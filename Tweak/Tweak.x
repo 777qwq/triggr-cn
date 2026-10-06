@@ -27,7 +27,7 @@ static inline NSString *TGCNRepair(NSString *s) {
     return s;
 }
 
-static inline NSString *TGCN(NSString *s) {
+__attribute__((unused)) static inline NSString *TGCN(NSString *s) {
     if (!s.length) return s;
     s = TGCNRepair(s);
     NSString *hit = TGCNDict[s];
@@ -36,7 +36,7 @@ static inline NSString *TGCN(NSString *s) {
 }
 
 // \u5e26\u524d\u7f00\u7684\u52a8\u6001\u62fc\u63a5\u6807\u9898\uff08TGActionTitle / TGCustomTriggerTitle \u7b49\uff09
-static const struct { __unsafe_unretained NSString *en; __unsafe_unretained NSString *zh; } TGCPPrefixes[] = {
+__attribute__((unused)) static const struct { __unsafe_unretained NSString *en; __unsafe_unretained NSString *zh; } TGCPPrefixes[] = {
     {@"Open ",            @"\u6253\u5f00 "},
     {@"Shortcut: ",       @"\u5feb\u6377\u6307\u4ee4\uff1a"},
     {@"Menu: ",           @"\u83dc\u5355\uff1a"},
