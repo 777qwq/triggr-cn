@@ -1,9 +1,9 @@
 // Triggr: assign actions to buttons, switches and gestures (SpringBoard).
 //
 // Every trigger hook asks the dispatcher for an action in the current mode
-// (lock screen / home screen / app, falling back to "A任意位置"). Only actions
+// (lock screen / home screen / app, falling back to "任意位置"). Only actions
 // Triggr can actually perform count as assigned, so an unfinished action can
-// never take a button away. With "R替换按键动作" on (the default), an
+// never take a button away. With "替换按键动作" on (the default), an
 // assigned home, Touch ID double tap, volume, lock or mute switch trigger skips
 // the system behaviour; with it off they run alongside. Touch ID finger events
 // and volume holds always run alongside.
@@ -210,7 +210,7 @@ static BOOL TGValueAction(NSString *action, BOOL dryRun) {
     if ([action hasPrefix:TGMediaVolumePrefix]) return TGSetVolume(TGPercent(action, TGMediaVolumePrefix), @"Audio/Video", dryRun);
     if ([action hasPrefix:TGRingerVolumePrefix]) return TGSetVolume(TGPercent(action, TGRingerVolumePrefix), @"Ringtone", dryRun);
     if ([action hasPrefix:TGMessagePrefix]) {
-        if (!dryRun) CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"), (__bridge CFStringRef)[action substringFromIndex:TGMessagePrefix.length], CFSTR("O好"));
+        if (!dryRun) CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"), (__bridge CFStringRef)[action substringFromIndex:TGMessagePrefix.length], CFSTR("好"));
         return YES;
     }
     if ([action hasPrefix:TGSpeakPrefix]) {
@@ -437,7 +437,7 @@ static BOOL TGSwitchFor(NSString *name, TGSwitch *out) {
         if (![lowPower respondsToSelector:sel]) return NO;
         out->get = ^BOOL { return NSProcessInfo.processInfo.isLowPowerModeEnabled; };
         out->set = ^(BOOL on) {
-            // As Settings: from Control Center, iOS shows a one-time "L低电量模式"
+            // As Settings: from Control Center, iOS shows a one-time "低电量模式"
             // explanation alert that then sits on screen (seen on iOS 15.8).
             void *symbol = dlsym(RTLD_DEFAULT, "kPMLPMSourceSettings");
             if (!symbol) symbol = dlsym(RTLD_DEFAULT, "kPMLPMSourceControlCenter");
@@ -1034,7 +1034,7 @@ static void TGRunList(NSArray<NSString *> *actions, NSUInteger index) {
 }
 
 // On the Lock Screen, lists that open an app (which iOS can't show there) always
-// wait for unlock, and shell commands do too when "C命令需解锁" is on
+// wait for unlock, and shell commands do too when "命令需解锁" is on
 // and a passcode is set. iOS's own unlock action block (SBLockScreenManager,
 // private, guarded) runs them once the user unlocks; if that API is missing,
 // they don't run at all.
@@ -1191,7 +1191,7 @@ static BOOL TGFire(NSString *trigger) {
 
 // Darwin notifications carry no payload, so SpringBoard listens for one name per
 // thing that may be run: built-in actions, assigned triggers and menus. Never
-// shell commands, URLs or apps. Only while "A允许 API" is on.
+// shell commands, URLs or apps. Only while "允许 API" is on.
 static NSMutableArray<NSNumber *> *tgAPITokens;
 
 static void TGListenAPI(NSString *name, void (^handler)(void)) {

@@ -158,7 +158,7 @@ static NSDictionary<NSString *, NSArray<NSString *> *> *TGAllAssignments(void) {
 // "…only work at the Home Screen", "…replace it inside apps".
 static NSString *TGAppName(NSString *identifier);
 
-// A place's name: "A任意位置", …, or the app's name for In Specific Apps.
+// A place's name: "任意位置", …, or the app's name for In Specific Apps.
 static NSString *TGPlaceTitle(NSString *mode) {
     if ([mode hasPrefix:TGAppModePrefix]) return TGAppName([mode substringFromIndex:TGAppModePrefix.length]);
     return TGModeTitle(mode);
@@ -825,7 +825,7 @@ static NSString *TGCategoryOf(NSString *action) {
     return nil;
 }
 
-// "T切换", "O开启", "O关闭": what's picked for this switch, in that order.
+// "切换", "开启", "关闭": what's picked for this switch, in that order.
 - (NSArray<NSString *> *)verbsForSwitch:(NSString *)name {
     NSMutableArray *verbs = [NSMutableArray array];
     for (NSArray<NSString *> *verb in @[@[@"toggle", @"切换"], @[@"on", @"开启"], @[@"off", @"关闭"]])
@@ -1601,7 +1601,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         [specs addObject:group];
         NSDictionary<NSString *, NSArray *> *icons = @{
             @"主屏幕按钮": @[@"circle.circle", UIColor.systemGrayColor], @"Touch ID": @[@"touchid", UIColor.systemRedColor],
-            @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor],
+            @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"顶部键": @[@"lock.fill", UIColor.systemBlueColor], @"侧边键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor],
             @"静音拨片": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
             @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
             @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
