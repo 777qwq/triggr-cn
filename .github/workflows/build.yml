@@ -34,6 +34,9 @@ jobs:
       - name: Convert to roothide (official RootHidePatcher patch.sh)
         run: |
           curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/patch.sh -o /tmp/patch.sh
+          # brew ldid 不带 procursus 字样，摘掉该建议性检查
+          perl -0pi -e 's/if ! ldid 2>&1 \| grep -q procursus; then\n\t\$ECHO "Please install Procursus ldid\."\n    exit 1;\nfi\n//' /tmp/patch.sh
+          grep -c procursus /tmp/patch.sh || true
           IN=$(ls packages/*.deb | head -1)
           sudo env "PATH=$PATH" bash /tmp/patch.sh "$IN" packages/triggr-cn-roothide.deb
           ls -la packages/
