@@ -399,7 +399,9 @@ static inline NSString *TGExtensionsDirectory(void) {
 
 static inline NSArray<NSString *> *TGExtensionNames(void) {
     NSMutableArray *names = [NSMutableArray array];
-    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:TGExtensionsDirectory() ?: @"" error:nil])
+    NSString *extdir = TGExtensionsDirectory();
+    if (!extdir) return names;
+    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:extdir error:nil])
         if ([file.pathExtension isEqualToString:@"plist"]) [names addObject:file.stringByDeletingPathExtension];
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
@@ -407,7 +409,9 @@ static inline NSArray<NSString *> *TGExtensionNames(void) {
 // {Title, ItemTitle, Symbol, Color, ItemsDirectory, ItemsExtension, ItemsExclude, Program}
 static inline NSDictionary *TGExtension(NSString *name) {
     if (!name.length || [name containsString:@"/"]) return nil;
-    NSDictionary *extension = [NSDictionary dictionaryWithContentsOfFile:[[TGExtensionsDirectory() stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"plist"]];
+    NSString *extdir2 = TGExtensionsDirectory();
+    if (!extdir2) return nil;
+    NSDictionary *extension = [NSDictionary dictionaryWithContentsOfFile:[[extdir2 stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"plist"]];
     return [extension[@"Title"] isKindOfClass:NSString.class] && [extension[@"Program"] isKindOfClass:NSString.class] ? extension : nil;
 }
 
