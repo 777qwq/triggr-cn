@@ -347,9 +347,9 @@ static inline NSString *TGTriggerTitle(NSString *trigger) {
             if ([trigger isEqualToString:@(TGTriggerGroups[g].items[i].identifier)]) {
                 // Events ("接入充电器") read fine alone; presses need their button.
                 BOOL event = TGTriggerGroups[g].items == TGOther || TGTriggerGroups[g].items == TGStateChanges || TGTriggerGroups[g].items == TGMotion;
-                if (TGTriggerGroups[g].items == TGIcons) return [NSString stringWithFormat:@"图标%s", TGTriggerGroups[g].items[i].title];
-                if (TGTriggerGroups[g].items == TGHomeGestures) return [NSString stringWithFormat:@"主屏幕%s", TGTriggerGroups[g].items[i].title];
-                return event ? @(TGTriggerGroups[g].items[i].title) : [NSString stringWithFormat:@"%s %s", TGTriggerGroups[g].title, TGTriggerGroups[g].items[i].title];
+                if (TGTriggerGroups[g].items == TGIcons) return [NSString stringWithFormat:@"图标%@", @(TGTriggerGroups[g].items[i].title)];
+                if (TGTriggerGroups[g].items == TGHomeGestures) return [NSString stringWithFormat:@"主屏幕%@", @(TGTriggerGroups[g].items[i].title)];
+                return event ? @(TGTriggerGroups[g].items[i].title) : [NSString stringWithFormat:@"%@ %@", @(TGTriggerGroups[g].title), @(TGTriggerGroups[g].items[i].title)];
             }
     return trigger;
 }
