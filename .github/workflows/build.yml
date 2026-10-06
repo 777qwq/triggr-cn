@@ -33,7 +33,7 @@ jobs:
 
       - name: Convert to roothide (official RootHidePatcher patch.sh)
         run: |
-          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/main/patch.sh -o /tmp/patch.sh
+          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/patch.sh -o /tmp/patch.sh
           IN=$(ls packages/*.deb | head -1)
           sudo -E bash /tmp/patch.sh "$IN" packages/triggr-cn-roothide.deb
           ls -la packages/
