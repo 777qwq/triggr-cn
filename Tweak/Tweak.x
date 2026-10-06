@@ -7,8 +7,29 @@
 
 static NSDictionary *TGCNDict;
 
+// Repair MacRoman-mangled UTF-8 (jbroot: %s is decoded as MacRoman there)
+static inline NSString *TGCNRepair(NSString *s) {
+    if (!s.length) return s;
+    BOOL suspicious = NO;
+    for (NSUInteger i = 0; i < s.length; i++) {
+        unichar c = [s characterAtIndex:i];
+        if (c >= 0x80 && c <= 0xFF) { suspicious = YES; break; }
+    }
+    if (!suspicious) return s;
+    NSData *d = [s dataUsingEncoding:NSMacOSRomanStringEncoding allowLossyConversion:NO];
+    if (!d) return s;
+    NSString *fixed = [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
+    if (!fixed.length || [fixed isEqualToString:s]) return s;
+    for (NSUInteger i = 0; i < fixed.length; i++) {
+        unichar c = [fixed characterAtIndex:i];
+        if (c >= 0x4E00 && c <= 0x9FFF) return fixed; // accept only if CJK appeared
+    }
+    return s;
+}
+
 static inline NSString *TGCN(NSString *s) {
     if (!s.length) return s;
+    s = TGCNRepair(s);
     NSString *hit = TGCNDict[s];
     if (hit) return hit;
     return s;
@@ -39,6 +60,7 @@ static const struct { __unsafe_unretained NSString *en; __unsafe_unretained NSSt
 
 static inline NSString *TGCNFull(NSString *s) {
     if (!s.length) return s;
+    s = TGCNRepair(s);
     NSString *hit = TGCNDict[s];
     if (hit) return hit;
     for (size_t i = 0; i < sizeof(TGCPPrefixes) / sizeof(TGCPPrefixes[0]); i++) {
