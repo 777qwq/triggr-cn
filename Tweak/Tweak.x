@@ -162,19 +162,5 @@ static void TGCNInit(void) {
 %ctor {
     TGCNInit();
     %init;
-    // diag v5: prove whether injection reaches TriggrApp; write to a file so
-    // it is checkable without a terminal. ASCII only (transport eats bytes).
-    @try {
-        NSDictionary *env = [[NSProcessInfo processInfo] environment];
-        NSString *bid = [[NSBundle mainBundle] bundleIdentifier] ?: @"(nil)";
-        NSString *exec = [env objectForKey:@"CYDIA"] ? @"(cydia)" : [[[NSProcessInfo processInfo] arguments] firstObject] ?: @"(nil)";
-        NSString *line = [NSString stringWithFormat:@"TGCN ctor bid=%@ exec=%@ dict=%lu\n", bid, exec, (unsigned long)TGCNDict.count];
-        NSString *path = @"/var/mobile/Library/triggr_cn.log";
-        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
-        if (!fh) {
-            [[NSData data] writeToFile:path atomically:NO];
-            fh = [NSFileHandle fileHandleForWritingAtPath:path];
-        }
-        if (fh) { [fh seekToEndOfFile]; [fh writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [fh closeFile]; }
-    } @catch (NSException *e) { /* never break host app */ }
+
 }
