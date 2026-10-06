@@ -12,7 +12,7 @@ jobs:
 
       - name: Prepare Theos
         run: |
-          brew install ldid xz make
+          brew install ldid xz make gnu-sed findutils dpkg file
           [ -d "$HOME/theos/.git" ] || git clone --depth=1 https://github.com/theos/theos.git $HOME/theos
           git -C $HOME/theos submodule update --init --depth 1 vendor/dm.pl vendor/logos vendor/include vendor/lib || true
           if [ ! -d "$HOME/theos/sdks/iPhoneOS16.5.sdk" ]; then
@@ -26,13 +26,21 @@ jobs:
           sed -i '' 's/convert binary1/convert xml1/' $HOME/theos/bin/convert_xml_plist.sh || true
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      - name: Build (roothide)
+      - name: Build (rootless)
         run: |
           export PATH="$HOME/theos/bin:$PATH"
-          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=roothide
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 
-      - name: Upload deb
+      - name: Convert to roothide (official RootHidePatcher patch.sh)
+        run: |
+          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/main/patch.sh -o /tmp/patch.sh
+          IN=$(ls packages/*.deb | head -1)
+          sudo -E bash /tmp/patch.sh "$IN" packages/triggr-cn-roothide.deb
+          ls -la packages/
+
+      - name: Upload debs
         uses: actions/upload-artifact@v4
         with:
-          name: triggr-cn-roothide-deb
-          path: packages/*.deb
+          name: triggr-cn-debs
+          path: |
+            packages/*.deb
