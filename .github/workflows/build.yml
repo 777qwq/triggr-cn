@@ -24,7 +24,7 @@ jobs:
           ok=0
           for i in 1 2; do
             echo "== install-theos attempt $i =="
-            if gtimeout 540 bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)" </dev/null >install.log 2>&1; then ok=1; break; fi
+            if gtimeout -k 15 540 bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)" </dev/null >install.log 2>&1; then ok=1; break; fi
             tail -3 install.log || true
           done
           [ $ok -eq 1 ] || echo "::warning::install-theos failed both attempts, using whatever it left + vendor patch"
