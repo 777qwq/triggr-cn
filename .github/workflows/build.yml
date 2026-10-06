@@ -1,0 +1,43 @@
+name: Build Triggr CN (roothide)
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Theos (author env, with timeout+fallback)
+        run: |
+          brew install ldid xz make coreutils
+          export THEOS=$HOME/theos
+          ok=0
+          for i in 1 2; do
+            echo "install-theos attempt $i"
+            if gtimeout 600 bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"; then ok=1; break; fi
+          done
+          if [ $ok -eq 0 ]; then
+            echo "fallback: lightweight setup"
+            mkdir -p $HOME/theos/vendor/include $HOME/theos/vendor/lib $HOME/theos/bin
+            [ -d $HOME/theos/.git ] || git clone --depth=1 https://github.com/theos/theos.git $HOME/theos
+            git -C $HOME/theos submodule update --init --depth 1 vendor/dm.pl vendor/logos vendor/include vendor/lib || true
+            git clone --depth=1 --filter=blob:none --sparse https://github.com/theos/sdks.git /tmp/sdkrepo
+            (cd /tmp/sdkrepo && git sparse-checkout set iPhoneOS16.5.sdk)
+            rm -rf $HOME/theos/sdks/iPhoneOS16.5.sdk && cp -R /tmp/sdkrepo/iPhoneOS16.5.sdk $HOME/theos/sdks/
+          fi
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+          ls $HOME/theos/sdks | head -5
+
+      - name: Build (roothide)
+        run: |
+          export PATH="$HOME/theos/bin:$PATH"
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=roothide
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: triggr-cn-roothide-deb
+          path: packages/*.deb
