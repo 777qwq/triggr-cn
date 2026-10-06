@@ -1,0 +1,9 @@
+Package: com.triggr.cn.l10n
+Name: Triggr Chinese L10n
+Version: 1.0.4-cn.1
+Architecture: iphoneos-arm64
+Description: Standalone Chinese localization layer for Triggr 1.0.4+. Translates the UI at runtime without modifying Triggr itself. Source: github.com/777qwq/triggr-cn
+Maintainer: 777qwq
+Author: 777qwq
+Section: Tweaks
+Depends: mobilesubstrate, firmware (>= 15.0)
