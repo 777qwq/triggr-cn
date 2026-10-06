@@ -31,19 +31,6 @@ jobs:
           sed -i 's/convert binary1/convert xml1/' $HOME/theos/bin/convert_xml_plist.sh || true
           echo "THEOS=$HOME/theos" >> $GITHUB_ENV
 
-      - name: Debug map header
-        run: |
-          python3 - <<'PYEOF'
-          d=open('Tweak/TGCNMap.h','rb').read()
-          print('size',len(d))
-          dk='打开'.encode(); zhd='菜单：'.encode()
-          print('EN sample hits:', d.count(b'Menu (deleted)'))
-          print('CJK hits:', d.count(dk), d.count(zhd))
-          i=d.find(b'TGCNMap_ZH')
-          print('ZH at',i)
-          print(d[i:i+80])
-          PYEOF
-
       - name: Build (rootless)
         run: |
           export PATH="$HOME/theos/bin:$PATH"
