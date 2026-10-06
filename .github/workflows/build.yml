@@ -1,0 +1,62 @@
+name: Build Triggr CN (roothide)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      patch_url:
+        description: 'extra deb url for A/B test'
+        required: false
+        default: ''
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare Theos
+        run: |
+          brew install ldid xz make gnu-sed findutils dpkg file coreutils
+          [ -d "$HOME/theos/.git" ] || git clone --depth=1 https://github.com/theos/theos.git $HOME/theos
+          git -C $HOME/theos submodule update --init --depth 1 vendor/dm.pl vendor/logos vendor/include vendor/lib || true
+          if [ ! -d "$HOME/theos/sdks/iPhoneOS16.5.sdk" ]; then
+            git clone --depth=1 --filter=blob:none --sparse https://github.com/theos/sdks.git /tmp/sdkrepo
+            (cd /tmp/sdkrepo && git sparse-checkout set iPhoneOS16.5.sdk)
+            rm -rf $HOME/theos/sdks/iPhoneOS16.5.sdk && cp -R /tmp/sdkrepo/iPhoneOS16.5.sdk $HOME/theos/sdks/
+          fi
+          mkdir -p $HOME/theos/bin
+          [ -f "$HOME/theos/bin/dm.pl" ] || { curl -fsSL https://raw.githubusercontent.com/theos/dm.pl/master/dm.pl -o $HOME/theos/bin/dm.pl; chmod +x $HOME/theos/bin/dm.pl; }
+          sed -i 's/convert binary1/convert xml1/' $HOME/theos/bin/convert_xml_plist.sh || true
+          echo "THEOS=$HOME/theos" >> $GITHUB_ENV
+
+      - name: Build (rootless)
+        run: |
+          export PATH="$HOME/theos/bin:$PATH"
+          make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
+
+      - name: Convert to roothide (official RootHidePatcher patch.sh)
+        run: |
+          brew install coreutils >/dev/null 2>&1 || true
+          export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/findutils/libexec/gnubin:$PATH"
+          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/patch.sh -o /tmp/patch.sh
+          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/roothide.entitlements -o /tmp/roothide.entitlements
+          ls -la /tmp/patch.sh /tmp/roothide.entitlements
+          if [ -n "${{ github.event.inputs.patch_url }}" ]; then
+            curl -fsSL "${{ github.event.inputs.patch_url }}" -o /tmp/extra.deb
+          fi
+          # brew ldid 不带 procursus 字样，摘掉该建议性检查
+          perl -0pi -e 's/if ! ldid 2>&1 \| grep -q procursus; then\n\t\$ECHO "Please install Procursus ldid\."\n    exit 1;\nfi\n//' /tmp/patch.sh
+          grep -c procursus /tmp/patch.sh || true
+          IN=$(ls packages/*.deb | head -1)
+          sudo env "PATH=$PATH" bash /tmp/patch.sh "$IN" packages/triggr-cn-roothide.deb
+          if [ -f /tmp/extra.deb ]; then sudo env "PATH=$PATH" bash /tmp/patch.sh /tmp/extra.deb packages/official-roothide.deb; fi
+          ls -la packages/
+
+      - name: Upload debs
+        uses: actions/upload-artifact@v4
+        with:
+          name: triggr-cn-debs
+          path: |
+            packages/*.deb
