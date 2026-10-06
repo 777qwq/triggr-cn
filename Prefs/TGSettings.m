@@ -1327,7 +1327,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [addApp setProperty:@YES forKey:@"useSearchBar"];
             [addApp setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
             [specs addObject:addApp];
-            PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:"来自应用的通知" target:self set:@selector(setNotifyingApp:specifier:)
+            PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:@"来自应用的通知" target:self set:@selector(setNotifyingApp:specifier:)
                 get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
             [addNotification setProperty:@YES forKey:@"useSearchBar"];
             [addNotification setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
