@@ -8,7 +8,14 @@
 @end
 
 static NSString *TGBundlePath(void) {
-    for (NSString *path in @[@"/var/jb/Library/PreferenceBundles/Triggr.bundle", @"/Library/PreferenceBundles/Triggr.bundle"])
+    NSMutableArray<NSString *> *paths = [NSMutableArray array];
+    [paths addObject:@"/var/jb/Library/PreferenceBundles/Triggr.bundle"];
+    [paths addObject:@"/Library/PreferenceBundles/Triggr.bundle"];
+    NSString *appDir = [NSBundle mainBundle].bundlePath.stringByDeletingLastPathComponent;
+    NSString *jbroot = appDir.stringByDeletingLastPathComponent;
+    if ([jbroot.lastPathComponent hasPrefix:@".jbroot"])
+        [paths addObject:[jbroot stringByAppendingPathComponent:@"Library/PreferenceBundles/Triggr.bundle"]];
+    for (NSString *path in paths)
         if ([NSFileManager.defaultManager fileExistsAtPath:path]) return path;
     return nil;
 }
