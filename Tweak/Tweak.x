@@ -82,12 +82,12 @@ static inline NSString *TGCNFull(NSString *s) {
 
 static void TGCNInit(void) {
     if (TGCNDict) return;
-    NSMutableDictionary *m = [NSMutableDictionary dictionaryWithCapacity:TGCN_MAP_COUNT];
+    NSMutableDictionary *table = [NSMutableDictionary dictionaryWithCapacity:TGCN_MAP_COUNT];
     for (int i = 0; i < TGCN_MAP_COUNT; i++) {
         NSString *en = TGCNMap_EN[i], *zh = TGCNMap_ZH[i];
-        if (en.length && zh.length && ![en isEqualToString:zh]) m[en] = zh;
+        if (en.length && zh.length && ![en isEqualToString:zh]) table[en] = zh;
     }
-    TGCNDict = [m copy];
+    TGCNDict = [table copy];
 }
 
 // ---- \u54bd\u5589\u70b9 1\uff1aPSSpecifier\uff08\u6240\u6709\u8bbe\u7f6e\u884c/\u5206\u7ec4\u6807\u9898\uff09----
