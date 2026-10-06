@@ -79,9 +79,6 @@ static inline NSString *TGCNFull(NSString *s) {
     }
     return s;
 }
-    }
-    return s;
-}
 
 static void TGCNInit(void) {
     if (TGCNDict) return;
