@@ -8,7 +8,15 @@
 @end
 
 static NSString *TGBundlePath(void) {
-    for (NSString *path in @[@"/var/jb/Library/PreferenceBundles/Triggr.bundle", @"/Library/PreferenceBundles/Triggr.bundle"])
+    NSMutableArray<NSString *> *paths = [NSMutableArray array];
+    [paths addObject:@"/var/jb/Library/PreferenceBundles/Triggr.bundle"];
+    [paths addObject:@"/Library/PreferenceBundles/Triggr.bundle"];
+    // roothide: derive the jbroot from this app's own real path (always exists)
+    NSString *appDir = [NSBundle mainBundle].bundlePath.stringByDeletingLastPathComponent;      // <jbroot>/Applications
+    NSString *jbroot = appDir.stringByDeletingLastPathComponent;                                // <jbroot>
+    if ([jbroot.lastPathComponent hasPrefix:@".jbroot"])
+        [paths addObject:[jbroot stringByAppendingPathComponent:@"Library/PreferenceBundles/Triggr.bundle"]];
+    for (NSString *path in paths)
         if ([NSFileManager.defaultManager fileExistsAtPath:path]) return path;
     return nil;
 }
