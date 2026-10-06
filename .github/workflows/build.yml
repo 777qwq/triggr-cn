@@ -12,7 +12,7 @@ jobs:
 
       - name: Prepare Theos
         run: |
-          brew install ldid xz make gnu-sed findutils dpkg file
+          brew install ldid xz make gnu-sed findutils dpkg file coreutils
           [ -d "$HOME/theos/.git" ] || git clone --depth=1 https://github.com/theos/theos.git $HOME/theos
           git -C $HOME/theos submodule update --init --depth 1 vendor/dm.pl vendor/logos vendor/include vendor/lib || true
           if [ ! -d "$HOME/theos/sdks/iPhoneOS16.5.sdk" ]; then
@@ -33,6 +33,8 @@ jobs:
 
       - name: Convert to roothide (official RootHidePatcher patch.sh)
         run: |
+          brew install coreutils >/dev/null 2>&1 || true
+          export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/findutils/libexec/gnubin:$PATH"
           curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/patch.sh -o /tmp/patch.sh
           # brew ldid 不带 procursus 字样，摘掉该建议性检查
           perl -0pi -e 's/if ! ldid 2>&1 \| grep -q procursus; then\n\t\$ECHO "Please install Procursus ldid\."\n    exit 1;\nfi\n//' /tmp/patch.sh
