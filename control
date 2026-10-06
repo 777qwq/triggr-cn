@@ -2,7 +2,7 @@ Package: com.triggr.cn.l10n
 Name: Triggr 汉化补丁
 Version: 1.0.4.1-cn.5
 Architecture: iphoneos-arm64
-Description: Triggr 的独立汉化补丁：不修改 Triggr 本体，实时翻译设置界面与主屏 App，并自动修复 jbroot 环境下的标题乱码。配合 Triggr 1.0.4+ 使用，官方更新后可直接叠加。源码：github.com/777qwq/triggr-cn（l10n 分支）
+Description: Triggr 的独立汉化补丁：不修改 Triggr 本体，实时翻译设置界面与主屏 App，并自动修复 jbroot 环境下的标题乱码。配合 Triggr 1.0.4+ 使用，官方更新后可直接叠加。
 Maintainer: 777qwq
 Author: 777qwq
 Section: Tweaks
