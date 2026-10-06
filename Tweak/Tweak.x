@@ -63,13 +63,22 @@ static inline NSString *TGCNFull(NSString *s) {
     s = TGCNRepair(s);
     NSString *hit = TGCNDict[s];
     if (hit) return hit;
-    for (size_t i = 0; i < sizeof(TGCPPrefixes) / sizeof(TGCPPrefixes[0]); i++) {
-        NSString *en = TGCPPrefixes[i].en;
-        if ([s hasPrefix:en]) {
-            NSString *rest = [s substringFromIndex:en.length];
-            // \u201cOpen Music\u201d\u8fd9\u7c7b\u547d\u4e2d\u6574\u4e32\u7684\u8d70\u5b57\u5178\uff1b\u5269\u4f59\u90e8\u5206\u82e5\u4ecd\u5168\u82f1\u6587\u5219\u4fdd\u6301\u539f\u6837\u62fc\u63a5
-            return [TGCPPrefixes[i].zh stringByAppendingString:TGCN(rest)];
-        }
+    // longest map-key prefix match (recursive), for runtime-composed titles
+    NSString *bestKey = nil;
+    for (int i = 1; i < TGCN_MAP_COUNT; i++) {
+        NSString *k = TGCNMap_EN[i];
+        if (k.length < 4 || ![s hasPrefix:k]) continue;
+        unichar next = [s characterAtIndex:k.length]; // k.length < s.length here
+        if (next != ' ' && ![k hasSuffix:@" "] && ![k hasSuffix:@":"]) continue;
+        if (!bestKey || k.length > bestKey.length) bestKey = k;
+    }
+    if (bestKey) {
+        NSString *rest = [s substringFromIndex:bestKey.length];
+        NSString *restT = [rest hasPrefix:@" "] ? [@" " stringByAppendingString:TGCNFull([rest substringFromIndex:1])] : TGCNFull(rest);
+        return [TGCNDict[bestKey] stringByAppendingString:restT];
+    }
+    return s;
+}
     }
     return s;
 }
@@ -128,6 +137,15 @@ static void TGCNInit(void) {
 }
 + (instancetype)alertControllerWithTitle:(NSString *)title message:(NSString *)message preferredStyle:(NSInteger)style popoverPresentationController:(id)ppc {
     return %orig(TGCNFull(title), TGCNFull(message), style, ppc);
+}
+%end
+
+%hook UIBarButtonItem
+- (instancetype)initWithTitle:(NSString *)title style:(NSInteger)style target:(id)target action:(SEL)action {
+    return %orig(TGCNFull(title), style, target, action);
+}
+- (void)setTitle:(NSString *)title {
+    %orig(TGCNFull(title));
 }
 %end
 
