@@ -332,8 +332,8 @@ static inline NSString *TGCustomTriggerTitle(NSString *trigger) {
     if ([trigger hasPrefix:TGBatteryAbovePrefix]) return [NSString stringWithFormat:@"电量升破 %@%%", value];
     if ([trigger hasPrefix:TGBatteryBelowPrefix]) return [NSString stringWithFormat:@"电量跌破 %@%%", value];
     if ([trigger hasPrefix:TGAppLaunchedPrefix]) return [@"打开了 " stringByAppendingString:value];
-    if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@来自 " stringByAppendingString:value];
-    if ([trigger hasPrefix:@"icon.flick"]) return [NSString stringWithFormat:@"%@ on %@", TGFlickDirectionTitle(trigger), value];
+    if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@"来自 " stringByAppendingString:value];
+    if ([trigger hasPrefix:@"icon.flick"]) return [NSString stringWithFormat:@"在 %@ 上%@", value, TGFlickDirectionTitle(trigger)];
     int hour, minute;
     NSString *days;
     if (TGParseTime(trigger, &hour, &minute, &days)) return [NSString stringWithFormat:@"%02d:%02d %@", hour, minute, TGDaysTitle(days)];
