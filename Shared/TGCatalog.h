@@ -399,7 +399,9 @@ static inline NSString *TGExtensionsDirectory(void) {
 
 static inline NSArray<NSString *> *TGExtensionNames(void) {
     NSMutableArray *names = [NSMutableArray array];
-    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:TGExtensionsDirectory() ?: @"" error:nil])
+    NSString *extdir = TGExtensionsDirectory();
+    if (!extdir) return names;
+    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:extdir error:nil])
         if ([file.pathExtension isEqualToString:@"plist"]) [names addObject:file.stringByDeletingPathExtension];
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
@@ -407,7 +409,9 @@ static inline NSArray<NSString *> *TGExtensionNames(void) {
 // {Title, ItemTitle, Symbol, Color, ItemsDirectory, ItemsExtension, ItemsExclude, Program}
 static inline NSDictionary *TGExtension(NSString *name) {
     if (!name.length || [name containsString:@"/"]) return nil;
-    NSDictionary *extension = [NSDictionary dictionaryWithContentsOfFile:[[TGExtensionsDirectory() stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"plist"]];
+    NSString *extdir2 = TGExtensionsDirectory();
+    if (!extdir2) return nil;
+    NSDictionary *extension = [NSDictionary dictionaryWithContentsOfFile:[[extdir2 stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"plist"]];
     return [extension[@"Title"] isKindOfClass:NSString.class] && [extension[@"Program"] isKindOfClass:NSString.class] ? extension : nil;
 }
 
@@ -433,7 +437,7 @@ static inline NSArray<NSString *> *TGExtensionAction(NSString *action) {
     return @[[rest substringToIndex:colon.location], [rest substringFromIndex:colon.location + 1]];
 }
 
-// Display title for an action id ("N无" when unassigned).
+// Display title for an action id ("无" when unassigned).
 static inline NSString *TGActionTitle(NSString *action) {
     if (action.length == 0) return @"无";
     NSArray *extension = TGExtensionAction(action);
@@ -443,9 +447,9 @@ static inline NSString *TGActionTitle(NSString *action) {
     }
     if ([action hasPrefix:TGShortcutPrefix]) return [@"快捷指令：" stringByAppendingString:[action substringFromIndex:TGShortcutPrefix.length]];
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
-    if ([action hasPrefix:TGShellPrefix]) return [@"Command: " stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
+    if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
     if ([action hasPrefix:TGAppPrefix]) return [@"打开 " stringByAppendingString:[action substringFromIndex:TGAppPrefix.length]];
-    if ([action hasPrefix:TGPausePrefix]) return [NSString stringWithFormat:@"Pause %@ s", [action substringFromIndex:TGPausePrefix.length]];
+    if ([action hasPrefix:TGPausePrefix]) return [NSString stringWithFormat:@"停顿 %@", [action substringFromIndex:TGPausePrefix.length]];
     if ([action hasPrefix:TGMenuPrefix]) return @"菜单";
     if ([action hasPrefix:TGBrightnessPrefix]) return [NSString stringWithFormat:@"亮度 %@%%", [action substringFromIndex:TGBrightnessPrefix.length]];
     if ([action hasPrefix:TGMediaVolumePrefix]) return [NSString stringWithFormat:@"媒体音量 %@%%", [action substringFromIndex:TGMediaVolumePrefix.length]];
