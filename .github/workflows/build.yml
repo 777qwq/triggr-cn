@@ -36,6 +36,8 @@ jobs:
           brew install coreutils >/dev/null 2>&1 || true
           export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/findutils/libexec/gnubin:$PATH"
           curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/patch.sh -o /tmp/patch.sh
+          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/roothide.entitlements -o /tmp/roothide.entitlements
+          ls -la /tmp/patch.sh /tmp/roothide.entitlements
           # brew ldid 不带 procursus 字样，摘掉该建议性检查
           perl -0pi -e 's/if ! ldid 2>&1 \| grep -q procursus; then\n\t\$ECHO "Please install Procursus ldid\."\n    exit 1;\nfi\n//' /tmp/patch.sh
           grep -c procursus /tmp/patch.sh || true
