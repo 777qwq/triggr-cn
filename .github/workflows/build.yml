@@ -35,7 +35,7 @@ jobs:
         run: |
           curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/patch.sh -o /tmp/patch.sh
           IN=$(ls packages/*.deb | head -1)
-          sudo -E bash /tmp/patch.sh "$IN" packages/triggr-cn-roothide.deb
+          sudo env "PATH=$PATH" bash /tmp/patch.sh "$IN" packages/triggr-cn-roothide.deb
           ls -la packages/
 
       - name: Upload debs
