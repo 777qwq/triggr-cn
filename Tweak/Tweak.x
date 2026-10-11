@@ -1113,9 +1113,13 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
         }
         if (!target) { done(NO); return; }
         @try {
-            id shortcutObj = [target respondsToSelector:@selector(shortcut)] ? [target performSelector:@selector(shortcut)] : nil;
+            // VCVoiceShortcut.shortcut is unpopulated here; but we have the
+            // identifier — INShortcut (public Intents API) builds from it.
+            NSString *identifier = [target respondsToSelector:@selector(identifier)] ? [target performSelector:@selector(identifier)] : nil;
+            Class insCls = NSClassFromString(@"INShortcut");
+            id shortcutObj = (identifier && insCls && [insCls instancesRespondToSelector:@selector(initWithIdentifier:)]) ? [(id)[insCls alloc] performSelector:@selector(initWithIdentifier:) withObject:identifier] : nil;
             Class descCls = NSClassFromString(@"WFINShortcutRunDescriptor");
-            TGATDebugLog([NSString stringWithFormat:@"vsc: target=%@ shortcutObj=%@ descCls=%@ resp=%d", target, shortcutObj, descCls, shortcutObj && descCls && [descCls instancesRespondToSelector:@selector(initWithShortcut:)]]); // DEBUG
+            TGATDebugLog([NSString stringWithFormat:@"vsc: ident=%@ shortcutObj=%@ descCls=%@ resp=%d", identifier, shortcutObj, descCls, shortcutObj && descCls && [descCls instancesRespondToSelector:@selector(initWithShortcut:)]]); // DEBUG
             id descriptor = (descCls && shortcutObj) ? [(id)[descCls alloc] performSelector:@selector(initWithShortcut:) withObject:shortcutObj] : nil;
             id request = nil; // runWorkflowWithDescriptor tolerates a nil request
             TGATDebugLog([NSString stringWithFormat:@"vsc: descriptor=%@ request=%@", descriptor, request]); // DEBUG
