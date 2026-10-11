@@ -1174,7 +1174,13 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
     if (!cls) { done(NO); return; }
     id client = [cls performSelector:@selector(standardClient)];
     if (!client) { done(NO); return; }
-    [client getVoiceShortcutsWithCompletion:^(NSArray *list, id err) {
+    SEL getSel = @selector(getVoiceShortcutsWithCompletion:);
+    if (![client respondsToSelector:getSel]) {
+        TGDumpMethodsForClass(object_getClass(client), @"VCVoiceShortcutClient-missing-get"); // DEBUG
+        done(NO);
+        return;
+    }
+    ((void (*)(id, SEL, void (^)(NSArray *, id)))objc_msgSend)(client, getSel, ^(NSArray *list, id err) {
         TGATDebugLog([NSString stringWithFormat:@"vsc: %lu shortcuts, err=%@", (unsigned long)list.count, err]); // DEBUG
         id target = nil;
         for (id vs in list) {
