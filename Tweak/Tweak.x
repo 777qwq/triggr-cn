@@ -1096,9 +1096,8 @@ static void TGShortcutProbe(NSString *p) {
 static NSArray<NSString *> *TGShortcutDatabases(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
     TGShortcutDBList = [NSMutableArray array];
-    NSMutableArray *dbs = [NSMutableArray array];
-    probe(@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
-    probe(@"/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
+    TGShortcutProbe(@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
+    TGShortcutProbe(@"/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
     // jbroot derived from this binary's real path
     Dl_info info;
     if (dladdr((void *)TGShortcutDatabases, &info) && info.dli_fname) {
