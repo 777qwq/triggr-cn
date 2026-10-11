@@ -469,23 +469,22 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
     if (!dir) return @[];
     NSMutableArray *names = [NSMutableArray array];
     // Recursive: AutoTouch organizes scripts in subfolders; show "Folder/Name".
-    NSArray *keys = @[@(NSURLIsDirectoryKey), @(NSURLNameKey)];
-    __block void (^walk)(NSString *) = ^(NSString *folder) {
-        NSDirectoryEnumerator *e = [NSFileManager.defaultManager enumeratorAtURL:[NSURL fileURLWithPath:folder]
-            includingPropertiesForKeys:keys options:NSDirectoryEnumerationSkipsHiddenFiles errorHandler:nil];
-        for (NSURL *url in e) {
-            NSNumber *isDir = nil; NSString *name = nil;
-            [url getResourceValue:&isDir forKey:NSURLIsDirectoryKey error:nil];
-            [url getResourceValue:&name forKey:NSURLNameKey error:nil];
-            if (!name || [name hasPrefix:@"."]) continue;
-            if (isDir.boolValue) { if (![name isEqualToString:@"Records"]) { e.skipDescendants = NO; walk(url.path); } continue; }
-            if ([name.pathExtension isEqualToString:@"lua"]) {
-                NSString *rel = [url.path substringFromIndex:dir.length + 1];
-                [names addObject:rel.stringByDeletingPathExtension];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
+        if ([file hasPrefix:@"."]) continue;
+        NSString *full = [dir stringByAppendingPathComponent:file];
+        BOOL isDir = NO;
+        [fm fileExistsAtPath:full isDirectory:&isDir];
+        if (isDir) {
+            if ([file isEqualToString:@"Records"]) continue;
+            for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
+                if ([sub.pathExtension isEqualToString:@"lua"] && ![sub hasPrefix:@"."])
+                    [names addObject:[NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension]];
             }
+        } else if ([file.pathExtension isEqualToString:@"lua"]) {
+            [names addObject:file.stringByDeletingPathExtension];
         }
-    };
-    walk(dir);
+    }
     TGATDebugLog([NSString stringWithFormat:@"lua=%@", names]); // DEBUG
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
