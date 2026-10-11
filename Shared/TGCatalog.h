@@ -498,7 +498,13 @@ static inline NSString *TGAutoTouchFindScript(NSArray<NSString *> *dirs, NSStrin
     NSFileManager *fm = NSFileManager.defaultManager;
     NSString *stem = name.stringByDeletingPathExtension;
     NSArray *exts = name.pathExtension.length ? @[name.pathExtension] : @[@"lua", @"at"];
-    for (NSString *dir in dirs) {
+    // Execution must feed runCommand the path form its engine accepts:
+    // prefer the real jbroot (…/containers/Bundle/Application/.jbroot-…) over
+    // the AppGroup mirror, whose absolute path it may not resolve.
+    NSMutableArray *ordered = [NSMutableArray array];
+    for (NSString *d in dirs) if (![d containsString:@"/Containers/Shared/AppGroup/"]) [ordered addObject:d];
+    for (NSString *d in dirs) if ([d containsString:@"/Containers/Shared/AppGroup/"]) [ordered addObject:d];
+    for (NSString *dir in ordered) {
         NSMutableArray *folders = [NSMutableArray arrayWithObject:@""];
         for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
             NSString *full = [dir stringByAppendingPathComponent:file];
