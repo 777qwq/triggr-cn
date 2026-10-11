@@ -1115,17 +1115,29 @@ static NSString *TGSpringCutsBinary(void) {
 }
 
 static void TGRunShortcut(NSString *name) {
+    // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
+    // through sh fails under roothide, NSTask launches the binary directly).
     NSString *bin = TGSpringCutsBinary();
     TGATDebugLog([NSString stringWithFormat:@"shortcut: entry name=%@ bin=%@", name, bin]); // DEBUG
-    // Preferred: the springcuts CLI (SpringCuts) - headless execution through
-    // the system's own shortcut service, no app bounce. The binary lives in
-    // the jbroot PATH that TGSpawnShell sets up.
     if (bin) {
-        NSString *safe = [name stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
-        // DEBUG: staged markers pinpoint where the spawn chain breaks
-        TGRunShell([NSString stringWithFormat:@"echo start > /var/mobile/Documents/sc.log; %@ -r \"%@\" -w >> /var/mobile/Documents/sc.log 2>&1; echo exit=$? >> /var/mobile/Documents/sc.log", bin, safe]);
-        TGATDebugLog(@"shortcut: springcuts spawned"); // DEBUG
-        return;
+        @try {
+            Class taskCls = NSClassFromString(@"NSTask");
+            if (taskCls) {
+                id task = [[taskCls alloc] init];
+                [task performSelector:@selector(setLaunchPath:) withObject:bin];
+                [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
+                [task launch];
+                TGATDebugLog(@"shortcut: NSTask launched"); // DEBUG
+                return;
+            }
+            // popen fallback (RC's second route)
+            FILE *fp = popen([[NSString stringWithFormat:@"%@ -r \"%@\"", bin, name] UTF8String], "r");
+            if (fp) pclose(fp);
+            TGATDebugLog(@"shortcut: popen done"); // DEBUG
+            return;
+        } @catch (NSException *e) {
+            TGATDebugLog([NSString stringWithFormat:@"shortcut EXC: %@", e]); // DEBUG
+        }
     }
     // Fallback: URL scheme (bounces through the Shortcuts app).
     NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
