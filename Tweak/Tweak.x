@@ -991,11 +991,15 @@ static void TGRunAutoTouch(NSString *name) {
         if (!found) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
         // Powercuts passes the AppGroup path in /var/… form (no /private prefix):
         // "…/AppGroup/.jbroot-XXX/var/mobile/Library/AutoTouch/Scripts/Records/x.lua"
-        if ([found hasPrefix:@"/private/var/mobile/Containers/Shared/AppGroup/"]) {
-            arg = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingString:[found substringFromIndex:(NSUInteger)strlen("/private/var/mobile/Containers/Shared/AppGroup/")]];
-        } else {
-            arg = found;
+        // Both jbroot views hold the same storage; normalize unconditionally
+        // to the AppGroup /var/… form Powercuts uses.
+        NSRange marker = [found rangeOfString:@"/.jbroot-"];
+        if (marker.location != NSNotFound) {
+            NSRange slash = [found rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, found.length - marker.location - 1)];
+            if (slash.location != NSNotFound)
+                arg = [@"/var/mobile/Containers/Shared/AppGroup" stringByAppendingString:[found substringFromIndex:slash.location]];
         }
+        if (!arg) arg = found;
         TGATDebugLog([NSString stringWithFormat:@"form=powercuts found=%@ arg=%@", found, arg]); // DEBUG
     }
     NSString *path = arg;
