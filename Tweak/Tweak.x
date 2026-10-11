@@ -970,7 +970,11 @@ static BOOL TGCanPerform(NSString *action) {
 static void TGRunAutoTouch(NSString *name) {
     NSString *dir = TGAutoTouchScriptsDirectory();
     NSLog(@"[TriggrCN][AT] dir=%@ name=%@", dir, name); // DEBUG build diagnostics, remove for release
-    if (!dir) return;
+    if (!dir) {
+        Dl_info info;
+        NSLog(@"[TriggrCN][AT] no dir; self=%@", (dladdr((void *)TGRunAutoTouch, &info) && info.dli_fname) ? @(info.dli_fname) : @"?");
+        return;
+    }
     NSString *path = [name.pathExtension isEqualToString:@"lua"] ? [dir stringByAppendingPathComponent:name]
         : [[dir stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"lua"];
     void *sym = dlsym(RTLD_DEFAULT, "runCommand");

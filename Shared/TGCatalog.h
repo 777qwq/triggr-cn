@@ -3,6 +3,7 @@
 //
 // Each assignment is its own key in the prefs domain:
 //   "<mode>/<trigger id>" = "<action id>"   ("" = none)
+#include <dlfcn.h>
 
 #define TGDomain @"com.johndie.triggr"
 #define TGPrefsChangedNotification "com.johndie.triggr/prefs-changed"
@@ -413,6 +414,19 @@ static inline NSArray<NSString *> *TGExtensionNames(void) {
 static inline NSString *TGAutoTouchScriptsDirectory(void) {
     for (NSString *path in @[@"/var/jb/var/mobile/Library/AutoTouch/Scripts", @"/var/mobile/Library/AutoTouch/Scripts"])
         if ([NSFileManager.defaultManager isReadableFileAtPath:path]) return path;
+    // Disguised jbroot (roothide): /var/jb may not exist. Derive it from this
+    // binary's real path (…/Library/MobileSubstrate/DynamicLibraries/…) and
+    // probe AutoTouch's folder inside the jbroot. Same trick as the app.
+    Dl_info info;
+    if (dladdr((void *)TGAutoTouchScriptsDirectory, &info) && info.dli_fname) {
+        NSString *selfPath = @(info.dli_fname);
+        NSRange r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
+        if (r.location != NSNotFound) {
+            NSString *jbroot = [selfPath substringToIndex:r.location];
+            NSString *candidate = [jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"];
+            if ([NSFileManager.defaultManager isReadableFileAtPath:candidate]) return candidate;
+        }
+    }
     return nil;
 }
 
