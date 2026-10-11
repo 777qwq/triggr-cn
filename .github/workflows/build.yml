@@ -54,6 +54,23 @@ jobs:
           if [ -f /tmp/extra.deb ]; then sudo env "PATH=$PATH" bash /tmp/patch.sh /tmp/extra.deb packages/official-roothide.deb; fi
           ls -la packages/
 
+      - name: Build FAT deb (relative layout: works on rootless AND roothide)
+        run: |
+          brew install zstd >/dev/null 2>&1 || true
+          mkdir -p /tmp/fat && cd /tmp/fat
+          IN=$(ls packages/com.johndie.triggr_*_iphoneos-arm64.deb | head -1)
+          ar x "$IN" data.tar.zst control.tar.zst debian-binary
+          zstd -d -f data.tar.zst -o data.tar
+          mkdir stage && tar -xf data.tar -C stage
+          test -d stage/var/jb
+          mkdir merged
+          cp -R stage/var/jb/. merged/
+          (cd merged && tar -cf ../rel.tar .)
+          zstd -f rel.tar -o data-fat.tar.zst
+          ar rc triggr-cn-fat.deb debian-binary control.tar.zst data-fat.tar.zst
+          cp triggr-cn-fat.deb "$GITHUB_WORKSPACE/packages/Triggr_1.0.4+cn3_FAT.deb"
+          ls -la "$GITHUB_WORKSPACE/packages/"
+
       - name: Upload debs
         uses: actions/upload-artifact@v4
         with:
