@@ -1139,9 +1139,7 @@ static void TGRunShortcut(NSString *name) {
             TGATDebugLog([NSString stringWithFormat:@"shortcut EXC: %@", e]); // DEBUG
         }
     }
-    // Fallback: URL scheme (bounces through the Shortcuts app).
-    NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
-    TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:enc]);
+    TGATDebugLog(@"shortcut: no springcuts binary, doing nothing"); // DEBUG
 }
 
 static void TGPerform(NSString *action) {
