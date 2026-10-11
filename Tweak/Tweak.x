@@ -978,8 +978,22 @@ static void TGRunAutoTouch(NSString *name) {
     }
     // The script may live in any candidate directory (roothide mirrors the
     // jbroot into the AppGroup container) — use the first one that has it.
-    NSString *path = TGAutoTouchFindScript(dirs, name);
-    if (!path) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
+    // Path-form experiment (debug build):
+    //   input "锁屏.lua" (with extension)  -> passed VERBATIM (relative name form)
+    //   input "锁屏" / "Records/锁屏"      -> resolved to a file, passed as a
+    //                                         path RELATIVE to AutoTouch's root
+    NSString *arg = nil;
+    if (name.pathExtension.length) {
+        arg = name;
+        TGATDebugLog([NSString stringWithFormat:@"form=verbatim name=%@", name]); // DEBUG
+    } else {
+        NSString *found = TGAutoTouchFindScript(dirs, name);
+        if (!found) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
+        for (NSString *dir in dirs)
+            if ([found hasPrefix:dir]) { arg = [found substringFromIndex:dir.length + 1]; break; }
+        TGATDebugLog([NSString stringWithFormat:@"form=relative found=%@ arg=%@", found, arg]); // DEBUG
+    }
+    NSString *path = arg;
     void *sym = dlsym(RTLD_DEFAULT, "runCommand");
     TGATDebugLog([NSString stringWithFormat:@"path=%@ sym=%p", path, sym]); // DEBUG
     if (!sym) return;
