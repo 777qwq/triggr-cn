@@ -1099,11 +1099,11 @@ static void TGRunShortcut(NSString *name) {
     TGATDebugLog([NSString stringWithFormat:@"shortcut name=%@ ident=%@", name, ident]); // DEBUG
     Class cls = NSClassFromString(@"SBShortcutActivatorRequest");
     if (ident && cls && [cls instancesRespondToSelector:@selector(initWithShortcutIdentifier:)]) {
-        id req = [[cls alloc] initWithShortcutIdentifier:ident];
+        id req = [(id)[cls alloc] performSelector:@selector(initWithShortcutIdentifier:) withObject:ident];
         TGATDebugLog([NSString stringWithFormat:@"activator req=%@", req]); // DEBUG
         if (req) {
             if ([req respondsToSelector:@selector(sendRequest)]) {
-                [req sendRequest];
+                [req performSelector:@selector(sendRequest)];
                 TGATDebugLog(@"shortcut: sent"); // DEBUG
                 return;
             }
