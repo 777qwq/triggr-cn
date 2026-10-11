@@ -468,12 +468,25 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
     NSString *dir = TGAutoTouchScriptsDirectory();
     if (!dir) return @[];
     NSMutableArray *names = [NSMutableArray array];
-    NSError *error = nil;
-    NSArray *files = [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:&error];
-    for (NSString *file in files)
-        if ([file.pathExtension isEqualToString:@"lua"] && ![file hasPrefix:@"."])
-            [names addObject:file.stringByDeletingPathExtension];
-    TGATDebugLog([NSString stringWithFormat:@"list %@ error=%@ files=%@ lua=%@", dir, error, files, names]); // DEBUG
+    // Recursive: AutoTouch organizes scripts in subfolders; show "Folder/Name".
+    NSArray *keys = @[@(NSURLIsDirectoryKey), @(NSURLNameKey)];
+    __block void (^walk)(NSString *) = ^(NSString *folder) {
+        NSDirectoryEnumerator *e = [NSFileManager.defaultManager enumeratorAtURL:[NSURL fileURLWithPath:folder]
+            includingPropertiesForKeys:keys options:NSDirectoryEnumerationSkipsHiddenFiles errorHandler:nil];
+        for (NSURL *url in e) {
+            NSNumber *isDir = nil; NSString *name = nil;
+            [url getResourceValue:&isDir forKey:NSURLIsDirectoryKey error:nil];
+            [url getResourceValue:&name forKey:NSURLNameKey error:nil];
+            if (!name || [name hasPrefix:@"."]) continue;
+            if (isDir.boolValue) { if (![name isEqualToString:@"Records"]) { e.skipDescendants = NO; walk(url.path); } continue; }
+            if ([name.pathExtension isEqualToString:@"lua"]) {
+                NSString *rel = [url.path substringFromIndex:dir.length + 1];
+                [names addObject:rel.stringByDeletingPathExtension];
+            }
+        }
+    };
+    walk(dir);
+    TGATDebugLog([NSString stringWithFormat:@"lua=%@", names]); // DEBUG
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
