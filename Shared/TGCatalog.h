@@ -421,11 +421,16 @@ static inline NSArray<NSString *> *TGAutoTouchScriptDirectories(void) {
     };
     probe(@"/var/jb/var/mobile/Library/AutoTouch/Scripts");
     probe(@"/var/mobile/Library/AutoTouch/Scripts");
-    // roothide: the sandboxed AutoTouch app writes through its AppGroup
-    // container, where the jbroot is mirrored under a ".jbroot-<hex>" folder.
-    for (NSString *group in [fm contentsOfDirectoryAtPath:@"/private/var/mobile/Containers/Shared/AppGroup" error:nil])
-        if ([group hasPrefix:@".jbroot-"])
-            probe([@"/private/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:[group stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"]]);
+    // AppGroup containers: the sandboxed AutoTouch app writes its scripts
+    // through the group container. roothide mirrors the jbroot there under
+    // ".jbroot-<hex>/…"; stock rootless (Dopamine) groups may hold
+    // <group>/var/mobile/… or <group>/Library/… layouts — probe them all.
+    for (NSString *group in [fm contentsOfDirectoryAtPath:@"/private/var/mobile/Containers/Shared/AppGroup" error:nil]) {
+        NSString *base = [@"/private/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:group];
+        probe([base stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"]);
+        probe([base stringByAppendingPathComponent:@"Library/AutoTouch/Scripts"]);
+        probe([base stringByAppendingPathComponent:@"AutoTouch/Scripts"]);
+    }
     // Disguised jbroot derived from this binary's real path (no /var/jb).
     Dl_info info;
     if (dladdr((void *)TGAutoTouchScriptDirectories, &info) && info.dli_fname) {
