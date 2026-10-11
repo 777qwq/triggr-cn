@@ -472,7 +472,11 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
     // Enumerate every candidate directory (union) and one subfolder level;
     // AutoTouch organizes scripts in subfolders, shown as "Folder/Name".
     for (NSString *dir in TGAutoTouchScriptDirectories()) {
-        for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
+        NSError *error = nil;
+        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:&error];
+        TGATDebugLog([NSString stringWithFormat:@"enum %@ -> %lu files, error=%@, %@",
+            dir, (unsigned long)files.count, error, files]); // DEBUG
+        for (NSString *file in files) {
             if ([file hasPrefix:@"."]) continue;
             NSString *full = [dir stringByAppendingPathComponent:file];
             BOOL isDir = NO;
@@ -480,18 +484,18 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
             if (isDir) {
                 if ([file isEqualToString:@"Records"]) continue;
                 for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
-                    if ([sub.pathExtension isEqualToString:@"lua"] && ![sub hasPrefix:@"."]) {
+                    if (([sub.pathExtension isEqualToString:@"lua"] || [sub.pathExtension isEqualToString:@"at"]) && ![sub hasPrefix:@"."]) {
                         NSString *rel = [NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension];
                         if (![names containsObject:rel]) [names addObject:rel];
                     }
                 }
-            } else if ([file.pathExtension isEqualToString:@"lua"]) {
+            } else if ([file.pathExtension isEqualToString:@"lua"] || [file.pathExtension isEqualToString:@"at"]) {
                 if (![names containsObject:file.stringByDeletingPathExtension])
                     [names addObject:file.stringByDeletingPathExtension];
             }
         }
     }
-    TGATDebugLog([NSString stringWithFormat:@"lua=%@", names]); // DEBUG
+    TGATDebugLog([NSString stringWithFormat:@"lua/at=%@", names]); // DEBUG
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
