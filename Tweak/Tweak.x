@@ -1181,7 +1181,8 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
         return;
     }
     void (^getBlk)(id, id) = ^(id list, id err) {
-        TGATDebugLog([NSString stringWithFormat:@"vsc: %lu shortcuts, err=%@", (unsigned long)list.count, err]); // DEBUG
+        unsigned long sc = [list respondsToSelector:@selector(count)] ? [(NSArray *)list count] : 0;
+        TGATDebugLog([NSString stringWithFormat:@"vsc: %lu shortcuts, err=%@", sc, err]); // DEBUG
         id target = nil;
         for (id vs in list) {
             NSString *n = [vs respondsToSelector:@selector(shortcutName)] ? [vs performSelector:@selector(shortcutName)] : nil;
