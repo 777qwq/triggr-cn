@@ -761,9 +761,9 @@ static NSString *TGCategoryOf(NSString *action) {
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
     for (int i = 0; i < count; i++) [rows addObject:[self rowForAction:@(items[i].identifier) title:@(items[i].title)]];
     if ([category isEqualToString:@"system"])
-        [rows addObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁…" prompt:@"设备密码"]];
+        [rows addObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁" prompt:@"设备密码"]];
     if ([category isEqualToString:@"media"])
-        [rows addObject:[self rowForCommand:TGAirPlayPrefix title:@"AirPlay 到…" prompt:@"扬声器或电视名称，与 AirPlay 菜单中显示的一致（部分匹配即可）"]];
+        [rows addObject:[self rowForCommand:TGAirPlayPrefix title:@"AirPlay 到" prompt:@"扬声器或电视名称，与 AirPlay 菜单中显示的一致（部分匹配即可）"]];
     if ([category isEqualToString:@"switches"]) {
         for (int i = 0; i < TG_COUNT(TGSwitches); i++) {
             PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:@(TGSwitches[i].title) target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
@@ -771,9 +771,9 @@ static NSString *TGCategoryOf(NSString *action) {
             [rows addObject:spec];
         }
     } else if ([category isEqualToString:@"levels"]) {
-        [rows addObject:[self rowForCommand:TGBrightnessPrefix title:@"设置亮度…" prompt:@"亮度，0–100 %"]];
-        [rows addObject:[self rowForCommand:TGMediaVolumePrefix title:@"设置媒体音量…" prompt:@"媒体音量，0–100 %"]];
-        [rows addObject:[self rowForCommand:TGRingerVolumePrefix title:@"设置铃声音量…" prompt:@"铃声音量，0–100 %"]];
+        [rows addObject:[self rowForCommand:TGBrightnessPrefix title:@"设置亮度" prompt:@"亮度，0–100 %"]];
+        [rows addObject:[self rowForCommand:TGMediaVolumePrefix title:@"设置媒体音量" prompt:@"媒体音量，0–100 %"]];
+        [rows addObject:[self rowForCommand:TGRingerVolumePrefix title:@"设置铃声音量" prompt:@"铃声音量，0–100 %"]];
     } else if ([category isEqualToString:@"open"]) {
         // AltList's single-app list saves and loads through this row's own setter
         // and getter, so Triggr receives the picked bundle id directly.
@@ -784,7 +784,7 @@ static NSString *TGCategoryOf(NSString *action) {
         [openApp setProperty:TGAppPrefix forKey:@"tgCommandPrefix"];
         [rows addObject:openApp];
         [rows addObject:[self rowForCommand:TGSettingsPrefix title:@"打开设置页…" prompt:nil]];
-        [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
+        [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
         [rows addObject:[self rowForCommand:TGURLPrefix title:@"打开 URL…" prompt:@"任意 URL 或 URL scheme，如 https://…、tel:…、music://"]];
     } else if ([category isEqualToString:@"text"]) {
         [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
