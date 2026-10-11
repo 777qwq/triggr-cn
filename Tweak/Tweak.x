@@ -969,19 +969,24 @@ static BOOL TGCanPerform(NSString *action) {
 // passing nil is harmless either way. No-op when AutoTouch isn't installed.
 static void TGRunAutoTouch(NSString *name) {
     NSString *dir = TGAutoTouchScriptsDirectory();
-    NSLog(@"[TriggrCN][AT] dir=%@ name=%@", dir, name); // DEBUG build diagnostics, remove for release
+    TGATDebugLog([NSString stringWithFormat:@"run name=%@ dir=%@", name, dir]); // DEBUG
     if (!dir) {
         Dl_info info;
-        NSLog(@"[TriggrCN][AT] no dir; self=%@", (dladdr((void *)TGRunAutoTouch, &info) && info.dli_fname) ? @(info.dli_fname) : @"?");
+        NSString *selfPath = (dladdr((void *)TGRunAutoTouch, &info) && info.dli_fname) ? @(info.dli_fname) : @"?";
+        TGATDebugLog([NSString stringWithFormat:@"no dir; self=%@", selfPath]); // DEBUG
         return;
     }
     NSString *path = [name.pathExtension isEqualToString:@"lua"] ? [dir stringByAppendingPathComponent:name]
         : [[dir stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"lua"];
     void *sym = dlsym(RTLD_DEFAULT, "runCommand");
-    NSLog(@"[TriggrCN][AT] path=%@ sym=%p", path, sym); // DEBUG
+    TGATDebugLog([NSString stringWithFormat:@"path=%@ sym=%p", path, sym]); // DEBUG
     if (!sym) return;
-    ((void (*)(id, id))sym)(path, nil); // signature to verify on device: (path, nil)
-    NSLog(@"[TriggrCN][AT] called"); // DEBUG
+    @try {
+        ((void (*)(id, id))sym)(path, nil); // signature to verify on device: (path, nil)
+        TGATDebugLog(@"called"); // DEBUG
+    } @catch (NSException *e) {
+        TGATDebugLog([NSString stringWithFormat:@"EXC: %@", e]); // DEBUG
+    }
 }
 
 static void TGPerform(NSString *action) {

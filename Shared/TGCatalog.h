@@ -4,6 +4,7 @@
 // Each assignment is its own key in the prefs domain:
 //   "<mode>/<trigger id>" = "<action id>"   ("" = none)
 #include <dlfcn.h>
+#include <sys/stat.h>
 
 #define TGDomain @"com.johndie.triggr"
 #define TGPrefsChangedNotification "com.johndie.triggr/prefs-changed"
@@ -411,9 +412,28 @@ static inline NSArray<NSString *> *TGExtensionNames(void) {
 // AutoTouch scripts: "autotouch:<script>" runs a .lua file from AutoTouch's
 // scripts folder through ATTweak's runCommand (see Tweak.x). Rootless jbroot
 // layout first, classic layout second.
+// DEBUG build diagnostics: append to a plain file (no syslog tooling needed).
+// REMOVE for the release build.
+static inline void TGATDebugLog(NSString *line) {
+    static NSString *logPath;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        logPath = @"/var/mobile/Documents/triggr_at.log";
+        if (![[NSFileManager defaultManager] fileExistsAtPath:logPath])
+            [@"" writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+        chmod(logPath.fileSystemRepresentation, 0666);
+    });
+    NSString *stamp = [NSDate.date descriptionWithLocale:nil];
+    FILE *f = fopen(logPath.fileSystemRepresentation, "a");
+    if (f) { fprintf(f, "[%s] %s\n", stamp.UTF8String, line.UTF8String); fclose(f); }
+}
+
 static inline NSString *TGAutoTouchScriptsDirectory(void) {
-    for (NSString *path in @[@"/var/jb/var/mobile/Library/AutoTouch/Scripts", @"/var/mobile/Library/AutoTouch/Scripts"])
-        if ([NSFileManager.defaultManager isReadableFileAtPath:path]) return path;
+    for (NSString *path in @[@"/var/jb/var/mobile/Library/AutoTouch/Scripts", @"/var/mobile/Library/AutoTouch/Scripts"]) {
+        BOOL readable = [NSFileManager.defaultManager isReadableFileAtPath:path];
+        TGATDebugLog([NSString stringWithFormat:@"probe %@ -> %d", path, readable]);
+        if (readable) return path;
+    }
     // Disguised jbroot (roothide): /var/jb may not exist. Derive it from this
     // binary's real path (…/Library/MobileSubstrate/DynamicLibraries/…) and
     // probe AutoTouch's folder inside the jbroot. Same trick as the app.
@@ -424,7 +444,9 @@ static inline NSString *TGAutoTouchScriptsDirectory(void) {
         if (r.location != NSNotFound) {
             NSString *jbroot = [selfPath substringToIndex:r.location];
             NSString *candidate = [jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"];
-            if ([NSFileManager.defaultManager isReadableFileAtPath:candidate]) return candidate;
+            BOOL readable = [NSFileManager.defaultManager isReadableFileAtPath:candidate];
+            TGATDebugLog([NSString stringWithFormat:@"jbroot=%@ probe %@ -> %d", jbroot, candidate, readable]);
+            if (readable) return candidate;
         }
     }
     return nil;
