@@ -1113,11 +1113,10 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
         }
         if (!target) { done(NO); return; }
         @try {
-            Class actionCls = NSClassFromString(@"WFINShortcutContextualAction");
             id shortcutObj = [target respondsToSelector:@selector(shortcut)] ? [target performSelector:@selector(shortcut)] : nil;
-            id action = shortcutObj ? [(id)[actionCls alloc] performSelector:@selector(initWithINShortcut:) withObject:shortcutObj] : nil;
-            id descriptor = [action respondsToSelector:@selector(runDescriptorForSurface:)] ? [(id)action performSelector:@selector(runDescriptorForSurface:) withObject:nil] : nil;
-            id request = [action respondsToSelector:@selector(runRequestForSurface:)] ? [(id)action performSelector:@selector(runRequestForSurface:) withObject:nil] : nil;
+            Class descCls = NSClassFromString(@"WFINShortcutRunDescriptor");
+            id descriptor = (descCls && shortcutObj) ? [(id)[descCls alloc] performSelector:@selector(initWithShortcut:) withObject:shortcutObj] : nil;
+            id request = nil; // runWorkflowWithDescriptor tolerates a nil request
             TGATDebugLog([NSString stringWithFormat:@"vsc: descriptor=%@ request=%@", descriptor, request]); // DEBUG
             if (!descriptor) { done(NO); return; }
             SEL runSel = @selector(runWorkflowWithDescriptor:request:completion:);
