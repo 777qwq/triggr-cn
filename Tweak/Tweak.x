@@ -1122,8 +1122,8 @@ static void TGRunShortcut(NSString *name) {
     // the jbroot PATH that TGSpawnShell sets up.
     if (bin) {
         NSString *safe = [name stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
-        // DEBUG: capture springcuts output/errors to a readable file
-        TGRunShell([NSString stringWithFormat:@"%@ -r \"%@\" -w > /var/mobile/Documents/sc.log 2>&1; echo exit=$? >> /var/mobile/Documents/sc.log", bin, safe]);
+        // DEBUG: staged markers pinpoint where the spawn chain breaks
+        TGRunShell([NSString stringWithFormat:@"echo start > /var/mobile/Documents/sc.log; %@ -r \"%@\" -w >> /var/mobile/Documents/sc.log 2>&1; echo exit=$? >> /var/mobile/Documents/sc.log", bin, safe]);
         TGATDebugLog(@"shortcut: springcuts spawned"); // DEBUG
         return;
     }
