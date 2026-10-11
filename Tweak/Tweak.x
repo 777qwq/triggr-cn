@@ -127,6 +127,8 @@ static NSString *TGCurrentMode(void) {
 #pragma mark - Actions
 
 static BOOL TGCanPerform(NSString *action);
+static void TGDismissSiri(BOOL animated);
+static void TGDumpMethodsForClass(Class cls, NSString *label);
 static void TGShowMenu(NSString *menuID);
 
 // The action assigned to `trigger` in the current mode, or nil.
