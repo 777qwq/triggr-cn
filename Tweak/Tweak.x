@@ -978,26 +978,8 @@ static void TGRunAutoTouch(NSString *name) {
     }
     // The script may live in any candidate directory (roothide mirrors the
     // jbroot into the AppGroup container) — use the first one that has it.
-    NSString *base = name; // name may carry .lua / .at / subfolder already
-    if (!base.pathExtension.length) {
-        // try .lua then .at
-        NSString *tryLua = nil, *tryAt = nil;
-        for (NSString *dir in dirs) {
-            NSString *c = [[dir stringByAppendingPathComponent:base] stringByAppendingPathExtension:@"lua"];
-            if (!tryLua && [NSFileManager.defaultManager fileExistsAtPath:c]) tryLua = c;
-            c = [[dir stringByAppendingPathComponent:base] stringByAppendingPathExtension:@"at"];
-            if (!tryAt && [NSFileManager.defaultManager fileExistsAtPath:c]) tryAt = c;
-        }
-        base = tryLua ?: tryAt ?: [base stringByAppendingPathExtension:@"lua"];
-    }
-    NSString *path = nil;
-    if ([base.pathExtension length]) {
-        for (NSString *dir in dirs) {
-            NSString *candidate = [dir stringByAppendingPathComponent:base];
-            if ([NSFileManager.defaultManager fileExistsAtPath:candidate]) { path = candidate; break; }
-        }
-    }
-    if (!path) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", base, dirs]); return; }
+    NSString *path = TGAutoTouchFindScript(dirs, name);
+    if (!path) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
     void *sym = dlsym(RTLD_DEFAULT, "runCommand");
     TGATDebugLog([NSString stringWithFormat:@"path=%@ sym=%p", path, sym]); // DEBUG
     if (!sym) return;

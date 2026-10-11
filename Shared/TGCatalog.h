@@ -482,7 +482,6 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
             BOOL isDir = NO;
             [fm fileExistsAtPath:full isDirectory:&isDir];
             if (isDir) {
-                if ([file isEqualToString:@"Records"]) continue;
                 for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
                     if (([sub.pathExtension isEqualToString:@"lua"] || [sub.pathExtension isEqualToString:@"at"]) && ![sub hasPrefix:@"."]) {
                         NSString *rel = [NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension];
@@ -497,6 +496,30 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
     }
     TGATDebugLog([NSString stringWithFormat:@"lua/at=%@", names]); // DEBUG
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+// Locate a script by (folder-prefixed) name across all candidate directories,
+// at top level or one subfolder deep, trying .lua then .at.
+static inline NSString *TGAutoTouchFindScript(NSArray<NSString *> *dirs, NSString *name) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *stem = name.stringByDeletingPathExtension;
+    NSArray *exts = name.pathExtension.length ? @[name.pathExtension] : @[@"lua", @"at"];
+    for (NSString *dir in dirs) {
+        NSMutableArray *folders = [NSMutableArray arrayWithObject:@""];
+        for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
+            NSString *full = [dir stringByAppendingPathComponent:file];
+            BOOL isDir = NO;
+            [fm fileExistsAtPath:full isDirectory:&isDir];
+            if (isDir && ![file hasPrefix:@"."]) [folders addObject:file];
+        }
+        for (NSString *folder in folders) {
+            for (NSString *ext in exts) {
+                NSString *c = folder.length ? [[dir stringByAppendingPathComponent:folder] stringByAppendingPathComponent:[stem stringByAppendingPathExtension:ext]]
+                                            : [dir stringByAppendingPathComponent:[stem stringByAppendingPathExtension:ext]];
+                if ([fm fileExistsAtPath:c]) return c;
+            }
+        }
+    }
+    return nil;
 }
 
 // {Title, ItemTitle, Symbol, Color, ItemsDirectory, ItemsExtension, ItemsExclude, Program}
