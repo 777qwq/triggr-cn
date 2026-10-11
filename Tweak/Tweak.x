@@ -1087,12 +1087,47 @@ static void TGDismissSiri(BOOL animated) {
 // Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
 // Shortcuts.sqlite and activate it in-process via SBShortcutActivatorRequest
 // (no bounce through the Shortcuts app). Falls back to the URL scheme.
+// Collect every plausible Shortcuts.sqlite location (roothide hides/mirrors
+// most of them): classic paths, jbroot mirrors, and every AppGroup container.
+static NSArray<NSString *> *TGShortcutDatabases(void) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSMutableArray *dbs = [NSMutableArray array];
+    void (^probe)(NSString *) = ^(NSString *p) {
+        if (p && ![dbs containsObject:p] && [fm fileExistsAtPath:p]) [dbs addObject:p];
+    };
+    probe(@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
+    probe(@"/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
+    // jbroot derived from this binary's real path
+    Dl_info info;
+    if (dladdr((void *)TGShortcutDatabases, &info) && info.dli_fname) {
+        NSString *selfPath = @(info.dli_fname);
+        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
+        NSString *jbroot = nil;
+        if (marker.location != NSNotFound) {
+            NSRange slash = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, selfPath.length - marker.location - 1)];
+            if (slash.location != NSNotFound) jbroot = [selfPath substringToIndex:slash.location];
+        } else {
+            NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
+            if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
+            if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
+        }
+        if (jbroot) probe([jbroot stringByAppendingPathComponent:@"var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
+    }
+    // every AppGroup container: db at container root or under Library/
+    for (NSString *group in [fm contentsOfDirectoryAtPath:@"/var/mobile/Containers/Shared/AppGroup" error:nil]) {
+        NSString *base = [@"/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:group];
+        probe([base stringByAppendingPathComponent:@"Shortcuts.sqlite"]);
+        probe([base stringByAppendingPathComponent:@"Library/Shortcuts/Shortcuts.sqlite"]);
+        probe([base stringByAppendingPathComponent:@"Library/Preferences/group.com.apple.shortcuts.plist"]);
+    }
+    return dbs;
+}
+
 static NSString *TGShortcutIdentifierForName(NSString *name) {
     NSFileManager *fm = NSFileManager.defaultManager;
-    for (NSString *db in @[@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite", @"/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]) {
-        BOOL exists = [fm fileExistsAtPath:db];
-        TGATDebugLog([NSString stringWithFormat:@"shortcut db %@ exists=%d", db, exists]); // DEBUG
-        if (!exists) continue;
+    for (NSString *db in TGShortcutDatabases()) {
+        TGATDebugLog([NSString stringWithFormat:@"shortcut db probing %@", db]); // DEBUG
+        {
         sqlite3 *h = NULL;
         if (sqlite3_open_v2(db.fileSystemRepresentation, &h, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { sqlite3_close(h); continue; }
         NSString *ident = nil;
