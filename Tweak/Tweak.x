@@ -669,17 +669,20 @@ static BOOL TGScreenRecord(BOOL dry) {
         return NO;
     }
     if (dry) return YES;
-    BOOL recording = ((BOOL (*)(id, SEL))objc_msgSend)(recorder, @selector(systemRecording));
-    TGATDebugLog([NSString stringWithFormat:@"screenrec: recording=%d", recording]); // DEBUG
-    if (recording) {
-        ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
-            TGATDebugLog([NSString stringWithFormat:@"screenrec stop err=%@", error]); // DEBUG
-        });
-    } else {
-        ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id error) {
-            TGATDebugLog([NSString stringWithFormat:@"screenrec start err=%@", error]); // DEBUG
-        });
-    }
+    // systemRecording lies on iOS 16 (reports 1 while idle). Toggle by
+    // attempting a stop first: error -5829 means "wasn't recording" -> start.
+    __block BOOL startedStop = NO;
+    ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
+        TGATDebugLog([NSString stringWithFormat:@"screenrec stop err=%@", error]); // DEBUG
+        NSInteger code = [error respondsToSelector:@selector(code)] ? [(NSError *)error code] : 0;
+        if (code == -5829) {
+            startedStop = YES;
+            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id err2) {
+                TGATDebugLog([NSString stringWithFormat:@"screenrec start err=%@", err2]); // DEBUG
+            });
+        }
+    });
+    TGATDebugLog([NSString stringWithFormat:@"screenrec toggled stop->start=%d", startedStop]); // DEBUG
     return YES;
 }
 
@@ -1087,20 +1090,31 @@ static void TGDismissSiri(BOOL animated) {
 static NSString *TGShortcutIdentifierForName(NSString *name) {
     NSFileManager *fm = NSFileManager.defaultManager;
     for (NSString *db in @[@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite", @"/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]) {
-        if (![fm fileExistsAtPath:db]) continue;
+        BOOL exists = [fm fileExistsAtPath:db];
+        TGATDebugLog([NSString stringWithFormat:@"shortcut db %@ exists=%d", db, exists]); // DEBUG
+        if (!exists) continue;
         sqlite3 *h = NULL;
         if (sqlite3_open_v2(db.fileSystemRepresentation, &h, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { sqlite3_close(h); continue; }
-        sqlite3_stmt *st = NULL;
         NSString *ident = nil;
-        if (sqlite3_prepare_v2(h, "SELECT ZUNIQUENAME FROM ZSHORTCUT WHERE ZNAME=?", -1, &st, NULL) == SQLITE_OK) {
-            sqlite3_bind_text(st, 1, name.UTF8String, -1, SQLITE_TRANSIENT);
-            if (sqlite3_step(st) == SQLITE_ROW) {
-                const char *t = (const char *)sqlite3_column_text(st, 0);
-                if (t) ident = [NSString stringWithUTF8String:t];
+        // Schema/names ground truth for the debug build.
+        sqlite3_stmt *st = NULL;
+        if (sqlite3_prepare_v2(h, "SELECT ZNAME, ZUNIQUENAME FROM ZSHORTCUT LIMIT 40", -1, &st, NULL) == SQLITE_OK) {
+            while (sqlite3_step(st) == SQLITE_ROW) {
+                const char *n = (const char *)sqlite3_column_text(st, 0);
+                const char *u = (const char *)sqlite3_column_text(st, 1);
+                TGATDebugLog([NSString stringWithFormat:@"shortcut entry: name=%s ident=%s", n ? n : "?", u ? u : "?"]); // DEBUG
+                if (n && !ident && name && [name isEqualToString:[NSString stringWithUTF8String:n]])
+                    ident = u ? [NSString stringWithUTF8String:u] : nil;
             }
             sqlite3_finalize(st);
         } else {
-            TGATDebugLog([NSString stringWithFormat:@"shortcut db err: %s", sqlite3_errmsg(h)]); // DEBUG
+            TGATDebugLog([NSString stringWithFormat:@"shortcut query err: %s", sqlite3_errmsg(h)]); // DEBUG
+            sqlite3_stmt *tbl = NULL;
+            if (sqlite3_prepare_v2(h, "SELECT name FROM sqlite_master WHERE type='table' LIMIT 40", -1, &tbl, NULL) == SQLITE_OK) {
+                while (sqlite3_step(tbl) == SQLITE_ROW)
+                    TGATDebugLog([NSString stringWithFormat:@"shortcut table: %s", sqlite3_column_text(tbl, 0)]); // DEBUG
+                sqlite3_finalize(tbl);
+            }
         }
         sqlite3_close(h);
         if (ident) return ident;
