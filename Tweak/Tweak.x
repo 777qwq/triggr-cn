@@ -1126,7 +1126,14 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
             }
             TGATDebugLog([NSString stringWithFormat:@"vsc: ident=%@ shortcutObj=%@ descCls=%@ resp=%d", identifier, shortcutObj, descCls, shortcutObj && descCls && [descCls instancesRespondToSelector:@selector(initWithShortcut:)]]); // DEBUG
             id descriptor = (descCls && shortcutObj) ? [(id)[descCls alloc] performSelector:@selector(initWithShortcut:) withObject:shortcutObj] : nil;
-            id request = nil; // runWorkflowWithDescriptor tolerates a nil request
+            // runWorkflowWithDescriptor asserts request non-nil; a bare
+            // request with identifying fields is what Siri-like callers use.
+            Class reqCls = NSClassFromString(@"WFWorkflowRunRequest");
+            id request = reqCls ? [[reqCls alloc] init] : nil;
+            if (request) {
+                [(id)request setValue:@"com.apple.shortcuts" forKey:@"parentBundleIdentifier"];
+                [(id)request setValue:@"com.apple.shortcuts" forKey:@"runSource"];
+            }
             TGATDebugLog([NSString stringWithFormat:@"vsc: descriptor=%@ request=%@", descriptor, request]); // DEBUG
             if (!descriptor) { done(NO); return; }
             SEL runSel = @selector(runWorkflowWithDescriptor:request:completion:);
