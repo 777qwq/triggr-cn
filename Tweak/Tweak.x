@@ -660,12 +660,26 @@ static BOOL TGScreenRecord(BOOL dry) {
     Class cls = objc_getClass("RPScreenRecorder");
     if (!cls) { dlopen("/System/Library/Frameworks/ReplayKit.framework/ReplayKit", RTLD_NOW); cls = objc_getClass("RPScreenRecorder"); }
     id recorder = [cls respondsToSelector:@selector(sharedRecorder)] ? [cls performSelector:@selector(sharedRecorder)] : nil;
+    if (!recorder) { TGATDebugLog(@"screenrec: no recorder"); return NO; } // DEBUG
     SEL start = @selector(startSystemRecordingWithMicrophoneEnabled:handler:), stop = @selector(stopSystemRecording:);
-    if (![recorder respondsToSelector:start] || ![recorder respondsToSelector:stop] || ![recorder respondsToSelector:@selector(systemRecording)]) return NO;
+    BOOL hasStart = [recorder respondsToSelector:start], hasStop = [recorder respondsToSelector:stop], hasState = [recorder respondsToSelector:@selector(systemRecording)];
+    TGATDebugLog([NSString stringWithFormat:@"screenrec: hasStart=%d hasStop=%d hasState=%d", hasStart, hasStop, hasState]); // DEBUG
+    if (!hasStart || !hasStop || !hasState) {
+        TGDumpMethodsForClass(object_getClass(recorder), @"RPScreenRecorder"); // DEBUG
+        return NO;
+    }
     if (dry) return YES;
     BOOL recording = ((BOOL (*)(id, SEL))objc_msgSend)(recorder, @selector(systemRecording));
-    if (recording) ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) { });
-    else ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id error) { });
+    TGATDebugLog([NSString stringWithFormat:@"screenrec: recording=%d", recording]); // DEBUG
+    if (recording) {
+        ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
+            TGATDebugLog([NSString stringWithFormat:@"screenrec stop err=%@", error]); // DEBUG
+        });
+    } else {
+        ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id error) {
+            TGATDebugLog([NSString stringWithFormat:@"screenrec start err=%@", error]); // DEBUG
+        });
+    }
     return YES;
 }
 
