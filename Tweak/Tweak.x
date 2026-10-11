@@ -1180,7 +1180,7 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
         done(NO);
         return;
     }
-    ((void (*)(id, SEL, void (^)(NSArray *, id)))objc_msgSend)(client, getSel, ^(NSArray *list, id err) {
+    void (^getBlk)(id, id) = ^(id list, id err) {
         TGATDebugLog([NSString stringWithFormat:@"vsc: %lu shortcuts, err=%@", (unsigned long)list.count, err]); // DEBUG
         id target = nil;
         for (id vs in list) {
@@ -1212,7 +1212,8 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
             TGATDebugLog([NSString stringWithFormat:@"vsc EXC: %@", e]); // DEBUG
             done(NO);
         }
-    }];
+    };
+    ((void (*)(id, SEL, id))objc_msgSend)(client, getSel, getBlk);
 }
 
 static void TGRunShortcut(NSString *name) {
