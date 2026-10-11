@@ -413,22 +413,6 @@ static inline NSArray<NSString *> *TGExtensionNames(void) {
 // AutoTouch scripts: "autotouch:<script>" runs a .lua file from AutoTouch's
 // scripts folder through ATTweak's runCommand (see Tweak.x). Rootless jbroot
 // layout first, classic layout second.
-// DEBUG build diagnostics: append to a plain file (no syslog tooling needed).
-// REMOVE for the release build.
-static inline void TGATDebugLog(NSString *line) {
-    static NSString *logPath;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        logPath = @"/var/mobile/Documents/triggr_at.log";
-        if (![[NSFileManager defaultManager] fileExistsAtPath:logPath])
-            [@"" writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-        chmod(logPath.fileSystemRepresentation, 0666);
-    });
-    NSString *stamp = [NSDate.date descriptionWithLocale:nil];
-    FILE *f = fopen(logPath.fileSystemRepresentation, "a");
-    if (f) { fprintf(f, "[%s] %s\n", stamp.UTF8String, line.UTF8String); fclose(f); }
-}
-
 static inline NSArray<NSString *> *TGAutoTouchScriptDirectories(void) {
     NSMutableArray *dirs = [NSMutableArray array];
     NSFileManager *fm = NSFileManager.defaultManager;

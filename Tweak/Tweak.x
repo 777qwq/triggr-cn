@@ -129,7 +129,6 @@ static NSString *TGCurrentMode(void) {
 
 static BOOL TGCanPerform(NSString *action);
 static void TGDismissSiri(BOOL animated);
-static void TGDumpMethodsForClass(Class cls, NSString *label);
 static void TGShowMenu(NSString *menuID);
 
 // The action assigned to `trigger` in the current mode, or nil.
@@ -340,7 +339,6 @@ static BOOL TGCall(id target, SEL sel, BOOL dryRun) {
 }
 
 static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
-    TGATDebugLog([NSString stringWithFormat:@"volstep: up=%d dry=%d app=%d", up, dryRun, [springBoard respondsToSelector:@selector(volumeControl)]]); // DEBUG
     id volume = TGSpringBoardControl(@selector(volumeControl));
     SEL step = up ? @selector(volumeStepUp) : @selector(volumeStepDown);
     // iOS 16: volumeStepUp/Down only report the step (the empty @available
@@ -371,7 +369,6 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
     }
     SEL start = up ? @selector(increaseVolume) : @selector(decreaseVolume);
     if (![volume respondsToSelector:start] || ![volume respondsToSelector:@selector(cancelVolumeEvent)]) {
-        TGATDebugLog(@"volstep: start/cancel selectors missing"); // DEBUG
         return NO;
     }
     if (!dryRun) {
@@ -675,12 +672,9 @@ static BOOL TGScreenRecord(BOOL dry) {
     Class cls = objc_getClass("RPScreenRecorder");
     if (!cls) { dlopen("/System/Library/Frameworks/ReplayKit.framework/ReplayKit", RTLD_NOW); cls = objc_getClass("RPScreenRecorder"); }
     id recorder = [cls respondsToSelector:@selector(sharedRecorder)] ? [cls performSelector:@selector(sharedRecorder)] : nil;
-    if (!recorder) { TGATDebugLog(@"screenrec: no recorder"); return NO; } // DEBUG
     SEL start = @selector(startSystemRecordingWithMicrophoneEnabled:handler:), stop = @selector(stopSystemRecording:);
     BOOL hasStart = [recorder respondsToSelector:start], hasStop = [recorder respondsToSelector:stop], hasState = [recorder respondsToSelector:@selector(systemRecording)];
-    TGATDebugLog([NSString stringWithFormat:@"screenrec: hasStart=%d hasStop=%d hasState=%d", hasStart, hasStop, hasState]); // DEBUG
     if (!hasStart || !hasStop || !hasState) {
-        TGDumpMethodsForClass(object_getClass(recorder), @"RPScreenRecorder"); // DEBUG
         return NO;
     }
     if (dry) return YES;
@@ -688,16 +682,13 @@ static BOOL TGScreenRecord(BOOL dry) {
     // attempting a stop first: error -5829 means "wasn't recording" -> start.
     __block BOOL startedStop = NO;
     ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
-        TGATDebugLog([NSString stringWithFormat:@"screenrec stop err=%@", error]); // DEBUG
         NSInteger code = [error respondsToSelector:@selector(code)] ? [(NSError *)error code] : 0;
         if (code == -5829) {
             startedStop = YES;
             ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id err2) {
-                TGATDebugLog([NSString stringWithFormat:@"screenrec start err=%@", err2]); // DEBUG
             });
         }
     });
-    TGATDebugLog([NSString stringWithFormat:@"screenrec toggled stop->start=%d", startedStop]); // DEBUG
     return YES;
 }
 
@@ -1015,10 +1006,8 @@ static BOOL TGCanPerform(NSString *action) {
 // passing nil is harmless either way. No-op when AutoTouch isn't installed.
 static void TGRunAutoTouch(NSString *name) {
     NSArray<NSString *> *dirs = TGAutoTouchScriptDirectories();
-    TGATDebugLog([NSString stringWithFormat:@"run name=%@ dirs=%@", name, dirs]); // DEBUG
     if (!dirs.count) return;
     NSString *path = TGAutoTouchFindScript(dirs, name);
-    if (!path) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
     // Normalize to the AppGroup /var/… form AutoTouch itself uses.
     NSRange marker = [path rangeOfString:@"/.jbroot-"];
     if (marker.location != NSNotFound) {
@@ -1031,19 +1020,14 @@ static void TGRunAutoTouch(NSString *name) {
     // The verified entry (from Powercuts' AutoTouchRunFileAction):
     //   [[PlayingManager sharedInstance] makePlayingFor:path]  ->  [playing start]
     Class cls = NSClassFromString(@"PlayingManager");
-    TGATDebugLog([NSString stringWithFormat:@"path=%@ class=%@", path, cls]); // DEBUG
     if (!cls) return;
     @try {
         id shared = [cls performSelector:@selector(sharedInstance)];
-        TGATDebugLog([NSString stringWithFormat:@"shared=%@", shared]); // DEBUG
         if (!shared) return;
         id playing = [shared performSelector:@selector(makePlayingFor:) withObject:path];
-        TGATDebugLog([NSString stringWithFormat:@"playing=%@", playing]); // DEBUG
         if (!playing) return;
         [playing performSelector:@selector(start)];
-        TGATDebugLog(@"started"); // DEBUG
     } @catch (NSException *e) {
-        TGATDebugLog([NSString stringWithFormat:@"EXC: %@", e]); // DEBUG
     }
 }
 
@@ -1052,51 +1036,23 @@ static void TGRunAutoTouch(NSString *name) {
 static void TGUnlockDevice(NSString *password) {
     id mgr = TGShared("SBLockScreenManager");
     if (!mgr) return;
-    TGATDebugLog(@"unlock: start"); // DEBUG
     if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
         ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
     if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)]) {
         ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), password, YES);
-        TGATDebugLog(@"unlock: called"); // DEBUG
     } else {
-        TGATDebugLog(@"unlock: selector missing"); // DEBUG
-        TGDumpMethodsForClass(object_getClass(mgr), @"SBLockScreenManager"); // DEBUG
     }
-}
-
-// DEBUG: dump an object's instance methods to the log (device-side API truth).
-static void TGDumpMethodsForClass(Class cls, NSString *label) {
-    unsigned n = 0;
-    Method *list = class_copyMethodList(cls, &n);
-    NSMutableString *s = [NSMutableString stringWithFormat:@"%@ methods(%u): ", label, n];
-    for (unsigned i = 0; i < n; i++) [s appendFormat:@"%@; ", NSStringFromSelector(method_getName(list[i]))];
-    free(list);
-    TGATDebugLog(s);
 }
 
 // Dismiss the Siri view (Powercuts' old code). iOS 16 may have dropped the
 // legacy selector — if so, dump what exists on-device for the next step.
 static void TGDismissSiri(BOOL animated) {
     id ctrl = TGShared("SBAssistantController");
-    if (!ctrl) { TGATDebugLog(@"siri: no SBAssistantController"); return; } // DEBUG
     if ([ctrl respondsToSelector:@selector(dismissAssistantViewIfNecessaryWithAnimation:)]) {
         if (!animated) {} // legacy call ignores nothing; keep argument
         ((void (*)(id, SEL, BOOL))objc_msgSend)(ctrl, @selector(dismissAssistantViewIfNecessaryWithAnimation:), animated);
-        TGATDebugLog(@"siri: legacy dismiss called"); // DEBUG
         return;
     }
-    TGATDebugLog(@"siri: legacy selector missing"); // DEBUG
-    TGDumpMethodsForClass(object_getClass(ctrl), @"SBAssistantController"); // DEBUG
-    // Also list every SpringBoard class looking like the modern assistant UI.
-    unsigned cn = 0;
-    Class *all = objc_copyClassList(&cn);
-    NSMutableString *s = [NSMutableString stringWithFormat:@"assistant-ish classes(%u): ", cn];
-    for (unsigned i = 0; i < cn; i++) {
-        NSString *nm = NSStringFromClass(all[i]);
-        if ([nm containsString:@"Assistant"] || [nm containsString:@"Siri"]) [s appendFormat:@"%@; ", nm];
-    }
-    free(all);
-    TGATDebugLog(s); // DEBUG
 }
 
 // Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
@@ -1106,7 +1062,6 @@ static void TGRunShortcut(NSString *name) {
     // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
     // through sh fails under roothide, NSTask launches the binary directly).
     NSString *bin = TGSpringCutsBinary();
-    TGATDebugLog([NSString stringWithFormat:@"shortcut: entry name=%@ bin=%@", name, bin]); // DEBUG
     if (bin) {
         @try {
             Class taskCls = NSClassFromString(@"NSTask");
@@ -1115,19 +1070,15 @@ static void TGRunShortcut(NSString *name) {
                 [task performSelector:@selector(setLaunchPath:) withObject:bin];
                 [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
                 [task performSelector:@selector(launch)];
-                TGATDebugLog(@"shortcut: NSTask launched"); // DEBUG
                 return;
             }
             // popen fallback (RC's second route)
             FILE *fp = popen([[NSString stringWithFormat:@"%@ -r \"%@\"", bin, name] UTF8String], "r");
             if (fp) pclose(fp);
-            TGATDebugLog(@"shortcut: popen done"); // DEBUG
             return;
         } @catch (NSException *e) {
-            TGATDebugLog([NSString stringWithFormat:@"shortcut EXC: %@", e]); // DEBUG
         }
     }
-    TGATDebugLog(@"shortcut: no springcuts binary"); // DEBUG
     CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"),
         CFSTR("未检测到 SpringCuts：请从 Havoc 源安装后即可后台执行快捷指令。"), CFSTR("好"));
 }
