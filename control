@@ -2,7 +2,11 @@ Package: com.johndie.triggr
 Name: Triggr 汉化版 (Chinese Localization)
 Version: 1.0.4+cn2
 Architecture: iphoneos-arm64
-Description: Activator-lite for rootless Dopamine: assign actions to the home, lock and volume buttons, Touch ID, the mute switch, status bar taps, icon flicks, shaking, and events like charger, Wi-Fi, battery level or a time of day. Supports A12 and newer (arm64e).
+Description: Activator 式按键动作指派（中文汉化版）。
+ 将动作指派给主屏幕按钮、Touch ID、音量键、静音拨片、状态栏点按、
+ 图标轻扫、摇晃，以及充电、Wi-Fi、电量、定时等事件。
+ 支持快捷指令后台执行、AutoTouch 脚本、密码解锁、Siri 控制。
+ 适用 A12 及更新机型（arm64e），iOS 15+。
 Maintainer: 777qwq
 Author: John d_ie
 Section: Tweaks
