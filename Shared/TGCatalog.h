@@ -468,9 +468,12 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
     NSString *dir = TGAutoTouchScriptsDirectory();
     if (!dir) return @[];
     NSMutableArray *names = [NSMutableArray array];
-    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:nil])
+    NSError *error = nil;
+    NSArray *files = [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:&error];
+    for (NSString *file in files)
         if ([file.pathExtension isEqualToString:@"lua"] && ![file hasPrefix:@"."])
             [names addObject:file.stringByDeletingPathExtension];
+    TGATDebugLog([NSString stringWithFormat:@"list %@ error=%@ files=%@ lua=%@", dir, error, files, names]); // DEBUG
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
