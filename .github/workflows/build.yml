@@ -59,7 +59,7 @@ jobs:
         run: |
           brew install zstd >/dev/null 2>&1 || true
           mkdir -p /tmp/fat && cd /tmp/fat
-          IN=$(ls packages/com.johndie.triggr_*_iphoneos-arm64.deb | head -1)
+          IN=$(find packages -maxdepth 1 -type f -name "com.johndie.triggr*.deb" | head -1)
           ar x "$IN" data.tar.zst control.tar.zst debian-binary
           zstd -d -f data.tar.zst -o data.tar
           mkdir stage && tar -xf data.tar -C stage
