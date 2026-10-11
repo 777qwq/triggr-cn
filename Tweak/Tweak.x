@@ -793,6 +793,16 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return YES;
             },
             @"system.nothing": ^BOOL(BOOL dry) { return YES; }, // only takes the trigger away from iOS
+            @"system.dismissSiri": ^BOOL(BOOL dry) {
+                id ctrl = TGShared("SBAssistantController");
+                if (!ctrl) return NO;
+                if (![ctrl respondsToSelector:@selector(dismissAssistantViewIfNecessaryWithAnimation:)]) {
+                    if (!dry) TGDismissSiri(NO); // dumps diagnostics in the debug build
+                    return NO;
+                }
+                if (!dry) ((void (*)(id, SEL, BOOL))objc_msgSend)(ctrl, @selector(dismissAssistantViewIfNecessaryWithAnimation:), YES);
+                return YES;
+            },
             @"system.vibrate": ^BOOL(BOOL dry) {
                 if (!dry) AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
                 return YES;
@@ -953,6 +963,7 @@ static BOOL TGCanPerform(NSString *action) {
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
     if ([action hasPrefix:TGAutotouchPrefix]) return NSClassFromString(@"PlayingManager") != nil;
+    if ([action hasPrefix:TGUnlockPrefix]) return YES;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
     if ([action hasPrefix:TGExtensionPrefix]) {
         NSString *program = TGExtension(TGExtensionAction(action)[0])[@"Program"];
@@ -1001,6 +1012,58 @@ static void TGRunAutoTouch(NSString *name) {
     }
 }
 
+// Passcode unlock (from Powercuts' ActionsHelper): wake the screen, then
+// SBLockScreenManager._attemptUnlockWithPasscode:finishUIUnlock:.
+static void TGUnlockDevice(NSString *password) {
+    id mgr = TGShared("SBLockScreenManager");
+    if (!mgr) return;
+    TGATDebugLog(@"unlock: start"); // DEBUG
+    if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
+        ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
+    if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)]) {
+        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), password, YES);
+        TGATDebugLog(@"unlock: called"); // DEBUG
+    } else {
+        TGATDebugLog(@"unlock: selector missing"); // DEBUG
+        TGDumpMethodsForClass(object_getClass(mgr), @"SBLockScreenManager"); // DEBUG
+    }
+}
+
+// DEBUG: dump an object's instance methods to the log (device-side API truth).
+static void TGDumpMethodsForClass(Class cls, NSString *label) {
+    unsigned n = 0;
+    Method *list = class_copyMethodList(cls, &n);
+    NSMutableString *s = [NSMutableString stringWithFormat:@"%@ methods(%u): ", label, n];
+    for (unsigned i = 0; i < n; i++) [s appendFormat:@"%@; ", NSStringFromSelector(method_getName(list[i]))];
+    free(list);
+    TGATDebugLog(s);
+}
+
+// Dismiss the Siri view (Powercuts' old code). iOS 16 may have dropped the
+// legacy selector — if so, dump what exists on-device for the next step.
+static void TGDismissSiri(BOOL animated) {
+    id ctrl = TGShared("SBAssistantController");
+    if (!ctrl) { TGATDebugLog(@"siri: no SBAssistantController"); return; } // DEBUG
+    if ([ctrl respondsToSelector:@selector(dismissAssistantViewIfNecessaryWithAnimation:)]) {
+        if (!animated) {} // legacy call ignores nothing; keep argument
+        ((void (*)(id, SEL, BOOL))objc_msgSend)(ctrl, @selector(dismissAssistantViewIfNecessaryWithAnimation:), animated);
+        TGATDebugLog(@"siri: legacy dismiss called"); // DEBUG
+        return;
+    }
+    TGATDebugLog(@"siri: legacy selector missing"); // DEBUG
+    TGDumpMethodsForClass(object_getClass(ctrl), @"SBAssistantController"); // DEBUG
+    // Also list every SpringBoard class looking like the modern assistant UI.
+    unsigned cn = 0;
+    Class *all = objc_copyClassList(&cn);
+    NSMutableString *s = [NSMutableString stringWithFormat:@"assistant-ish classes(%u): ", cn];
+    for (unsigned i = 0; i < cn; i++) {
+        NSString *nm = NSStringFromClass(all[i]);
+        if ([nm containsString:@"Assistant"] || [nm containsString:@"Siri"]) [s appendFormat:@"%@; ", nm];
+    }
+    free(all);
+    TGATDebugLog(s); // DEBUG
+}
+
 static void TGPerform(NSString *action) {
     dispatch_async(dispatch_get_main_queue(), ^{
         TGActionBlock block = TGActionTable()[action] ?: TGSwitchAction(action);
@@ -1011,6 +1074,8 @@ static void TGPerform(NSString *action) {
             TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:name]);
         } else if ([action hasPrefix:TGAutotouchPrefix]) {
             TGRunAutoTouch([action substringFromIndex:TGAutotouchPrefix.length]);
+        } else if ([action hasPrefix:TGUnlockPrefix]) {
+            if (![action isEqual:TGUnlockPrefix]) TGUnlockDevice([action substringFromIndex:TGUnlockPrefix.length]);
         } else if ([action hasPrefix:TGURLPrefix]) {
             TGOpenURL([action substringFromIndex:TGURLPrefix.length]);
         } else if ([action hasPrefix:TGShellPrefix]) {

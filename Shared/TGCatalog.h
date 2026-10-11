@@ -111,6 +111,7 @@ static const TGItem TGSystemActions[] = {
     {"system.reachability", "单手模式"}, {"system.siri", "Siri"}, {"system.screenshot", "截屏"},
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
     {"system.vibrate", "振动"}, {"system.nothing", "无操作"},
+    {"system.dismissSiri", "关闭 Siri"},
 };
 static const TGItem TGPowerActions[] = {
     {"system.sleep", "熄屏"}, {"system.lock", "锁定设备"}, {"system.respring", "注销"}, {"system.powerdown", "关机滑块"},
@@ -178,6 +179,7 @@ static const TGGroup TGActionGroups[] = {
 #define TGSettingsPrefix @"settings:" // App-prefs page id
 #define TGAirPlayPrefix @"airplay:"   // AirPlay device name (or part of it)
 #define TGAutotouchPrefix @"autotouch:" // AutoTouch script name (without .lua)
+#define TGUnlockPrefix @"unlock:" // device passcode (stored in the action id, like shell commands)
 // Settings can't discover AirPlay devices itself: it asks SpringBoard, which
 // writes the names it sees to this file and answers with the second notification.
 #define TGAirPlayListRequest "com.johndie.triggr/airplay-list"
@@ -566,6 +568,7 @@ static inline NSString *TGActionTitle(NSString *action) {
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
     if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
     if ([action hasPrefix:TGAutotouchPrefix]) return [@"AutoTouch：" stringByAppendingString:[action substringFromIndex:TGAutotouchPrefix.length]];
+    if ([action hasPrefix:TGUnlockPrefix]) return @"密码解锁";
     if ([action hasPrefix:TGAppPrefix]) return [@"打开 " stringByAppendingString:[action substringFromIndex:TGAppPrefix.length]];
     if ([action hasPrefix:TGPausePrefix]) return [NSString stringWithFormat:@"停顿 %@", [action substringFromIndex:TGPausePrefix.length]];
     if ([action hasPrefix:TGMenuPrefix]) return @"菜单";
