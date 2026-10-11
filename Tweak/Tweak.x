@@ -989,9 +989,14 @@ static void TGRunAutoTouch(NSString *name) {
     } else {
         NSString *found = TGAutoTouchFindScript(dirs, name);
         if (!found) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
-        for (NSString *dir in dirs)
-            if ([found hasPrefix:dir]) { arg = [found substringFromIndex:dir.length + 1]; break; }
-        TGATDebugLog([NSString stringWithFormat:@"form=relative found=%@ arg=%@", found, arg]); // DEBUG
+        // Powercuts passes the AppGroup path in /var/… form (no /private prefix):
+        // "…/AppGroup/.jbroot-XXX/var/mobile/Library/AutoTouch/Scripts/Records/x.lua"
+        if ([found hasPrefix:@"/private/var/mobile/Containers/Shared/AppGroup/"]) {
+            arg = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingString:[found substringFromIndex:(NSUInteger)strlen("/private/var/mobile/Containers/Shared/AppGroup/")]];
+        } else {
+            arg = found;
+        }
+        TGATDebugLog([NSString stringWithFormat:@"form=powercuts found=%@ arg=%@", found, arg]); // DEBUG
     }
     NSString *path = arg;
     void *sym = dlsym(RTLD_DEFAULT, "runCommand");
