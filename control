@@ -1,9 +1,10 @@
 Package: com.johndie.triggr
-Name: Triggr 汉化版 (Chinese Localization)
+Name: Triggr汉化修改版
 Version: 1.0.4+cn3
 Architecture: iphoneos-arm64
 Description: 777qwq
- 基于 Triggr 开源项目汉化修改，只在隐根 iOS16 验证，兼容自测无效删除。
+ 基于 Triggr 开源项目汉化修改，兼容自测无效删除。
+ .
  新增：
  1. AutoTouch 动作：选择器列 .lua 脚本，后台执行；
  2. 密码解锁动作；
@@ -14,7 +15,7 @@ Description: 777qwq
  2. 音量加/减动作；
  3. 屏幕录制动作。
 Maintainer: 777qwq
-Author: John d_ie
+Author: 777qwq
 Section: Tweaks
 Depends: mobilesubstrate, preferenceloader, com.opa334.altlist, uikittools, firmware (>= 15.0)
 Depiction: https://jond-ie.github.io/repo/depictions/com.johndie.triggr.html
