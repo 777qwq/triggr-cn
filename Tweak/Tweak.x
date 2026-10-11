@@ -1091,9 +1091,11 @@ static void TGDismissSiri(BOOL animated) {
 // uses; verified against the on-device method dump): find the VCVoiceShortcut
 // by name, build a run descriptor from its INShortcut, run it. No app bounce.
 static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
+    TGATDebugLog([NSString stringWithFormat:@"vsc: enter name=%@", name]); // DEBUG
     Class cls = NSClassFromString(@"VCVoiceShortcutClient");
-    if (!cls) { done(NO); return; }
+    if (!cls) { TGATDebugLog(@"vsc: no class"); done(NO); return; } // DEBUG
     id client = [cls performSelector:@selector(standardClient)];
+    TGATDebugLog([NSString stringWithFormat:@"vsc: client=%@", client]); // DEBUG
     if (!client) { done(NO); return; }
     SEL getSel = @selector(getVoiceShortcutsWithCompletion:);
     if (![client respondsToSelector:getSel]) {
@@ -1139,12 +1141,17 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
 }
 
 static void TGRunShortcut(NSString *name) {
-    TGRunShortcutViaClient(name, ^(BOOL ok) {
+    TGATDebugLog([NSString stringWithFormat:@"shortcut: run entry name=%@", name]); // DEBUG
+    // standardClient sets up its XPC connection synchronously and can stall the
+    // trigger thread — run the whole client flow off the main path.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
+        TGRunShortcutViaClient(name, ^(BOOL ok) {
         TGATDebugLog([NSString stringWithFormat:@"shortcut via client ok=%d", ok]); // DEBUG
         if (ok) return;
         NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
         TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:enc]);
         TGATDebugLog(@"shortcut: url fallback"); // DEBUG
+        });
     });
 }
 
