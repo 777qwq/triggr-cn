@@ -1166,26 +1166,48 @@ static void TGDumpShortcutClasses(void) {
     }
 }
 
-static void TGRunShortcut(NSString *name) {
-    NSString *ident = TGShortcutIdentifierForName(name);
-    TGATDebugLog([NSString stringWithFormat:@"shortcut name=%@ ident=%@", name, ident]); // DEBUG
-    if (!ident) TGDumpShortcutClasses(); // DEBUG
-    Class cls = NSClassFromString(@"SBShortcutActivatorRequest");
-    if (ident && cls && [cls instancesRespondToSelector:@selector(initWithShortcutIdentifier:)]) {
-        id req = [(id)[cls alloc] performSelector:@selector(initWithShortcutIdentifier:) withObject:ident];
-        TGATDebugLog([NSString stringWithFormat:@"activator req=%@", req]); // DEBUG
-        if (req) {
-            if ([req respondsToSelector:@selector(sendRequest)]) {
-                [req performSelector:@selector(sendRequest)];
-                TGATDebugLog(@"shortcut: sent"); // DEBUG
-                return;
-            }
-            TGDumpMethodsForClass(cls, @"SBShortcutActivatorRequest"); // DEBUG
+// Run a shortcut through VoiceShortcutClient (the XPC path Shortcuts itself
+// uses; verified against the on-device method dump): find the VCVoiceShortcut
+// by name, build a run descriptor from its INShortcut, run it. No app bounce.
+static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
+    Class cls = NSClassFromString(@"VCVoiceShortcutClient");
+    if (!cls) { done(NO); return; }
+    id client = [cls performSelector:@selector(standardClient)];
+    if (!client) { done(NO); return; }
+    [client getVoiceShortcutsWithCompletion:^(NSArray *list, id err) {
+        TGATDebugLog([NSString stringWithFormat:@"vsc: %lu shortcuts, err=%@", (unsigned long)list.count, err]); // DEBUG
+        id target = nil;
+        for (id vs in list) {
+            NSString *n = [vs respondsToSelector:@selector(shortcutName)] ? [vs performSelector:@selector(shortcutName)] : nil;
+            if ([n isEqualToString:name]) { target = vs; break; }
         }
-    }
-    NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
-    TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:enc]);
-    TGATDebugLog(@"shortcut: url fallback"); // DEBUG
+        if (!target) { done(NO); return; }
+        @try {
+            Class actionCls = NSClassFromString(@"WFINShortcutContextualAction");
+            id action = [[actionCls alloc] initWithINShortcut:[target shortcut]];
+            id descriptor = [action runDescriptorForSurface:nil];
+            id request = [action runRequestForSurface:nil];
+            TGATDebugLog([NSString stringWithFormat:@"vsc: descriptor=%@ request=%@", descriptor, request]); // DEBUG
+            if (!descriptor) { done(NO); return; }
+            [client runWorkflowWithDescriptor:descriptor request:request completion:^(id result) {
+                TGATDebugLog([NSString stringWithFormat:@"vsc: run result=%@", result]); // DEBUG
+            }];
+            done(YES);
+        } @catch (NSException *e) {
+            TGATDebugLog([NSString stringWithFormat:@"vsc EXC: %@", e]); // DEBUG
+            done(NO);
+        }
+    }];
+}
+
+static void TGRunShortcut(NSString *name) {
+    TGRunShortcutViaClient(name, ^(BOOL ok) {
+        TGATDebugLog([NSString stringWithFormat:@"shortcut via client ok=%d", ok]); // DEBUG
+        if (ok) return;
+        NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
+        TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:enc]);
+        TGATDebugLog(@"shortcut: url fallback"); // DEBUG
+    });
 }
 
 static void TGPerform(NSString *action) {
