@@ -21,6 +21,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
+#import <sqlite3.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 #include <dlfcn.h>
 #import <AudioToolbox/AudioToolbox.h>
@@ -1066,14 +1067,61 @@ static void TGDismissSiri(BOOL animated) {
     TGATDebugLog(s); // DEBUG
 }
 
+// Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
+// Shortcuts.sqlite and activate it in-process via SBShortcutActivatorRequest
+// (no bounce through the Shortcuts app). Falls back to the URL scheme.
+static NSString *TGShortcutIdentifierForName(NSString *name) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *db in @[@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite", @"/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]) {
+        if (![fm fileExistsAtPath:db]) continue;
+        sqlite3 *h = NULL;
+        if (sqlite3_open_v2(db.fileSystemRepresentation, &h, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { sqlite3_close(h); continue; }
+        sqlite3_stmt *st = NULL;
+        NSString *ident = nil;
+        if (sqlite3_prepare_v2(h, "SELECT ZUNIQUENAME FROM ZSHORTCUT WHERE ZNAME=?", -1, &st, NULL) == SQLITE_OK) {
+            sqlite3_bind_text(st, 1, name.UTF8String, -1, SQLITE_TRANSIENT);
+            if (sqlite3_step(st) == SQLITE_ROW) {
+                const char *t = (const char *)sqlite3_column_text(st, 0);
+                if (t) ident = [NSString stringWithUTF8String:t];
+            }
+            sqlite3_finalize(st);
+        } else {
+            TGATDebugLog([NSString stringWithFormat:@"shortcut db err: %s", sqlite3_errmsg(h)]); // DEBUG
+        }
+        sqlite3_close(h);
+        if (ident) return ident;
+    }
+    return nil;
+}
+
+static void TGRunShortcut(NSString *name) {
+    NSString *ident = TGShortcutIdentifierForName(name);
+    TGATDebugLog([NSString stringWithFormat:@"shortcut name=%@ ident=%@", name, ident]); // DEBUG
+    Class cls = NSClassFromString(@"SBShortcutActivatorRequest");
+    if (ident && cls && [cls instancesRespondToSelector:@selector(initWithShortcutIdentifier:)]) {
+        id req = [[cls alloc] initWithShortcutIdentifier:ident];
+        TGATDebugLog([NSString stringWithFormat:@"activator req=%@", req]); // DEBUG
+        if (req) {
+            if ([req respondsToSelector:@selector(sendRequest)]) {
+                [req sendRequest];
+                TGATDebugLog(@"shortcut: sent"); // DEBUG
+                return;
+            }
+            TGDumpMethodsForClass(cls, @"SBShortcutActivatorRequest"); // DEBUG
+        }
+    }
+    NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
+    TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:enc]);
+    TGATDebugLog(@"shortcut: url fallback"); // DEBUG
+}
+
 static void TGPerform(NSString *action) {
     dispatch_async(dispatch_get_main_queue(), ^{
         TGActionBlock block = TGActionTable()[action] ?: TGSwitchAction(action);
         if (block) {
             block(NO);
         } else if ([action hasPrefix:TGShortcutPrefix]) {
-            NSString *name = [[action substringFromIndex:TGShortcutPrefix.length] stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
-            TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:name]);
+            TGRunShortcut([action substringFromIndex:TGShortcutPrefix.length]);
         } else if ([action hasPrefix:TGAutotouchPrefix]) {
             TGRunAutoTouch([action substringFromIndex:TGAutotouchPrefix.length]);
         } else if ([action hasPrefix:TGUnlockPrefix]) {
