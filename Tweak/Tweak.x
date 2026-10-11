@@ -952,7 +952,7 @@ static BOOL TGCanPerform(NSString *action) {
     if ([action hasPrefix:TGMenuPrefix]) return tgMenuNames[[action substringFromIndex:TGMenuPrefix.length]] != nil;
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
-    if ([action hasPrefix:TGAutotouchPrefix]) return dlsym(RTLD_DEFAULT, "runCommand") != NULL;
+    if ([action hasPrefix:TGAutotouchPrefix]) return NSClassFromString(@"PlayingManager") != nil;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
     if ([action hasPrefix:TGExtensionPrefix]) {
         NSString *program = TGExtension(TGExtensionAction(action)[0])[@"Program"];
@@ -970,47 +970,32 @@ static BOOL TGCanPerform(NSString *action) {
 static void TGRunAutoTouch(NSString *name) {
     NSArray<NSString *> *dirs = TGAutoTouchScriptDirectories();
     TGATDebugLog([NSString stringWithFormat:@"run name=%@ dirs=%@", name, dirs]); // DEBUG
-    if (!dirs.count) {
-        Dl_info info;
-        NSString *selfPath = (dladdr((void *)TGRunAutoTouch, &info) && info.dli_fname) ? @(info.dli_fname) : @"?";
-        TGATDebugLog([NSString stringWithFormat:@"no dir; self=%@", selfPath]); // DEBUG
-        return;
-    }
-    // The script may live in any candidate directory (roothide mirrors the
-    // jbroot into the AppGroup container) — use the first one that has it.
-    // Path-form experiment (debug build):
-    //   input "锁屏.lua" (with extension)  -> passed VERBATIM (relative name form)
-    //   input "锁屏" / "Records/锁屏"      -> resolved to a file, passed as a
-    //                                         path RELATIVE to AutoTouch's root
-    NSString *arg = nil;
-    if (name.pathExtension.length) {
-        arg = name;
-        TGATDebugLog([NSString stringWithFormat:@"form=verbatim name=%@", name]); // DEBUG
-    } else {
-        NSString *found = TGAutoTouchFindScript(dirs, name);
-        if (!found) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
-        // Powercuts passes the AppGroup path in /var/… form (no /private prefix):
-        // "…/AppGroup/.jbroot-XXX/var/mobile/Library/AutoTouch/Scripts/Records/x.lua"
-        // Both jbroot views hold the same storage; normalize unconditionally
-        // to the AppGroup /var/… form Powercuts uses.
-        NSRange marker = [found rangeOfString:@"/.jbroot-"];
-        if (marker.location != NSNotFound) {
-            NSRange slash = [found rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, found.length - marker.location - 1)];
-            if (slash.location != NSNotFound) {
-                NSString *jbrootName = [found substringWithRange:NSMakeRange(marker.location + 1, slash.location - marker.location - 1)]; // ".jbroot-<hex>"
-                arg = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingPathComponent:[jbrootName stringByAppendingString:[found substringFromIndex:slash.location]]];
-            }
+    if (!dirs.count) return;
+    NSString *path = TGAutoTouchFindScript(dirs, name);
+    if (!path) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", name, dirs]); return; }
+    // Normalize to the AppGroup /var/… form AutoTouch itself uses.
+    NSRange marker = [path rangeOfString:@"/.jbroot-"];
+    if (marker.location != NSNotFound) {
+        NSRange slash = [path rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, path.length - marker.location - 1)];
+        if (slash.location != NSNotFound) {
+            NSString *jbrootName = [path substringWithRange:NSMakeRange(marker.location + 1, slash.location - marker.location - 1)];
+            path = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingPathComponent:[jbrootName stringByAppendingString:[path substringFromIndex:slash.location]]];
         }
-        if (!arg) arg = found;
-        TGATDebugLog([NSString stringWithFormat:@"form=powercuts found=%@ arg=%@", found, arg]); // DEBUG
     }
-    NSString *path = arg;
-    void *sym = dlsym(RTLD_DEFAULT, "runCommand");
-    TGATDebugLog([NSString stringWithFormat:@"path=%@ sym=%p", path, sym]); // DEBUG
-    if (!sym) return;
+    // The verified entry (from Powercuts' AutoTouchRunFileAction):
+    //   [[PlayingManager sharedInstance] makePlayingFor:path]  ->  [playing start]
+    Class cls = NSClassFromString(@"PlayingManager");
+    TGATDebugLog([NSString stringWithFormat:@"path=%@ class=%@", path, cls]); // DEBUG
+    if (!cls) return;
     @try {
-        ((void (*)(id, id))sym)(path, nil); // signature to verify on device: (path, nil)
-        TGATDebugLog(@"called"); // DEBUG
+        id shared = [cls performSelector:@selector(sharedInstance)];
+        TGATDebugLog([NSString stringWithFormat:@"shared=%@", shared]); // DEBUG
+        if (!shared) return;
+        id playing = [shared performSelector:@selector(makePlayingFor:) withObject:path];
+        TGATDebugLog([NSString stringWithFormat:@"playing=%@", playing]); // DEBUG
+        if (!playing) return;
+        [playing performSelector:@selector(start)];
+        TGATDebugLog(@"started"); // DEBUG
     } @catch (NSException *e) {
         TGATDebugLog([NSString stringWithFormat:@"EXC: %@", e]); // DEBUG
     }
