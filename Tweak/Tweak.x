@@ -1139,7 +1139,9 @@ static void TGRunShortcut(NSString *name) {
             TGATDebugLog([NSString stringWithFormat:@"shortcut EXC: %@", e]); // DEBUG
         }
     }
-    TGATDebugLog(@"shortcut: no springcuts binary, doing nothing"); // DEBUG
+    TGATDebugLog(@"shortcut: no springcuts binary"); // DEBUG
+    CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"),
+        CFSTR("未检测到 SpringCuts：请从 Havoc 源安装后即可后台执行快捷指令。"), CFSTR("好"));
 }
 
 static void TGPerform(NSString *action) {
