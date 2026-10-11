@@ -58,8 +58,11 @@ jobs:
         continue-on-error: true
         run: |
           brew install zstd >/dev/null 2>&1 || true
-          mkdir -p /tmp/fat && cd /tmp/fat
-          IN=$(find packages -maxdepth 1 -type f -name "com.johndie.triggr*.deb" | head -1)
+          cd "$GITHUB_WORKSPACE"
+          ls -la packages/ || true
+          IN=$(find packages -maxdepth 1 -type f -name "*.deb" ! -name "*roothide*" 2>/dev/null | head -1)
+          if [ -z "$IN" ]; then IN=$(find . -maxdepth 3 -type f -name "com.johndie.triggr*.deb" ! -name "*roothide*" 2>/dev/null | head -1); fi
+          echo "FAT source: $IN"
           ar x "$IN" data.tar.zst control.tar.zst debian-binary
           zstd -d -f data.tar.zst -o data.tar
           mkdir stage && tar -xf data.tar -C stage
