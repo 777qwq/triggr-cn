@@ -1125,32 +1125,21 @@ static NSArray<NSString *> *TGShortcutDatabases(void) {
 }
 
 static NSString *TGShortcutIdentifierForName(NSString *name) {
-    NSFileManager *fm = NSFileManager.defaultManager;
     for (NSString *db in TGShortcutDatabases()) {
-        TGATDebugLog([NSString stringWithFormat:@"shortcut db probing %@", db]); // DEBUG
-        {
         sqlite3 *h = NULL;
         if (sqlite3_open_v2(db.fileSystemRepresentation, &h, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { sqlite3_close(h); continue; }
         NSString *ident = nil;
-        // Schema/names ground truth for the debug build.
         sqlite3_stmt *st = NULL;
         if (sqlite3_prepare_v2(h, "SELECT ZNAME, ZUNIQUENAME FROM ZSHORTCUT LIMIT 40", -1, &st, NULL) == SQLITE_OK) {
             while (sqlite3_step(st) == SQLITE_ROW) {
                 const char *n = (const char *)sqlite3_column_text(st, 0);
                 const char *u = (const char *)sqlite3_column_text(st, 1);
-                TGATDebugLog([NSString stringWithFormat:@"shortcut entry: name=%s ident=%s", n ? n : "?", u ? u : "?"]); // DEBUG
-                if (n && !ident && name && [name isEqualToString:[NSString stringWithUTF8String:n]])
+                NSString *entry = [NSString stringWithFormat:@"shortcut entry: name=%s ident=%s", n ? n : "?", u ? u : "?"];
+                TGATDebugLog(entry); // DEBUG
+                if (!ident && n && [name isEqualToString:[NSString stringWithUTF8String:n]])
                     ident = u ? [NSString stringWithUTF8String:u] : nil;
             }
             sqlite3_finalize(st);
-        } else {
-            TGATDebugLog([NSString stringWithFormat:@"shortcut query err: %s", sqlite3_errmsg(h)]); // DEBUG
-            sqlite3_stmt *tbl = NULL;
-            if (sqlite3_prepare_v2(h, "SELECT name FROM sqlite_master WHERE type='table' LIMIT 40", -1, &tbl, NULL) == SQLITE_OK) {
-                while (sqlite3_step(tbl) == SQLITE_ROW)
-                    TGATDebugLog([NSString stringWithFormat:@"shortcut table: %s", sqlite3_column_text(tbl, 0)]); // DEBUG
-                sqlite3_finalize(tbl);
-            }
         }
         sqlite3_close(h);
         if (ident) return ident;
