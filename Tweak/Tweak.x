@@ -1138,8 +1138,10 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
             Class reqCls = NSClassFromString(@"WFWorkflowRunRequest");
             id request = reqCls ? [[reqCls alloc] init] : nil;
             if (request) {
-                [(id)request setValue:@"com.apple.shortcuts" forKey:@"parentBundleIdentifier"];
-                [(id)request setValue:@"com.apple.shortcuts" forKey:@"runSource"];
+                // Claim SpringBoard honestly — the service validates the
+                // caller identity and invalidates the connection on mismatch.
+                [(id)request setValue:@"com.apple.springboard" forKey:@"parentBundleIdentifier"];
+                [(id)request setValue:@"com.apple.springboard" forKey:@"runSource"];
             }
             TGATDebugLog([NSString stringWithFormat:@"vsc: descriptor=%@ request=%@", descriptor, request]); // DEBUG
             if (!descriptor) { done(NO); return; }
