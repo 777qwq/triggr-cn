@@ -680,11 +680,9 @@ static BOOL TGScreenRecord(BOOL dry) {
     if (dry) return YES;
     // systemRecording lies on iOS 16 (reports 1 while idle). Toggle by
     // attempting a stop first: error -5829 means "wasn't recording" -> start.
-    __block BOOL startedStop = NO;
     ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
         NSInteger code = [error respondsToSelector:@selector(code)] ? [(NSError *)error code] : 0;
         if (code == -5829) {
-            startedStop = YES;
             ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id err2) {
             });
         }
