@@ -54,23 +54,6 @@ jobs:
           if [ -f /tmp/extra.deb ]; then sudo env "PATH=$PATH" bash /tmp/patch.sh /tmp/extra.deb packages/official-roothide.deb; fi
           ls -la packages/
 
-      - name: 'Build FAT deb (rootless AND roothide)'
-        continue-on-error: true
-        run: |
-          brew install zstd >/dev/null 2>&1 || true
-          cd "$GITHUB_WORKSPACE"
-          ls -la packages/ || true
-          IN=$(find packages -maxdepth 1 -type f -name "*.deb" ! -name "*roothide*" 2>/dev/null | head -1)
-          if [ -z "$IN" ]; then IN=$(find . -maxdepth 3 -type f -name "com.johndie.triggr*.deb" ! -name "*roothide*" 2>/dev/null | head -1); fi
-          echo "FAT source: $IN"
-          rm -rf /tmp/fat && mkdir -p /tmp/fat/merged
-          dpkg-deb -R "$IN" /tmp/fat/stage
-          test -d /tmp/fat/stage/var/jb
-          cp -R /tmp/fat/stage/var/jb/. /tmp/fat/merged/
-          cp -R /tmp/fat/stage/DEBIAN /tmp/fat/merged/DEBIAN
-          dpkg-deb -b /tmp/fat/merged packages/Triggr_1.0.4+cn3_FAT.deb
-          ls -la packages/
-
       - name: Upload debs
         uses: actions/upload-artifact@v4
         with:
