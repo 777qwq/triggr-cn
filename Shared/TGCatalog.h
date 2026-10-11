@@ -428,61 +428,67 @@ static inline void TGATDebugLog(NSString *line) {
     if (f) { fprintf(f, "[%s] %s\n", stamp.UTF8String, line.UTF8String); fclose(f); }
 }
 
-static inline NSString *TGAutoTouchScriptsDirectory(void) {
-    for (NSString *path in @[@"/var/jb/var/mobile/Library/AutoTouch/Scripts", @"/var/mobile/Library/AutoTouch/Scripts"]) {
-        BOOL readable = [NSFileManager.defaultManager isReadableFileAtPath:path];
-        TGATDebugLog([NSString stringWithFormat:@"probe %@ -> %d", path, readable]);
-        if (readable) return path;
-    }
-    // Disguised jbroot (roothide): /var/jb may not exist. Derive it from this
-    // binary's real path (…/Library/MobileSubstrate/DynamicLibraries/…) and
-    // probe AutoTouch's folder inside the jbroot. Same trick as the app.
+static inline NSArray<NSString *> *TGAutoTouchScriptDirectories(void) {
+    NSMutableArray *dirs = [NSMutableArray array];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    void (^probe)(NSString *) = ^(NSString *p) {
+        if (p && ![dirs containsObject:p] && [fm isReadableFileAtPath:p]) [dirs addObject:p];
+    };
+    probe(@"/var/jb/var/mobile/Library/AutoTouch/Scripts");
+    probe(@"/var/mobile/Library/AutoTouch/Scripts");
+    // roothide: the sandboxed AutoTouch app writes through its AppGroup
+    // container, where the jbroot is mirrored under a ".jbroot-<hex>" folder.
+    for (NSString *group in [fm contentsOfDirectoryAtPath:@"/private/var/mobile/Containers/Shared/AppGroup" error:nil])
+        if ([group hasPrefix:@".jbroot-"])
+            probe([@"/private/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:[group stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"]]);
+    // Disguised jbroot derived from this binary's real path (no /var/jb).
     Dl_info info;
-    if (dladdr((void *)TGAutoTouchScriptsDirectory, &info) && info.dli_fname) {
+    if (dladdr((void *)TGAutoTouchScriptDirectories, &info) && info.dli_fname) {
         NSString *selfPath = @(info.dli_fname);
-        // Works from any in-jbroot binary: tweak (/usr/lib/TweakInject or
-        // /Library/MobileSubstrate) or preference bundle (…/.jbroot-XXXX/…).
-        // jbroot = the hidden ".jbroot-<hex>" directory itself, or whatever
-        // precedes the injection folder.
-        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
         NSString *jbroot = nil;
+        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
         if (marker.location != NSNotFound) {
             NSRange slash = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, selfPath.length - marker.location - 1)];
-            jbroot = slash.location == NSNotFound ? nil : [selfPath substringToIndex:slash.location];
+            if (slash.location != NSNotFound) jbroot = [selfPath substringToIndex:slash.location];
         } else {
             NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
             if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
             if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
         }
-        if (jbroot) {
-            NSString *candidate = [jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"];
-            BOOL readable = [NSFileManager.defaultManager isReadableFileAtPath:candidate];
-            TGATDebugLog([NSString stringWithFormat:@"jbroot=%@ probe %@ -> %d", jbroot, candidate, readable]);
-            if (readable) return candidate;
-        }
+        if (jbroot) probe([jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"]);
     }
-    return nil;
+    TGATDebugLog([NSString stringWithFormat:@"dirs=%@", dirs]); // DEBUG
+    return dirs;
+}
+
+// Kept for compatibility: the first directory that exists.
+static inline NSString *TGAutoTouchScriptsDirectory(void) {
+    return TGAutoTouchScriptDirectories().firstObject;
 }
 
 static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
-    NSString *dir = TGAutoTouchScriptsDirectory();
-    if (!dir) return @[];
     NSMutableArray *names = [NSMutableArray array];
-    // Recursive: AutoTouch organizes scripts in subfolders; show "Folder/Name".
     NSFileManager *fm = NSFileManager.defaultManager;
-    for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
-        if ([file hasPrefix:@"."]) continue;
-        NSString *full = [dir stringByAppendingPathComponent:file];
-        BOOL isDir = NO;
-        [fm fileExistsAtPath:full isDirectory:&isDir];
-        if (isDir) {
-            if ([file isEqualToString:@"Records"]) continue;
-            for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
-                if ([sub.pathExtension isEqualToString:@"lua"] && ![sub hasPrefix:@"."])
-                    [names addObject:[NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension]];
+    // Enumerate every candidate directory (union) and one subfolder level;
+    // AutoTouch organizes scripts in subfolders, shown as "Folder/Name".
+    for (NSString *dir in TGAutoTouchScriptDirectories()) {
+        for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
+            if ([file hasPrefix:@"."]) continue;
+            NSString *full = [dir stringByAppendingPathComponent:file];
+            BOOL isDir = NO;
+            [fm fileExistsAtPath:full isDirectory:&isDir];
+            if (isDir) {
+                if ([file isEqualToString:@"Records"]) continue;
+                for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
+                    if ([sub.pathExtension isEqualToString:@"lua"] && ![sub hasPrefix:@"."]) {
+                        NSString *rel = [NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension];
+                        if (![names containsObject:rel]) [names addObject:rel];
+                    }
+                }
+            } else if ([file.pathExtension isEqualToString:@"lua"]) {
+                if (![names containsObject:file.stringByDeletingPathExtension])
+                    [names addObject:file.stringByDeletingPathExtension];
             }
-        } else if ([file.pathExtension isEqualToString:@"lua"]) {
-            [names addObject:file.stringByDeletingPathExtension];
         }
     }
     TGATDebugLog([NSString stringWithFormat:@"lua=%@", names]); // DEBUG

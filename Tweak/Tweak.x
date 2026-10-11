@@ -968,16 +968,23 @@ static BOOL TGCanPerform(NSString *action) {
 // (verified from ATTweak's symbol table). Some builds keep a second argument;
 // passing nil is harmless either way. No-op when AutoTouch isn't installed.
 static void TGRunAutoTouch(NSString *name) {
-    NSString *dir = TGAutoTouchScriptsDirectory();
-    TGATDebugLog([NSString stringWithFormat:@"run name=%@ dir=%@", name, dir]); // DEBUG
-    if (!dir) {
+    NSArray<NSString *> *dirs = TGAutoTouchScriptDirectories();
+    TGATDebugLog([NSString stringWithFormat:@"run name=%@ dirs=%@", name, dirs]); // DEBUG
+    if (!dirs.count) {
         Dl_info info;
         NSString *selfPath = (dladdr((void *)TGRunAutoTouch, &info) && info.dli_fname) ? @(info.dli_fname) : @"?";
         TGATDebugLog([NSString stringWithFormat:@"no dir; self=%@", selfPath]); // DEBUG
         return;
     }
-    NSString *path = [name.pathExtension isEqualToString:@"lua"] ? [dir stringByAppendingPathComponent:name]
-        : [[dir stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"lua"];
+    // The script may live in any candidate directory (roothide mirrors the
+    // jbroot into the AppGroup container) — use the first one that has it.
+    NSString *base = name.pathExtension.length ? name : [name stringByAppendingPathExtension:@"lua"];
+    NSString *path = nil;
+    for (NSString *dir in dirs) {
+        NSString *candidate = [dir stringByAppendingPathComponent:base];
+        if ([NSFileManager.defaultManager fileExistsAtPath:candidate]) { path = candidate; break; }
+    }
+    if (!path) { TGATDebugLog([NSString stringWithFormat:@"script not found: %@ in %@", base, dirs]); return; }
     void *sym = dlsym(RTLD_DEFAULT, "runCommand");
     TGATDebugLog([NSString stringWithFormat:@"path=%@ sym=%p", path, sym]); // DEBUG
     if (!sym) return;
