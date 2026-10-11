@@ -1089,12 +1089,14 @@ static void TGDismissSiri(BOOL animated) {
 // (no bounce through the Shortcuts app). Falls back to the URL scheme.
 // Collect every plausible Shortcuts.sqlite location (roothide hides/mirrors
 // most of them): classic paths, jbroot mirrors, and every AppGroup container.
+static NSMutableArray<NSString *> *TGShortcutDBList = nil;
+static void TGShortcutProbe(NSString *p) {
+    if (p && ![TGShortcutDBList containsObject:p] && [NSFileManager.defaultManager fileExistsAtPath:p]) [TGShortcutDBList addObject:p];
+}
 static NSArray<NSString *> *TGShortcutDatabases(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
+    TGShortcutDBList = [NSMutableArray array];
     NSMutableArray *dbs = [NSMutableArray array];
-    void (^probe)(NSString *) = ^(NSString *p) {
-        if (p && ![dbs containsObject:p] && [fm fileExistsAtPath:p]) [dbs addObject:p];
-    };
     probe(@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
     probe(@"/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
     // jbroot derived from this binary's real path
@@ -1111,16 +1113,15 @@ static NSArray<NSString *> *TGShortcutDatabases(void) {
             if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
             if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
         }
-        if (jbroot) probe([jbroot stringByAppendingPathComponent:@"var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
+        if (jbroot) TGShortcutProbe([jbroot stringByAppendingPathComponent:@"var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
     }
     // every AppGroup container: db at container root or under Library/
     for (NSString *group in [fm contentsOfDirectoryAtPath:@"/var/mobile/Containers/Shared/AppGroup" error:nil]) {
         NSString *base = [@"/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:group];
-        probe([base stringByAppendingPathComponent:@"Shortcuts.sqlite"]);
-        probe([base stringByAppendingPathComponent:@"Library/Shortcuts/Shortcuts.sqlite"]);
-        probe([base stringByAppendingPathComponent:@"Library/Preferences/group.com.apple.shortcuts.plist"]);
+        TGShortcutProbe([base stringByAppendingPathComponent:@"Shortcuts.sqlite"]);
+        TGShortcutProbe([base stringByAppendingPathComponent:@"Library/Shortcuts/Shortcuts.sqlite"]);
     }
-    return dbs;
+    return TGShortcutDBList;
 }
 
 static NSString *TGShortcutIdentifierForName(NSString *name) {
