@@ -1184,14 +1184,23 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
         if (!target) { done(NO); return; }
         @try {
             Class actionCls = NSClassFromString(@"WFINShortcutContextualAction");
-            id action = [[actionCls alloc] initWithINShortcut:[target shortcut]];
-            id descriptor = [action runDescriptorForSurface:nil];
-            id request = [action runRequestForSurface:nil];
+            id shortcutObj = [target respondsToSelector:@selector(shortcut)] ? [target performSelector:@selector(shortcut)] : nil;
+            id action = shortcutObj ? [(id)[actionCls alloc] performSelector:@selector(initWithINShortcut:) withObject:shortcutObj] : nil;
+            id descriptor = [action respondsToSelector:@selector(runDescriptorForSurface:)] ? [(id)action performSelector:@selector(runDescriptorForSurface:) withObject:nil] : nil;
+            id request = [action respondsToSelector:@selector(runRequestForSurface:)] ? [(id)action performSelector:@selector(runRequestForSurface:) withObject:nil] : nil;
             TGATDebugLog([NSString stringWithFormat:@"vsc: descriptor=%@ request=%@", descriptor, request]); // DEBUG
             if (!descriptor) { done(NO); return; }
-            [client runWorkflowWithDescriptor:descriptor request:request completion:^(id result) {
-                TGATDebugLog([NSString stringWithFormat:@"vsc: run result=%@", result]); // DEBUG
-            }];
+            SEL runSel = @selector(runWorkflowWithDescriptor:request:completion:);
+            if ([client respondsToSelector:runSel]) {
+                id runBlock = ^(id result) {
+                    TGATDebugLog([NSString stringWithFormat:@"vsc: run result=%@", result]); // DEBUG
+                };
+                ((id (*)(id, SEL, id, id, id))objc_msgSend)(client, runSel, descriptor, request, runBlock);
+            } else {
+                TGDumpMethodsForClass(object_getClass(client), @"VCVoiceShortcutClient-missing-run"); // DEBUG
+                done(NO);
+                return;
+            }
             done(YES);
         } @catch (NSException *e) {
             TGATDebugLog([NSString stringWithFormat:@"vsc EXC: %@", e]); // DEBUG
