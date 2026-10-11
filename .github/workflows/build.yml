@@ -54,7 +54,7 @@ jobs:
           if [ -f /tmp/extra.deb ]; then sudo env "PATH=$PATH" bash /tmp/patch.sh /tmp/extra.deb packages/official-roothide.deb; fi
           ls -la packages/
 
-      - name: Build FAT deb (relative layout: works on rootless AND roothide)
+      - name: 'Build FAT deb (rootless AND roothide)'
         continue-on-error: true
         run: |
           brew install zstd >/dev/null 2>&1 || true
