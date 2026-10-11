@@ -63,17 +63,13 @@ jobs:
           IN=$(find packages -maxdepth 1 -type f -name "*.deb" ! -name "*roothide*" 2>/dev/null | head -1)
           if [ -z "$IN" ]; then IN=$(find . -maxdepth 3 -type f -name "com.johndie.triggr*.deb" ! -name "*roothide*" 2>/dev/null | head -1); fi
           echo "FAT source: $IN"
-          ar x "$IN" data.tar.zst control.tar.zst debian-binary
-          zstd -d -f data.tar.zst -o data.tar
-          mkdir stage && tar -xf data.tar -C stage
-          test -d stage/var/jb
-          mkdir merged
-          cp -R stage/var/jb/. merged/
-          (cd merged && tar -cf ../rel.tar .)
-          zstd -f rel.tar -o data-fat.tar.zst
-          ar rc triggr-cn-fat.deb debian-binary control.tar.zst data-fat.tar.zst
-          cp triggr-cn-fat.deb "$GITHUB_WORKSPACE/packages/Triggr_1.0.4+cn3_FAT.deb"
-          ls -la "$GITHUB_WORKSPACE/packages/"
+          rm -rf /tmp/fat && mkdir -p /tmp/fat/merged
+          dpkg-deb -R "$IN" /tmp/fat/stage
+          test -d /tmp/fat/stage/var/jb
+          cp -R /tmp/fat/stage/var/jb/. /tmp/fat/merged/
+          cp -R /tmp/fat/stage/DEBIAN /tmp/fat/merged/DEBIAN
+          dpkg-deb -b /tmp/fat/merged packages/Triggr_1.0.4+cn3_FAT.deb
+          ls -la packages/
 
       - name: Upload debs
         uses: actions/upload-artifact@v4
