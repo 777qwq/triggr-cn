@@ -1087,16 +1087,6 @@ static void TGDismissSiri(BOOL animated) {
 // Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
 // Shortcuts.sqlite and activate it in-process via SBShortcutActivatorRequest
 // (no bounce through the Shortcuts app). Falls back to the URL scheme.
-// DEBUG build diagnostics (file log). Remove for release.
-static void TGATDebugLog(NSString *line) {
-    NSString *logPath = @"/var/mobile/Documents/triggr_at.log";
-    if (![[NSFileManager defaultManager] fileExistsAtPath:logPath])
-        [@"" writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
-    chmod(logPath.fileSystemRepresentation, 0666);
-    FILE *f = fopen(logPath.fileSystemRepresentation, "a");
-    if (f) { fprintf(f, "[%s] %s\n", [[NSDate date] descriptionWithLocale:nil].UTF8String, line.UTF8String); fclose(f); }
-}
-
 static NSString *TGSpringCutsBinary(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
     for (NSString *p in @[@"/var/jb/usr/bin/springcuts", @"/usr/bin/springcuts", @"/var/jb/usr/local/bin/springcuts"]) {
