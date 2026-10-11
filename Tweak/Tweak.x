@@ -343,7 +343,18 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
     TGATDebugLog([NSString stringWithFormat:@"volstep: up=%d dry=%d app=%d", up, dryRun, [springBoard respondsToSelector:@selector(volumeControl)]]); // DEBUG
     id volume = TGSpringBoardControl(@selector(volumeControl));
     SEL step = up ? @selector(volumeStepUp) : @selector(volumeStepDown);
+    // iOS 16: volumeStepUp/Down only report the step (the empty @available
+    // branch here once made assigned volume actions no-ops); apply the step
+    // with changeVolumeByDelta: just like iOS 15.
     if (@available(iOS 16, *)) {
+        if ([volume respondsToSelector:step] && [volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
+            if (!dryRun) {
+                float delta = fabsf(((float (*)(id, SEL))objc_msgSend)(volume, step));
+                if (delta <= 0 || delta > 0.5f) delta = 1.0f / 16;
+                ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? delta : -delta);
+            }
+            return YES;
+        }
     } else if ([volume respondsToSelector:step] && [volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
         // iOS 15: volumeStepUp/Down only return the step size (verified on 15.8),
         // so the step is applied with changeVolumeByDelta:.
