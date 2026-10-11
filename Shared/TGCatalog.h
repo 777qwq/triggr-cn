@@ -457,7 +457,6 @@ static inline NSArray<NSString *> *TGAutoTouchScriptDirectories(void) {
         }
         if (jbroot) probe([jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"]);
     }
-    TGATDebugLog([NSString stringWithFormat:@"dirs=%@", dirs]); // DEBUG
     return dirs;
 }
 
@@ -472,10 +471,7 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
     // Enumerate every candidate directory (union) and one subfolder level;
     // AutoTouch organizes scripts in subfolders, shown as "Folder/Name".
     for (NSString *dir in TGAutoTouchScriptDirectories()) {
-        NSError *error = nil;
-        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:&error];
-        TGATDebugLog([NSString stringWithFormat:@"enum %@ -> %lu files, error=%@, %@",
-            dir, (unsigned long)files.count, error, files]); // DEBUG
+        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
         for (NSString *file in files) {
             if ([file hasPrefix:@"."]) continue;
             NSString *full = [dir stringByAppendingPathComponent:file];
@@ -494,7 +490,6 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
             }
         }
     }
-    TGATDebugLog([NSString stringWithFormat:@"lua/at=%@", names]); // DEBUG
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 // Locate a script by (folder-prefixed) name across all candidate directories,
