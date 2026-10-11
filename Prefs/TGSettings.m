@@ -537,7 +537,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
     // Installed action extensions, each its own category ("ext:<name>").
     for (NSString *name in TGExtensionNames()) {
         NSDictionary *extension = TGExtension(name);
@@ -563,6 +563,7 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
         @"open": @[@"arrow.up.right.square.fill", UIColor.systemIndigoColor],
         @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
         @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor],
+        @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
     };
     if (icons[category]) TGSetIcon(spec, icons[category][0], icons[category][1]);
     else if ([category hasPrefix:TGExtensionPrefix]) {
@@ -579,6 +580,7 @@ static NSString *TGCategoryOf(NSString *action) {
     for (NSString *prefix in @[TGBrightnessPrefix, TGMediaVolumePrefix, TGRingerVolumePrefix]) if ([action hasPrefix:prefix]) return @"levels";
     for (NSString *prefix in @[TGAppPrefix, TGSettingsPrefix, TGShortcutPrefix, TGURLPrefix]) if ([action hasPrefix:prefix]) return @"open";
     for (NSString *prefix in @[TGMessagePrefix, TGSpeakPrefix, TGShellPrefix]) if ([action hasPrefix:prefix]) return @"text";
+    if ([action hasPrefix:TGAutotouchPrefix]) return @"autotouch";
     for (NSString *prefix in @[@"toggle.", @"on.", @"off."]) if ([action hasPrefix:prefix]) return @"switches";
     if ([action hasPrefix:@"media."] || [action hasPrefix:TGAirPlayPrefix]) return @"media";
     for (int i = 0; i < TG_COUNT(TGPowerActions); i++) if ([action isEqualToString:@(TGPowerActions[i].identifier)]) return @"power";
@@ -748,6 +750,11 @@ static NSString *TGCategoryOf(NSString *action) {
             [rows addObject:[self rowForAction:[NSString stringWithFormat:@"%@%@:%@", TGExtensionPrefix, name, item] title:item]];
         return rows;
     }
+    if ([category isEqualToString:@"autotouch"]) {
+        for (NSString *script in TGAutoTouchScripts())
+            [rows addObject:[self rowForAction:[TGAutotouchPrefix stringByAppendingString:script] title:script]];
+        return rows;
+    }
     if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
     else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
@@ -793,7 +800,7 @@ static NSString *TGCategoryOf(NSString *action) {
     for (int g = 0; g < TG_COUNT(TGActionGroups); g++)
         for (int i = 0; i < TGActionGroups[g].count; i++)
             [rows addObject:[self rowForAction:@(TGActionGroups[g].items[i].identifier) title:@(TGActionGroups[g].items[i].title)]];
-    for (NSString *category in @[@"levels", @"open", @"text", @"menus"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
+    for (NSString *category in @[@"levels", @"open", @"text", @"menus", @"autotouch"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
     for (NSArray<NSString *> *category in TGCategories())
         if ([category[0] hasPrefix:TGExtensionPrefix]) [rows addObjectsFromArray:[self rowsForCategory:category[0]]];
     NSMutableArray *specs = [NSMutableArray array];
@@ -997,7 +1004,18 @@ static NSString *TGCategoryOf(NSString *action) {
         NSString *item = [self itemWithPrefix:prefix];
         if (item) cell.accessoryType = UITableViewCellAccessoryCheckmark;
         BOOL titled = [prefix isEqualToString:TGAppPrefix] || [prefix isEqualToString:TGSettingsPrefix];
-        if (item) detail = titled ? [TGDisplayTitle(item) substringFromIndex:[TGDisplayTitle(item) rangeOfString:@" "].location + 1] : [item substringFromIndex:prefix.length];
+        if (item) {
+            if (titled) {
+                // Strip the "打开 "/"Settings: " prefix for display. Localized
+                // titles ("设置：…") have no space: NSNotFound + 1 overflows and
+                // substringFromIndex: throws. Fall back to the full title.
+                NSString *title = TGDisplayTitle(item);
+                NSRange space = [title rangeOfString:@" "];
+                detail = (space.location != NSNotFound && space.location + 1 < title.length) ? [title substringFromIndex:space.location + 1] : title;
+            } else {
+                detail = [item substringFromIndex:prefix.length];
+            }
+        }
     }
     // Search mixes every category; say where each result lives.
     if (_query && !detail.length && !picked) {

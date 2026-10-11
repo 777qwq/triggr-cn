@@ -22,6 +22,7 @@
 #import <objc/message.h>
 #import <dlfcn.h>
 #import <LocalAuthentication/LocalAuthentication.h>
+#include <dlfcn.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import "../Shared/TGCatalog.h"
 #import "../Shared/TGHardware.h"
@@ -951,6 +952,7 @@ static BOOL TGCanPerform(NSString *action) {
     if ([action hasPrefix:TGMenuPrefix]) return tgMenuNames[[action substringFromIndex:TGMenuPrefix.length]] != nil;
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
+    if ([action hasPrefix:TGAutotouchPrefix]) return dlsym(RTLD_DEFAULT, "runCommand") != NULL;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
     if ([action hasPrefix:TGExtensionPrefix]) {
         NSString *program = TGExtension(TGExtensionAction(action)[0])[@"Program"];
@@ -958,6 +960,24 @@ static BOOL TGCanPerform(NSString *action) {
     }
     TGActionBlock block = TGActionTable()[action] ?: TGSwitchAction(action);
     return block && block(YES);
+}
+
+// AutoTouch: its system dylib (ATTweak) runs in this process (SpringBoard) and
+// exports a plain C function runCommand(path) that drives its Lua engine
+// directly — Powercuts runs its Lua actions this way, silently, no app involved
+// (verified from ATTweak's symbol table). Some builds keep a second argument;
+// passing nil is harmless either way. No-op when AutoTouch isn't installed.
+static void TGRunAutoTouch(NSString *name) {
+    NSString *dir = TGAutoTouchScriptsDirectory();
+    NSLog(@"[TriggrCN][AT] dir=%@ name=%@", dir, name); // DEBUG build diagnostics, remove for release
+    if (!dir) return;
+    NSString *path = [name.pathExtension isEqualToString:@"lua"] ? [dir stringByAppendingPathComponent:name]
+        : [[dir stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"lua"];
+    void *sym = dlsym(RTLD_DEFAULT, "runCommand");
+    NSLog(@"[TriggrCN][AT] path=%@ sym=%p", path, sym); // DEBUG
+    if (!sym) return;
+    ((void (*)(id, id))sym)(path, nil); // signature to verify on device: (path, nil)
+    NSLog(@"[TriggrCN][AT] called"); // DEBUG
 }
 
 static void TGPerform(NSString *action) {
@@ -968,6 +988,8 @@ static void TGPerform(NSString *action) {
         } else if ([action hasPrefix:TGShortcutPrefix]) {
             NSString *name = [[action substringFromIndex:TGShortcutPrefix.length] stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
             TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:name]);
+        } else if ([action hasPrefix:TGAutotouchPrefix]) {
+            TGRunAutoTouch([action substringFromIndex:TGAutotouchPrefix.length]);
         } else if ([action hasPrefix:TGURLPrefix]) {
             TGOpenURL([action substringFromIndex:TGURLPrefix.length]);
         } else if ([action hasPrefix:TGShellPrefix]) {
@@ -1012,7 +1034,7 @@ static void TGNoteCausedStates(NSString *action) {
         families = @[@3];
     } else if ([action isEqualToString:@"system.sleep"] || [action isEqualToString:@"system.respring"] || [action isEqualToString:@"system.safemode"]) {
         families = @[@3, @4];
-    } else if ([action hasPrefix:TGShellPrefix] || [action hasPrefix:TGShortcutPrefix]) {
+    } else if ([action hasPrefix:TGShellPrefix] || [action hasPrefix:TGAutotouchPrefix] || [action hasPrefix:TGShortcutPrefix]) {
         families = @[@0, @1, @2, @3, @4]; // can change anything
     }
     for (NSNumber *family in families) tgCausedAt[family.intValue] = now;
@@ -1043,7 +1065,7 @@ static BOOL TGNeedsUnlock(NSArray<NSString *> *actions) {
     BOOL command = NO;
     for (NSString *action in actions) {
         if (TGActionOpensApp(action)) return YES;
-        if ([action hasPrefix:TGShellPrefix]) command = YES;
+        if ([action hasPrefix:TGShellPrefix] || [action hasPrefix:TGAutotouchPrefix]) command = YES;
     }
     // Public: YES when a passcode is set.
     return command && tgRequireUnlock && [[LAContext new] canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication error:nil];

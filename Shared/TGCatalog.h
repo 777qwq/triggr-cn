@@ -175,6 +175,7 @@ static const TGGroup TGActionGroups[] = {
 #define TGSpeakPrefix @"speak:"
 #define TGSettingsPrefix @"settings:" // App-prefs page id
 #define TGAirPlayPrefix @"airplay:"   // AirPlay device name (or part of it)
+#define TGAutotouchPrefix @"autotouch:" // AutoTouch script name (without .lua)
 // Settings can't discover AirPlay devices itself: it asks SpringBoard, which
 // writes the names it sees to this file and answers with the second notification.
 #define TGAirPlayListRequest "com.johndie.triggr/airplay-list"
@@ -406,6 +407,25 @@ static inline NSArray<NSString *> *TGExtensionNames(void) {
     return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
+// AutoTouch scripts: "autotouch:<script>" runs a .lua file from AutoTouch's
+// scripts folder through ATTweak's runCommand (see Tweak.x). Rootless jbroot
+// layout first, classic layout second.
+static inline NSString *TGAutoTouchScriptsDirectory(void) {
+    for (NSString *path in @[@"/var/jb/var/mobile/Library/AutoTouch/Scripts", @"/var/mobile/Library/AutoTouch/Scripts"])
+        if ([NSFileManager.defaultManager isReadableFileAtPath:path]) return path;
+    return nil;
+}
+
+static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
+    NSString *dir = TGAutoTouchScriptsDirectory();
+    if (!dir) return @[];
+    NSMutableArray *names = [NSMutableArray array];
+    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:nil])
+        if ([file.pathExtension isEqualToString:@"lua"] && ![file hasPrefix:@"."])
+            [names addObject:file.stringByDeletingPathExtension];
+    return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
 // {Title, ItemTitle, Symbol, Color, ItemsDirectory, ItemsExtension, ItemsExclude, Program}
 static inline NSDictionary *TGExtension(NSString *name) {
     if (!name.length || [name containsString:@"/"]) return nil;
@@ -448,6 +468,7 @@ static inline NSString *TGActionTitle(NSString *action) {
     if ([action hasPrefix:TGShortcutPrefix]) return [@"快捷指令：" stringByAppendingString:[action substringFromIndex:TGShortcutPrefix.length]];
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
     if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
+    if ([action hasPrefix:TGAutotouchPrefix]) return [@"AutoTouch：" stringByAppendingString:[action substringFromIndex:TGAutotouchPrefix.length]];
     if ([action hasPrefix:TGAppPrefix]) return [@"打开 " stringByAppendingString:[action substringFromIndex:TGAppPrefix.length]];
     if ([action hasPrefix:TGPausePrefix]) return [NSString stringWithFormat:@"停顿 %@", [action substringFromIndex:TGPausePrefix.length]];
     if ([action hasPrefix:TGMenuPrefix]) return @"菜单";
