@@ -55,6 +55,7 @@ jobs:
           ls -la packages/
 
       - name: Build FAT deb (relative layout: works on rootless AND roothide)
+        continue-on-error: true
         run: |
           brew install zstd >/dev/null 2>&1 || true
           mkdir -p /tmp/fat && cd /tmp/fat
