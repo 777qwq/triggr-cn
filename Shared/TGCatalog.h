@@ -440,12 +440,21 @@ static inline NSString *TGAutoTouchScriptsDirectory(void) {
     Dl_info info;
     if (dladdr((void *)TGAutoTouchScriptsDirectory, &info) && info.dli_fname) {
         NSString *selfPath = @(info.dli_fname);
-        // TweakInject is the rootless layout (…/usr/lib/TweakInject/…);
-        // MobileSubstrate the classic one. jbroot = whatever precedes it.
-        NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
-        if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
-        if (r.location != NSNotFound) {
-            NSString *jbroot = [selfPath substringToIndex:r.location];
+        // Works from any in-jbroot binary: tweak (/usr/lib/TweakInject or
+        // /Library/MobileSubstrate) or preference bundle (…/.jbroot-XXXX/…).
+        // jbroot = the hidden ".jbroot-<hex>" directory itself, or whatever
+        // precedes the injection folder.
+        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
+        NSString *jbroot = nil;
+        if (marker.location != NSNotFound) {
+            NSRange slash = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, selfPath.length - marker.location - 1)];
+            jbroot = slash.location == NSNotFound ? nil : [selfPath substringToIndex:slash.location];
+        } else {
+            NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
+            if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
+            if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
+        }
+        if (jbroot) {
             NSString *candidate = [jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"];
             BOOL readable = [NSFileManager.defaultManager isReadableFileAtPath:candidate];
             TGATDebugLog([NSString stringWithFormat:@"jbroot=%@ probe %@ -> %d", jbroot, candidate, readable]);
