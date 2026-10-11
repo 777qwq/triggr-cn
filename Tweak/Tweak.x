@@ -1124,6 +1124,13 @@ static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
                 shortcutObj = ((id (*)(id, SEL, id, id *))objc_msgSend)(client, lookupSel, identifier, &err);
                 TGATDebugLog([NSString stringWithFormat:@"vsc: lookup err=%@", err]); // DEBUG
             }
+            // shortcutWithIdentifier: returns a WFObservableObjectResult wrapper;
+            // unwrap .value (WFWorkflowDescriptor, NSSecureCoding-compliant) or
+            // the XPC encoder rejects the wrapper.
+            if ([shortcutObj respondsToSelector:@selector(value)]) {
+                id value = [shortcutObj performSelector:@selector(value)];
+                if (value) shortcutObj = value;
+            }
             TGATDebugLog([NSString stringWithFormat:@"vsc: ident=%@ shortcutObj=%@ descCls=%@ resp=%d", identifier, shortcutObj, descCls, shortcutObj && descCls && [descCls instancesRespondToSelector:@selector(initWithShortcut:)]]); // DEBUG
             id descriptor = (descCls && shortcutObj) ? [(id)[descCls alloc] performSelector:@selector(initWithShortcut:) withObject:shortcutObj] : nil;
             // runWorkflowWithDescriptor asserts request non-nil; a bare
