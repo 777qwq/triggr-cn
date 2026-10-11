@@ -1087,97 +1087,45 @@ static void TGDismissSiri(BOOL animated) {
 // Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
 // Shortcuts.sqlite and activate it in-process via SBShortcutActivatorRequest
 // (no bounce through the Shortcuts app). Falls back to the URL scheme.
-// Run a shortcut through VoiceShortcutClient (the XPC path Shortcuts itself
-// uses; verified against the on-device method dump): find the VCVoiceShortcut
-// by name, build a run descriptor from its INShortcut, run it. No app bounce.
-static void TGRunShortcutViaClient(NSString *name, void (^done)(BOOL)) {
-    TGATDebugLog([NSString stringWithFormat:@"vsc: enter name=%@", name]); // DEBUG
-    Class cls = NSClassFromString(@"VCVoiceShortcutClient");
-    if (!cls) { TGATDebugLog(@"vsc: no class"); done(NO); return; } // DEBUG
-    id client = [cls performSelector:@selector(standardClient)];
-    TGATDebugLog([NSString stringWithFormat:@"vsc: client=%@", client]); // DEBUG
-    if (!client) { done(NO); return; }
-    SEL getSel = @selector(getVoiceShortcutsWithCompletion:);
-    if (![client respondsToSelector:getSel]) {
-        TGDumpMethodsForClass(object_getClass(client), @"VCVoiceShortcutClient-missing-get"); // DEBUG
-        done(NO);
-        return;
+static NSString *TGSpringCutsBinary(void) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *p in @[@"/var/jb/usr/bin/springcuts", @"/usr/bin/springcuts", @"/var/jb/usr/local/bin/springcuts"]) {
+        if ([fm fileExistsAtPath:p]) return p;
     }
-    void (^getBlk)(id, id) = ^(id list, id err) {
-        unsigned long sc = [list respondsToSelector:@selector(count)] ? [(NSArray *)list count] : 0;
-        TGATDebugLog([NSString stringWithFormat:@"vsc: %lu shortcuts, err=%@", sc, err]); // DEBUG
-        id target = nil;
-        for (id vs in list) {
-            NSString *n = [vs respondsToSelector:@selector(shortcutName)] ? [vs performSelector:@selector(shortcutName)] : nil;
-            if ([n isEqualToString:name]) { target = vs; break; }
+    // derive from this dylib's real path (disguised jbroot)
+    Dl_info info;
+    if (dladdr((void *)TGSpringCutsBinary, &info) && info.dli_fname) {
+        NSString *selfPath = @(info.dli_fname);
+        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
+        NSString *jbroot = nil;
+        if (marker.location != NSNotFound) {
+            NSRange slash = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, selfPath.length - marker.location - 1)];
+            if (slash.location != NSNotFound) jbroot = [selfPath substringToIndex:slash.location];
+        } else {
+            NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
+            if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
+            if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
         }
-        if (!target) { done(NO); return; }
-        @try {
-            // VCVoiceShortcut.shortcut is unpopulated client-side; ask
-            // shortcutsd via shortcutWithIdentifier:error: (server-side lookup).
-            NSString *identifier = [target respondsToSelector:@selector(identifier)] ? [target performSelector:@selector(identifier)] : nil;
-            Class descCls = NSClassFromString(@"WFINShortcutRunDescriptor");
-            id shortcutObj = nil;
-            SEL lookupSel = @selector(shortcutWithIdentifier:error:);
-            if (identifier && [client respondsToSelector:lookupSel]) {
-                NSError *err = nil;
-                shortcutObj = ((id (*)(id, SEL, id, id *))objc_msgSend)(client, lookupSel, identifier, &err);
-                TGATDebugLog([NSString stringWithFormat:@"vsc: lookup err=%@", err]); // DEBUG
-            }
-            // shortcutWithIdentifier: returns a WFObservableObjectResult wrapper;
-            // unwrap .value (WFWorkflowDescriptor, NSSecureCoding-compliant) or
-            // the XPC encoder rejects the wrapper.
-            if ([shortcutObj respondsToSelector:@selector(value)]) {
-                id value = [shortcutObj performSelector:@selector(value)];
-                if (value) shortcutObj = value;
-            }
-            TGATDebugLog([NSString stringWithFormat:@"vsc: ident=%@ shortcutObj=%@ descCls=%@ resp=%d", identifier, shortcutObj, descCls, shortcutObj && descCls && [descCls instancesRespondToSelector:@selector(initWithShortcut:)]]); // DEBUG
-            id descriptor = (descCls && shortcutObj) ? [(id)[descCls alloc] performSelector:@selector(initWithShortcut:) withObject:shortcutObj] : nil;
-            // runWorkflowWithDescriptor asserts request non-nil; a bare
-            // request with identifying fields is what Siri-like callers use.
-            Class reqCls = NSClassFromString(@"WFWorkflowRunRequest");
-            id request = reqCls ? [[reqCls alloc] init] : nil;
-            if (request) {
-                // Claim SpringBoard honestly — the service validates the
-                // caller identity and invalidates the connection on mismatch.
-                [(id)request setValue:@"com.apple.springboard" forKey:@"parentBundleIdentifier"];
-                [(id)request setValue:@"com.apple.springboard" forKey:@"runSource"];
-            }
-            TGATDebugLog([NSString stringWithFormat:@"vsc: descriptor=%@ request=%@", descriptor, request]); // DEBUG
-            if (!descriptor) { done(NO); return; }
-            SEL runSel = @selector(runWorkflowWithDescriptor:request:completion:);
-            if ([client respondsToSelector:runSel]) {
-                id runBlock = ^(id result) {
-                    TGATDebugLog([NSString stringWithFormat:@"vsc: run result=%@", result]); // DEBUG
-                };
-                ((id (*)(id, SEL, id, id, id))objc_msgSend)(client, runSel, descriptor, request, runBlock);
-            } else {
-                TGDumpMethodsForClass(object_getClass(client), @"VCVoiceShortcutClient-missing-run"); // DEBUG
-                done(NO);
-                return;
-            }
-            done(YES);
-        } @catch (NSException *e) {
-            TGATDebugLog([NSString stringWithFormat:@"vsc EXC: %@", e]); // DEBUG
-            done(NO);
+        if (jbroot) {
+            NSString *p = [jbroot stringByAppendingPathComponent:@"usr/bin/springcuts"];
+            if ([fm fileExistsAtPath:p]) return p;
         }
-    };
-    ((void (*)(id, SEL, id))objc_msgSend)(client, getSel, getBlk);
+    }
+    return nil;
 }
 
 static void TGRunShortcut(NSString *name) {
-    TGATDebugLog([NSString stringWithFormat:@"shortcut: run entry name=%@", name]); // DEBUG
-    // standardClient sets up its XPC connection synchronously and can stall the
-    // trigger thread — run the whole client flow off the main path.
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0), ^{
-        TGRunShortcutViaClient(name, ^(BOOL ok) {
-        TGATDebugLog([NSString stringWithFormat:@"shortcut via client ok=%d", ok]); // DEBUG
-        if (ok) return;
-        NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
-        TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:enc]);
-        TGATDebugLog(@"shortcut: url fallback"); // DEBUG
-        });
-    });
+    // Preferred: the springcuts CLI (SpringCuts) - headless execution through
+    // the system's own shortcut service, no app bounce. The binary lives in
+    // the jbroot PATH that TGSpawnShell sets up.
+    if (TGSpringCutsBinary()) {
+        NSString *safe = [name stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
+        TGRunShell([NSString stringWithFormat:@"springcuts -r \"%@\"", safe]);
+        return;
+    }
+    // Fallback: URL scheme (bounces through the Shortcuts app).
+    NSString *enc = [name stringByAddingPercentEncodingWithAllowedCharacters:NSCharacterSet.URLQueryAllowedCharacterSet];
+    TGOpenURL([@"shortcuts://run-shortcut?name=" stringByAppendingString:enc]);
 }
 
 static void TGPerform(NSString *action) {
