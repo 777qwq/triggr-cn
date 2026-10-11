@@ -466,6 +466,35 @@ static inline NSString *TGAutoTouchScriptsDirectory(void) {
     return TGAutoTouchScriptDirectories().firstObject;
 }
 
+// Where the SpringCuts CLI lives (probed paths + derived jbroot).
+static inline NSString *TGSpringCutsBinary(void) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *p in @[@"/var/jb/usr/bin/springcuts", @"/usr/bin/springcuts", @"/var/jb/usr/local/bin/springcuts"]) {
+        if ([fm fileExistsAtPath:p]) return p;
+    }
+    // derive from this dylib's real path (disguised jbroot)
+    Dl_info info;
+    if (dladdr((void *)TGSpringCutsBinary, &info) && info.dli_fname) {
+        NSString *selfPath = @(info.dli_fname);
+        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
+        NSString *jbroot = nil;
+        if (marker.location != NSNotFound) {
+            NSRange slash = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, selfPath.length - marker.location - 1)];
+            if (slash.location != NSNotFound) jbroot = [selfPath substringToIndex:slash.location];
+        } else {
+            NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
+            if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
+            if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
+        }
+        if (jbroot) {
+            NSString *p = [jbroot stringByAppendingPathComponent:@"usr/bin/springcuts"];
+            if ([fm fileExistsAtPath:p]) return p;
+        }
+    }
+    return nil;
+}
+
+
 static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
     NSMutableArray *names = [NSMutableArray array];
     NSFileManager *fm = NSFileManager.defaultManager;

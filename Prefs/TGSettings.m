@@ -537,7 +537,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"autotouch", @"AutoTouch"], @[@"menus", @"菜单"]] mutableCopy];
     // Installed action extensions, each its own category ("ext:<name>").
     for (NSString *name in TGExtensionNames()) {
         NSDictionary *extension = TGExtension(name);
@@ -1219,6 +1219,13 @@ static NSString *TGCategoryOf(NSString *action) {
     }
     if ([prefix isEqualToString:TGAirPlayPrefix]) {
         [self pickAirPlayDeviceAtIndexPath:indexPath specifier:spec existing:existingItem];
+        return;
+    }
+    if ([prefix isEqualToString:TGShortcutPrefix] && !TGSpringCutsBinary()) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"未检测到 SpringCuts"
+            message:@"未检测到 SpringCuts：请安装后即可后台执行快捷指令。" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:alert animated:YES completion:nil];
         return;
     }
     [self promptForCommand:spec prefix:prefix existing:existingItem];

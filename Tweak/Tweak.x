@@ -340,6 +340,7 @@ static BOOL TGCall(id target, SEL sel, BOOL dryRun) {
 }
 
 static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
+    TGATDebugLog([NSString stringWithFormat:@"volstep: up=%d dry=%d app=%d", up, dryRun, [springBoard respondsToSelector:@selector(volumeControl)]]); // DEBUG
     id volume = TGSpringBoardControl(@selector(volumeControl));
     SEL step = up ? @selector(volumeStepUp) : @selector(volumeStepDown);
     if (@available(iOS 16, *)) {
@@ -358,7 +359,10 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
         return YES;
     }
     SEL start = up ? @selector(increaseVolume) : @selector(decreaseVolume);
-    if (![volume respondsToSelector:start] || ![volume respondsToSelector:@selector(cancelVolumeEvent)]) return NO;
+    if (![volume respondsToSelector:start] || ![volume respondsToSelector:@selector(cancelVolumeEvent)]) {
+        TGATDebugLog(@"volstep: start/cancel selectors missing"); // DEBUG
+        return NO;
+    }
     if (!dryRun) {
         ((void (*)(id, SEL))objc_msgSend)(volume, start);
         ((void (*)(id, SEL))objc_msgSend)(volume, @selector(cancelVolumeEvent));
@@ -1087,33 +1091,6 @@ static void TGDismissSiri(BOOL animated) {
 // Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
 // Shortcuts.sqlite and activate it in-process via SBShortcutActivatorRequest
 // (no bounce through the Shortcuts app). Falls back to the URL scheme.
-static NSString *TGSpringCutsBinary(void) {
-    NSFileManager *fm = NSFileManager.defaultManager;
-    for (NSString *p in @[@"/var/jb/usr/bin/springcuts", @"/usr/bin/springcuts", @"/var/jb/usr/local/bin/springcuts"]) {
-        if ([fm fileExistsAtPath:p]) return p;
-    }
-    // derive from this dylib's real path (disguised jbroot)
-    Dl_info info;
-    if (dladdr((void *)TGSpringCutsBinary, &info) && info.dli_fname) {
-        NSString *selfPath = @(info.dli_fname);
-        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
-        NSString *jbroot = nil;
-        if (marker.location != NSNotFound) {
-            NSRange slash = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, selfPath.length - marker.location - 1)];
-            if (slash.location != NSNotFound) jbroot = [selfPath substringToIndex:slash.location];
-        } else {
-            NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
-            if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
-            if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
-        }
-        if (jbroot) {
-            NSString *p = [jbroot stringByAppendingPathComponent:@"usr/bin/springcuts"];
-            if ([fm fileExistsAtPath:p]) return p;
-        }
-    }
-    return nil;
-}
-
 static void TGRunShortcut(NSString *name) {
     // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
     // through sh fails under roothide, NSTask launches the binary directly).
