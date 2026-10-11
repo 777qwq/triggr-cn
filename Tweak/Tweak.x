@@ -1126,7 +1126,7 @@ static void TGRunShortcut(NSString *name) {
                 id task = [[taskCls alloc] init];
                 [task performSelector:@selector(setLaunchPath:) withObject:bin];
                 [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
-                [task launch];
+                [task performSelector:@selector(launch)];
                 TGATDebugLog(@"shortcut: NSTask launched"); // DEBUG
                 return;
             }
