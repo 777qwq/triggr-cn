@@ -105,7 +105,7 @@ static const TGGroup TGTriggerGroups[] = {
 };
 
 static const TGItem TGSystemActions[] = {
-    {"system.home", "回到主屏幕"}, {"system.switcher", "AApp 切换器"},
+    {"system.home", "回到主屏幕"}, {"system.switcher", "App 切换器"},
     {"system.lastapp", "上一个应用"}, {"system.quitapp", "退出当前应用"},
     {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"},
     {"system.reachability", "单手模式"}, {"system.siri", "唤醒 Siri"}, {"system.dismissSiri", "关闭 Siri"}, {"system.screenshot", "截屏"},
@@ -134,7 +134,7 @@ static const TGItem TGOffActions[] = { TG_SWITCHES(TG_SWITCH_OFF) };
 static const TGItem TGMediaActions[] = {
     {"media.playpause", "播放 / 暂停"}, {"media.next", "下一曲"}, {"media.previous", "上一曲"},
     {"media.volup", "音量加"}, {"media.voldown", "音量减"},
-    {"media.airplay", "AAirPlay 选择器"}, {"media.airplayiphone", "在本机播放"},
+    {"media.airplay", "AirPlay 选择器"}, {"media.airplayiphone", "在本机播放"},
 };
 
 static const TGGroup TGActionGroups[] = {

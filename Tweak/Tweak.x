@@ -1610,11 +1610,16 @@ static void TGVolumeTapped(int which) {
 
 static BOOL TGVolumeEnded(int which) {
     NSString *press = which == 0 ? @"volume.up" : @"volume.down";
+    NSString *hold = which == 0 ? @"volume.uphold" : @"volume.downhold";
     TGVolumeState *state = &tgVolume[which];
     state->down = NO;
     if (state->holdFired || state->partOfBoth) tgVolumeLastTap = -1;
     else if ([tgAssignedTriggers containsObject:@"volume.updown"] || [tgAssignedTriggers containsObject:@"volume.downup"]) TGVolumeTapped(which);
     if ((!state->calledSystemOnDown || !tgReplaces) && !state->holdFired && !state->partOfBoth) TGFire(press);
+    // A hold assignment swallowed the press on the way down; if the button
+    // turns out to be a tap, replay the single volume step the system skipped.
+    if (tgReplaces && !state->calledSystemOnDown && !state->holdFired && !state->partOfBoth && TGActionFor(press) == nil && TGActionFor(hold) != nil)
+        TGVolumeStep(UIApplication.sharedApplication, which == 0, NO);
     return state->calledSystemOnDown;
 }
 
