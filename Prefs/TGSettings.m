@@ -504,7 +504,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 
 // insert: a new pause at `index`; otherwise edit the pause at `index`.
 - (void)promptPauseAtIndex:(NSInteger)index insert:(BOOL)insert {
-    NSString *current = insert ? @"1" : [self.items[index] substringFromIndex:TGPausePrefix.length];
+    NSString *current = insert ? @"" : [self.items[index] substringFromIndex:TGPausePrefix.length];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"停顿" message:[NSString stringWithFormat:@"执行下一动作前的等待秒数（0.1–%g）。", TGPauseMax] preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.text = current;
