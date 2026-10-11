@@ -996,8 +996,10 @@ static void TGRunAutoTouch(NSString *name) {
         NSRange marker = [found rangeOfString:@"/.jbroot-"];
         if (marker.location != NSNotFound) {
             NSRange slash = [found rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, found.length - marker.location - 1)];
-            if (slash.location != NSNotFound)
-                arg = [@"/var/mobile/Containers/Shared/AppGroup" stringByAppendingString:[found substringFromIndex:slash.location]];
+            if (slash.location != NSNotFound) {
+                NSString *jbrootName = [found substringWithRange:NSMakeRange(marker.location + 1, slash.location - marker.location - 1)]; // ".jbroot-<hex>"
+                arg = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingPathComponent:[jbrootName stringByAppendingString:[found substringFromIndex:slash.location]]];
+            }
         }
         if (!arg) arg = found;
         TGATDebugLog([NSString stringWithFormat:@"form=powercuts found=%@ arg=%@", found, arg]); // DEBUG
