@@ -15,5 +15,3 @@ Maintainer: 777qwq
 Author: 777qwq
 Section: Tweaks
 Depends: mobilesubstrate, preferenceloader, com.opa334.altlist, uikittools, firmware (>= 15.0)
-Depiction: https://jond-ie.github.io/repo/depictions/com.johndie.triggr.html
-SileoDepiction: https://jond-ie.github.io/repo/depictions/com.johndie.triggr.json

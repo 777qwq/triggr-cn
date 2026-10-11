@@ -36,24 +36,6 @@ jobs:
           export PATH="$HOME/theos/bin:$PATH"
           make package FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless
 
-      - name: Convert to roothide (official RootHidePatcher patch.sh)
-        run: |
-          brew install coreutils >/dev/null 2>&1 || true
-          export PATH="/opt/homebrew/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/gnu-sed/libexec/gnubin:/opt/homebrew/opt/findutils/libexec/gnubin:$PATH"
-          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/patch.sh -o /tmp/patch.sh
-          curl -fsSL https://raw.githubusercontent.com/roothide/RootHidePatcher/master/roothide.entitlements -o /tmp/roothide.entitlements
-          ls -la /tmp/patch.sh /tmp/roothide.entitlements
-          if [ -n "${{ github.event.inputs.patch_url }}" ]; then
-            curl -fsSL "${{ github.event.inputs.patch_url }}" -o /tmp/extra.deb
-          fi
-          # brew ldid 不带 procursus 字样，摘掉该建议性检查
-          perl -0pi -e 's/if ! ldid 2>&1 \| grep -q procursus; then\n\t\$ECHO "Please install Procursus ldid\."\n    exit 1;\nfi\n//' /tmp/patch.sh
-          grep -c procursus /tmp/patch.sh || true
-          IN=$(ls packages/*.deb | head -1)
-          sudo env "PATH=$PATH" bash /tmp/patch.sh "$IN" packages/triggr-cn-roothide.deb
-          if [ -f /tmp/extra.deb ]; then sudo env "PATH=$PATH" bash /tmp/patch.sh /tmp/extra.deb packages/official-roothide.deb; fi
-          ls -la packages/
-
       - name: Upload debs
         uses: actions/upload-artifact@v4
         with:
