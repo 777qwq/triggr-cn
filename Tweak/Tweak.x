@@ -1585,7 +1585,10 @@ static BOOL TGVolumeBegan(int which) {
             TGFire(hold);
         });
     }
-    state->calledSystemOnDown = !tgReplaces || TGActionFor(press) == nil;
+    // With Replace on, an assigned hold also swallows the press: iOS starts
+    // changing the volume the moment the button goes down, so letting the
+    // system see it would defeat the replacement.
+    state->calledSystemOnDown = !tgReplaces || (TGActionFor(press) == nil && TGActionFor(hold) == nil);
     return state->calledSystemOnDown;
 }
 

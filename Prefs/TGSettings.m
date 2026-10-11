@@ -754,9 +754,6 @@ static NSString *TGCategoryOf(NSString *action) {
     if ([category isEqualToString:@"autotouch"]) {
         for (NSString *script in TGAutoTouchScripts())
             [rows addObject:[self rowForAction:[TGAutotouchPrefix stringByAppendingString:script] title:script]];
-        // Always keep an entry point, even when no script folder was found:
-        // manual input covers custom paths/subfolders and aids debugging.
-        [rows addObject:[self rowForCommand:TGAutotouchPrefix title:@"运行脚本…" prompt:@"AutoTouch 脚本名（不带 .lua）"]];
         return rows;
     }
     if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
