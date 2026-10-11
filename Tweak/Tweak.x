@@ -1087,6 +1087,16 @@ static void TGDismissSiri(BOOL animated) {
 // Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
 // Shortcuts.sqlite and activate it in-process via SBShortcutActivatorRequest
 // (no bounce through the Shortcuts app). Falls back to the URL scheme.
+// DEBUG build diagnostics (file log). Remove for release.
+static void TGATDebugLog(NSString *line) {
+    NSString *logPath = @"/var/mobile/Documents/triggr_at.log";
+    if (![[NSFileManager defaultManager] fileExistsAtPath:logPath])
+        [@"" writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
+    chmod(logPath.fileSystemRepresentation, 0666);
+    FILE *f = fopen(logPath.fileSystemRepresentation, "a");
+    if (f) { fprintf(f, "[%s] %s\n", [[NSDate date] descriptionWithLocale:nil].UTF8String, line.UTF8String); fclose(f); }
+}
+
 static NSString *TGSpringCutsBinary(void) {
     NSFileManager *fm = NSFileManager.defaultManager;
     for (NSString *p in @[@"/var/jb/usr/bin/springcuts", @"/usr/bin/springcuts", @"/var/jb/usr/local/bin/springcuts"]) {
@@ -1115,12 +1125,15 @@ static NSString *TGSpringCutsBinary(void) {
 }
 
 static void TGRunShortcut(NSString *name) {
+    NSString *bin = TGSpringCutsBinary();
+    TGATDebugLog([NSString stringWithFormat:@"shortcut: entry name=%@ bin=%@", name, bin]); // DEBUG
     // Preferred: the springcuts CLI (SpringCuts) - headless execution through
     // the system's own shortcut service, no app bounce. The binary lives in
     // the jbroot PATH that TGSpawnShell sets up.
-    if (TGSpringCutsBinary()) {
+    if (bin) {
         NSString *safe = [name stringByReplacingOccurrencesOfString:@"\"" withString:@"\\\""];
-        TGRunShell([NSString stringWithFormat:@"springcuts -r \"%@\"", safe]);
+        TGRunShell([NSString stringWithFormat:@"%@ -r \"%@\"", bin, safe]);
+        TGATDebugLog(@"shortcut: springcuts spawned"); // DEBUG
         return;
     }
     // Fallback: URL scheme (bounces through the Shortcuts app).
