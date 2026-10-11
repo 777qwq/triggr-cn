@@ -440,7 +440,10 @@ static inline NSString *TGAutoTouchScriptsDirectory(void) {
     Dl_info info;
     if (dladdr((void *)TGAutoTouchScriptsDirectory, &info) && info.dli_fname) {
         NSString *selfPath = @(info.dli_fname);
-        NSRange r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
+        // TweakInject is the rootless layout (…/usr/lib/TweakInject/…);
+        // MobileSubstrate the classic one. jbroot = whatever precedes it.
+        NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
+        if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
         if (r.location != NSNotFound) {
             NSString *jbroot = [selfPath substringToIndex:r.location];
             NSString *candidate = [jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"];
