@@ -1146,9 +1146,30 @@ static NSString *TGShortcutIdentifierForName(NSString *name) {
     return nil;
 }
 
+static void TGDumpShortcutClasses(void) {
+    unsigned cn = 0;
+    Class *all = objc_copyClassList(&cn);
+    NSMutableString *s = [NSMutableString stringWithFormat:@"shortcut-ish classes(%u): ", cn];
+    NSMutableArray *hits = [NSMutableArray array];
+    for (unsigned i = 0; i < cn; i++) {
+        NSString *nm = NSStringFromClass(all[i]);
+        if ([nm containsString:@"Shortcut"] && ([nm hasPrefix:@"SB"] || [nm hasPrefix:@"WF"] || [nm hasPrefix:@"VC"])) {
+            [s appendFormat:@"%@; ", nm];
+            if (hits.count < 14) [hits addObject:all[i]];
+        }
+    }
+    free(all);
+    TGATDebugLog(s); // DEBUG
+    for (Class c in hits) {
+        TGDumpMethodsForClass(object_getClass(c), [NSString stringWithFormat:@"+%@", NSStringFromClass(c)]);
+        TGDumpMethodsForClass(c, [NSString stringWithFormat:@"-%@", NSStringFromClass(c)]);
+    }
+}
+
 static void TGRunShortcut(NSString *name) {
     NSString *ident = TGShortcutIdentifierForName(name);
     TGATDebugLog([NSString stringWithFormat:@"shortcut name=%@ ident=%@", name, ident]); // DEBUG
+    if (!ident) TGDumpShortcutClasses(); // DEBUG
     Class cls = NSClassFromString(@"SBShortcutActivatorRequest");
     if (ident && cls && [cls instancesRespondToSelector:@selector(initWithShortcutIdentifier:)]) {
         id req = [(id)[cls alloc] performSelector:@selector(initWithShortcutIdentifier:) withObject:ident];
