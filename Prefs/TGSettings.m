@@ -208,13 +208,6 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (BOOL)statusBarTapsOn;
 @end
 
-@interface TGInputController : UIViewController <UITextFieldDelegate>
-@property (nonatomic, copy) NSString *prompt;
-@property (nonatomic, copy) NSString *initialText;
-@property (nonatomic) BOOL percent, secure, asciiOnly;
-@property (nonatomic, copy) void (^onSave)(NSString *text);
-@property (nonatomic, copy) void (^onRemove)(void);
-@end
 
 @implementation TGListController
 
@@ -1372,94 +1365,42 @@ static NSString *TGCategoryOf(NSString *action) {
 // CoreImage while the alert transition loads the keyboard. A pushed page that
 // focuses the field after the transition keeps the same keyboard off that path.
 
-// A text (or number) for a command action, on its own input page.
+// A text (or number) for a command action, in an alert.
 - (void)promptForCommand:(PSSpecifier *)spec prefix:(NSString *)prefix existing:(NSString *)existingItem {
     BOOL percent = [prefix isEqualToString:TGBrightnessPrefix] || [prefix isEqualToString:TGMediaVolumePrefix] || [prefix isEqualToString:TGRingerVolumePrefix];
-    TGInputController *page = [TGInputController new];
-    page.title = [spec.name stringByReplacingOccurrencesOfString:@"…" withString:@""];
-    page.prompt = [spec propertyForKey:@"tgPrompt"];
-    page.initialText = existingItem ? [existingItem substringFromIndex:prefix.length] : @"";
-    page.percent = percent;
-    page.secure = [prefix isEqualToString:TGUnlockPrefix]; // passwords: dots, no candidate bar
-    page.asciiOnly = [NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.johndie.triggr.app"];
-    __weak typeof(self) weakSelf = self;
-    page.onSave = ^(NSString *text) { [weakSelf setItem:[prefix stringByAppendingString:text] forPrefix:prefix]; };
-    page.onRemove = existingItem ? ^{ [weakSelf setItem:nil forPrefix:prefix]; } : nil;
-    [self.navigationController pushViewController:page animated:YES];
-}
-
-@end
-
-
-@implementation TGInputController {
-    UITextField *_field;
-}
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSave target:self action:@selector(save)];
-    if (self.onRemove) {
-        UIBarButtonItem *remove = [[UIBarButtonItem alloc] initWithTitle:@"移除" style:UIBarButtonItemStyleDone target:self action:@selector(remove)];
-        self.navigationItem.leftBarButtonItem = remove;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[spec.name stringByReplacingOccurrencesOfString:@"…" withString:@""] message:[spec propertyForKey:@"tgPrompt"] preferredStyle:UIAlertControllerStyleAlert];
+    NSString *existing = existingItem ? [existingItem substringFromIndex:prefix.length] : @"";
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.text = existing;
+        if (percent) field.keyboardType = UIKeyboardTypeNumberPad;
+        if ([prefix isEqualToString:TGUnlockPrefix]) {
+            // iOS 16.3: PAC fault while the alert transition loads the keyboard
+            // in the arm64e app slice; secure ASCII entry sidesteps it.
+            field.secureTextEntry = YES;
+            field.keyboardType = UIKeyboardTypeASCIICapable;
+        }
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (percent && text.length) text = [NSString stringWithFormat:@"%d", (int)MIN(MAX(text.intValue, 0), 100)];
+        if (text.length) [self setItem:[prefix stringByAppendingString:text] forPrefix:prefix];
+    }]];
+    if (existingItem) {
+        [alert addAction:[UIAlertAction actionWithTitle:@"移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [self setItem:nil forPrefix:prefix];
+        }]];
     }
-    _field = [UITextField new];
-    _field.text = self.initialText;
-    _field.placeholder = self.prompt;
-    _field.borderStyle = UITextBorderStyleRoundedRect;
-    _field.clearButtonMode = UITextFieldViewModeWhileEditing;
-    _field.autocorrectionType = UITextAutocorrectionTypeNo;
-    _field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    _field.delegate = self;
-    if (self.percent) _field.keyboardType = UIKeyboardTypeNumberPad;
-    if (self.secure) _field.secureTextEntry = YES;
-    // In TriggrApp the Chinese candidate bar's CoreImage GL context dies with a
-    // PAC fault (Settings is fine), so the app entry gets ASCII-only fields.
-    if (self.asciiOnly) _field.keyboardType = UIKeyboardTypeASCIICapable;
-    UILabel *note = [UILabel new];
-    note.text = self.asciiOnly ? [self.prompt ?: @"" stringByAppendingString:@"\n\nApp 内输入仅支持英文与数字；中文请从「设置 → Triggr」配置。"]
-                               : self.prompt;
-    note.numberOfLines = 0;
-    note.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-    note.textColor = UIColor.secondaryLabelColor;
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_field, note]];
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 14;
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:stack];
-    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
-    [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:guide.topAnchor constant:16],
-        [stack.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
-        [stack.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
-        [_field.heightAnchor constraintEqualToConstant:44],
-    ]];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-    dispatch_async(dispatch_get_main_queue(), ^{ [_field becomeFirstResponder]; });
-}
-
-- (BOOL)textFieldShouldReturn:(UITextField *)textField {
-    [self save];
-    return YES;
-}
-
-- (void)save {
-    NSString *text = [_field.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-    if (self.percent && text.length) text = [NSString stringWithFormat:@"%d", (int)MIN(MAX(text.intValue, 0), 100)];
-    if (!text.length) return;
-    if (self.onSave) self.onSave(text);
-    [self.navigationController popViewControllerAnimated:YES];
-}
-
-- (void)remove {
-    if (self.onRemove) self.onRemove();
-    [self.navigationController popViewControllerAnimated:YES];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 @end
+
+
 
 #pragma mark - Trigger group (one button's triggers, or the custom events)
 
