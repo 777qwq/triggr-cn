@@ -7,6 +7,7 @@
 #import <notify.h>
 #import <objc/message.h>
 #import "../Shared/TGRelay.h"
+#import "../Shared/TGCatalog.h"
 
 static void TGRelay(const char *name, uint64_t wantedBit) {
     static int token = -1;
