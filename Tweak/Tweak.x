@@ -2725,7 +2725,9 @@ static void TGUpdateOtherEvents(void) {
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0));
+    BOOL wantSlides = NO;
+    for (NSString *trigger in tgAssignedTriggers) if ([trigger hasPrefix:@"slide."]) wantSlides = YES;
+    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | (wantSlides ? TGRelayWantsSlides : 0));
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");
     if (wantPower && !tgPowerObserver) {
@@ -2792,6 +2794,11 @@ static void TGUpdateOtherEvents(void) {
     notify_register_dispatch(TGRelayStatusBarTapRight, &rightToken, dispatch_get_main_queue(), ^(int t) { TGStatusBarTapped(TGStatusBarSideRight); });
     int shakeToken;
     notify_register_dispatch(TGRelayShake, &shakeToken, dispatch_get_main_queue(), ^(int t) { TGShaken(); });
+    int slToken, srToken, stToken, sbToken;
+    notify_register_dispatch(TGRelaySlideLeft, &slToken, dispatch_get_main_queue(), ^(int t) { TGFire(@"slide.left"); });
+    notify_register_dispatch(TGRelaySlideRight, &srToken, dispatch_get_main_queue(), ^(int t) { TGFire(@"slide.right"); });
+    notify_register_dispatch(TGRelaySlideTop, &stToken, dispatch_get_main_queue(), ^(int t) { TGFire(@"slide.top"); });
+    notify_register_dispatch(TGRelaySlideBottom, &sbToken, dispatch_get_main_queue(), ^(int t) { TGFire(@"slide.bottom"); });
     tgSpringBoardStarted = CACurrentMediaTime();
     %init(_ungrouped);
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");

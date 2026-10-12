@@ -34,6 +34,63 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 %end
 %end
 
+// Edge slide-ins: a fast straight slide starting on a screen edge. Tracked
+// here in every app (sendEvent), fired through the relay; SpringBoard runs the
+// action. Parallel by design: touches are never consumed.
+%group Slides
+%hook UIApplication
+- (void)sendEvent:(UIEvent *)event {
+    %orig;
+    if (event.type != UIEventTypeTouches) return;
+    static NSMutableDictionary<NSValue *, NSValue *> *starts;
+    static NSMutableDictionary<NSValue *, NSDate *> *times;
+    static CFAbsoluteTime lastFire;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ starts = [NSMutableDictionary new]; times = [NSMutableDictionary new]; });
+    CGSize size = UIScreen.mainScreen.bounds.size;
+    for (UITouch *touch in event.allTouches) {
+        NSValue *key = [NSValue valueWithNonretainedObject:touch];
+        CGPoint p = [touch locationInView:nil];
+        switch (touch.phase) {
+            case UITouchPhaseBegan:
+                starts[key] = [NSValue valueWithCGPoint:p];
+                times[key] = [NSDate date];
+                break;
+            case UITouchPhaseEnded: {
+                NSValue *startValue = starts[key];
+                NSDate *startTime = times[key];
+                [starts removeObjectForKey:key];
+                [times removeObjectForKey:key];
+                if (!startValue || !startTime) break;
+                CGPoint s = startValue.CGPointValue;
+                NSTimeInterval dt = -startTime.timeIntervalSinceNow;
+                if (dt <= 0 || dt > 0.6) break;
+                CGFloat dx = p.x - s.x, dy = p.y - s.y;
+                const CGFloat Margin = 24, Min = 60, MaxPerp = 40;
+                const char *name = NULL;
+                if (s.x < Margin && dx > Min && fabs(dy) < MaxPerp) name = TGRelaySlideLeft;
+                else if (s.x > size.width - Margin && dx < -Min && fabs(dy) < MaxPerp) name = TGRelaySlideRight;
+                else if (s.y < Margin && dy > Min && fabs(dx) < MaxPerp) name = TGRelaySlideTop;
+                else if (s.y > size.height - Margin && dy < -Min && fabs(dx) < MaxPerp) name = TGRelaySlideBottom;
+                if (!name) break;
+                CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+                if (now - lastFire < 0.3) break; // multi-touch can end twice at once
+                lastFire = now;
+                TGRelay(name, TGRelayWantsSlides);
+                break;
+            }
+            case UITouchPhaseCancelled:
+                [starts removeObjectForKey:key];
+                [times removeObjectForKey:key];
+                break;
+            default:
+                break;
+        }
+    }
+}
+%end
+%end
+
 // iOS's own shake detection (the one behind Shake to Undo) ends at the
 // application object, in apps and in SpringBoard alike.
 %group Shake
@@ -52,4 +109,5 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
     %init(Shake);
     BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
     if (!springBoard) %init(StatusBar);
+    %init(Slides); // edges work in apps and on the Home Screen alike
 }

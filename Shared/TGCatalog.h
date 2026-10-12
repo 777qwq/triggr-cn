@@ -61,6 +61,11 @@ static const TGItem TGStatusBar[] = {
 };
 // Shake rides on iOS's own shake detection, so no sensor runs for Triggr.
 static const TGItem TGMotion[] = { {"motion.shake", "摇晃设备"} };
+// A fast straight slide starting on a screen edge (see the Relay's touch tracker).
+static const TGItem TGScreenEdges[] = {
+    {"slide.left", "左缘滑入"}, {"slide.right", "右缘滑入"},
+    {"slide.top", "上缘滑入"}, {"slide.bottom", "下缘滑入"},
+};
 // A quick flick that starts on a Home Screen icon (see TGFlickRecognizer).
 // Gestures on the Home Screen pages themselves (not on an icon).
 static const TGItem TGHomeGestures[] = {
@@ -96,6 +101,7 @@ static const TGGroup TGTriggerGroups[] = {
     {"音量键", TGVolume, TG_COUNT(TGVolume), "U「音量加后音量减」（及反向）是两次快速连按；始终与系统并行执行，音量最终回到原位。"},
     {"静音拨片", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。"},
     {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
+    {"屏幕边缘", TGScreenEdges, TG_COUNT(TGScreenEdges), "从屏幕边缘起笔的快速直线滑入。任何界面均可用；与系统返回手势靠速度区分（返回是慢速横向拖动）。应用内由 Relay 捕获转发。"},
     {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。"},
     {"主屏幕手势", TGHomeGestures, TG_COUNT(TGHomeGestures), "在主屏幕页面上（而非图标上）。双指滑动和捏合不影响单指滚动、聚焦搜索和今天视图；双击只在空白处生效。编辑主屏幕或打开文件夹时忽略。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且亮屏时可用；应用提供该功能时「摇动以撤销」仍会出现。"},

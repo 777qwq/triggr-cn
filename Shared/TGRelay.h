@@ -7,7 +7,12 @@
 #define TGRelayStatusBarTapLeft "com.johndie.triggr/statusbar-tap-left"
 #define TGRelayStatusBarTapRight "com.johndie.triggr/statusbar-tap-right"
 #define TGRelayShake "com.johndie.triggr/shake"
+#define TGRelaySlideLeft "com.johndie.triggr/slide-left"
+#define TGRelaySlideRight "com.johndie.triggr/slide-right"
+#define TGRelaySlideTop "com.johndie.triggr/slide-top"
+#define TGRelaySlideBottom "com.johndie.triggr/slide-bottom"
 // A Darwin notification state set by SpringBoard: which events are assigned.
 #define TGRelayWanted "com.johndie.triggr/relay-wanted"
 #define TGRelayWantsStatusBar 1ULL
 #define TGRelayWantsShake 2ULL
+#define TGRelayWantsSlides 4ULL
