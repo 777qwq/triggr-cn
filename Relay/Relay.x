@@ -167,6 +167,12 @@ static BOOL TGBottomDeferred(void) {
     return %orig;
 }
 %end
+%hook UIScreenEdgePanGestureRecognizer
+- (void)setState:(UIGestureRecognizerState)state {
+    if (tgEdgeHot && state == UIGestureRecognizerStateBegan) state = UIGestureRecognizerStateFailed;
+    %orig(state);
+}
+%end
 %end
 
 %group Slides
