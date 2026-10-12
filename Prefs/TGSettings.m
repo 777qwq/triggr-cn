@@ -382,7 +382,9 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     grid.spacing = 6;
     for (NSUInteger i = 0; i < buttons.count; i += perRow) {
         NSRange range = NSMakeRange(i, MIN(perRow, buttons.count - i));
-        UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:[buttons subarrayWithRange:range]];
+        NSMutableArray *rowViews = [[buttons subarrayWithRange:range] mutableCopy];
+        [rowViews addObject:UIView.new]; // flexible spacer: keeps buttons at 32pt
+        UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:rowViews];
         row.axis = UILayoutConstraintAxisHorizontal;
         row.spacing = 6;
         [grid addArrangedSubview:row];
@@ -400,7 +402,7 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     _picker.datePickerMode = UIDatePickerModeTime;
     _picker.preferredDatePickerStyle = UIDatePickerStyleWheels;
 
-    _repeat = [[UISegmentedControl alloc] initWithItems:@[@"每天", @"工作日", @"周末", @"每周", @"每月"]];
+    _repeat = [[UISegmentedControl alloc] initWithItems:@[@"每天", @"每周", @"每月"]];
     _repeat.selectedSegmentIndex = 0;
     [_repeat addTarget:self action:@selector(repeatChanged) forControlEvents:UIControlEventValueChanged];
 
@@ -411,6 +413,7 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
         [_weekdayButtons addObject:button];
         [weekdayViews addObject:button];
     }
+    [weekdayViews addObject:UIView.new]; // flexible spacer: keeps buttons at 32pt
     UIStackView *weekdayGrid = [[UIStackView alloc] initWithArrangedSubviews:weekdayViews];
     weekdayGrid.axis = UILayoutConstraintAxisHorizontal;
     weekdayGrid.spacing = 6;
@@ -471,16 +474,14 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     NSDateComponents *time = [NSCalendar.currentCalendar components:NSCalendarUnitHour | NSCalendarUnitMinute fromDate:_picker.date];
     NSString *spec = nil;
     switch (_repeat.selectedSegmentIndex) {
-        case 1: spec = @"weekdays"; break;
-        case 2: spec = @"weekends"; break;
-        case 3: {
+        case 1: {
             NSMutableArray<NSString *> *days = [NSMutableArray array];
             for (UIButton *button in _weekdayButtons)
                 if (button.selected) [days addObject:[NSString stringWithFormat:@"%ld", (long)button.tag - 100]];
             spec = days.count ? [NSString stringWithFormat:@"weekly:%@", [days componentsJoinedByString:@","]] : @"daily";
             break;
         }
-        case 4: {
+        case 2: {
             NSMutableArray<NSString *> *days = [NSMutableArray array];
             for (UIButton *button in _monthdayButtons)
                 if (button.selected) [days addObject:button.tag == 99 ? @"last" : [NSString stringWithFormat:@"%ld", (long)button.tag]];
@@ -1368,6 +1369,13 @@ static NSString *TGCategoryOf(NSString *action) {
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.text = existing;
         if (percent) field.keyboardType = UIKeyboardTypeNumberPad;
+        if ([prefix isEqualToString:TGUnlockPrefix]) {
+            // iOS 16.3: the Chinese candidate bar's symbol rendering (CoreImage
+            // GL context) dies with a PAC fault when the keyboard loads during
+            // the alert transition. Secure ASCII entry never loads it.
+            field.secureTextEntry = YES;
+            field.keyboardType = UIKeyboardTypeASCIICapable;
+        }
         field.autocorrectionType = UITextAutocorrectionTypeNo;
         field.autocapitalizationType = UITextAutocapitalizationTypeNone;
         field.clearButtonMode = UITextFieldViewModeWhileEditing;
