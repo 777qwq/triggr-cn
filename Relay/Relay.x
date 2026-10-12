@@ -55,6 +55,8 @@ static void TGReadSlidePrefs(void) {
     if ([v respondsToSelector:@selector(doubleValue)] && [v doubleValue] > 0) tgMaxDuration = [v doubleValue];
 }
 
+static BOOL tgEdgeHot; // an edge slide is being tracked right now
+
 @interface TGEdgeSwipeRecognizer : UIGestureRecognizer
 @property (nonatomic, assign) BOOL tracking;
 @property (nonatomic, assign) CGPoint start;
@@ -82,6 +84,7 @@ static void TGReadSlidePrefs(void) {
     CGSize size = self.view.bounds.size;
     if (p.x < tgMargin || p.x > size.width - tgMargin || p.y < tgMargin || p.y > size.height - tgMargin) {
         self.tracking = YES;
+        tgEdgeHot = YES;
         self.start = p;
         self.startTime = CACurrentMediaTime();
     }
@@ -127,6 +130,7 @@ static void TGReadSlidePrefs(void) {
 - (void)reset {
     [super reset];
     self.tracking = NO;
+    if (!self.tracking) tgEdgeHot = NO;
 }
 @end
 
@@ -151,6 +155,15 @@ static BOOL TGBottomDeferred(void) {
 %hook UIViewController
 - (UIRectEdge)preferredScreenEdgesDeferringSystemGestures {
     if (TGBottomDeferred()) return UIRectEdgeBottom;
+    return %orig;
+}
+%end
+%end
+
+%group SlideGuard
+%hook UINavigationController
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    if (tgEdgeHot && [gestureRecognizer isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) return NO;
     return %orig;
 }
 %end
@@ -197,6 +210,7 @@ static BOOL TGBottomDeferred(void) {
     if (!springBoard) {
         %init(StatusBar);
         %init(BottomDefer);
+        %init(SlideGuard);
     }
     %init(Slides); // edges work in apps and on the Home Screen alike
 }
