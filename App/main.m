@@ -17,6 +17,8 @@
 static CIContext *tgSoftwareContext;
 
 static void TGPatchCoreImageGL(void) {
+    // CoreUI is lazy-loaded; force it in or the class lookup below misses.
+    if (!dlopen("/System/Library/PrivateFrameworks/CoreUI.framework/CoreUI", RTLD_LAZY)) return;
     Class cls = NSClassFromString(@"CUIShapeEffectStack");
     if (!cls) return;
     Method m = class_getClassMethod(cls, NSSelectorFromString(@"sharedCIContext"));
