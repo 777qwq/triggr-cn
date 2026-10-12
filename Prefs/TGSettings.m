@@ -211,7 +211,7 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 @interface TGInputController : UIViewController <UITextFieldDelegate>
 @property (nonatomic, copy) NSString *prompt;
 @property (nonatomic, copy) NSString *initialText;
-@property (nonatomic) BOOL percent, secure;
+@property (nonatomic) BOOL percent, secure, asciiOnly;
 @property (nonatomic, copy) void (^onSave)(NSString *text);
 @property (nonatomic, copy) void (^onRemove)(void);
 @end
@@ -1381,6 +1381,7 @@ static NSString *TGCategoryOf(NSString *action) {
     page.initialText = existingItem ? [existingItem substringFromIndex:prefix.length] : @"";
     page.percent = percent;
     page.secure = [prefix isEqualToString:TGUnlockPrefix]; // passwords: dots, no candidate bar
+    page.asciiOnly = [NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.johndie.triggr.app"];
     __weak typeof(self) weakSelf = self;
     page.onSave = ^(NSString *text) { [weakSelf setItem:[prefix stringByAppendingString:text] forPrefix:prefix]; };
     page.onRemove = existingItem ? ^{ [weakSelf setItem:nil forPrefix:prefix]; } : nil;
@@ -1412,8 +1413,12 @@ static NSString *TGCategoryOf(NSString *action) {
     _field.delegate = self;
     if (self.percent) _field.keyboardType = UIKeyboardTypeNumberPad;
     if (self.secure) _field.secureTextEntry = YES;
+    // In TriggrApp the Chinese candidate bar's CoreImage GL context dies with a
+    // PAC fault (Settings is fine), so the app entry gets ASCII-only fields.
+    if (self.asciiOnly) _field.keyboardType = UIKeyboardTypeASCIICapable;
     UILabel *note = [UILabel new];
-    note.text = self.prompt;
+    note.text = self.asciiOnly ? [self.prompt ?: @"" stringByAppendingString:@"\n\nApp 内输入仅支持英文与数字；中文请从「设置 → Triggr」配置。"]
+                               : self.prompt;
     note.numberOfLines = 0;
     note.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
     note.textColor = UIColor.secondaryLabelColor;
