@@ -361,10 +361,10 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
 }
 
 - (void)repeatChanged {
-    _weeklyLabel.hidden = _repeat.selectedSegmentIndex != 3;
-    _monthlyLabel.hidden = _repeat.selectedSegmentIndex != 4;
-    for (UIButton *button in _weekdayButtons) button.hidden = _repeat.selectedSegmentIndex != 3;
-    for (UIButton *button in _monthdayButtons) button.hidden = _repeat.selectedSegmentIndex != 4;
+    _weeklyLabel.hidden = _repeat.selectedSegmentIndex != 1;
+    _monthlyLabel.hidden = _repeat.selectedSegmentIndex != 2;
+    for (UIButton *button in _weekdayButtons) button.hidden = _repeat.selectedSegmentIndex != 1;
+    for (UIButton *button in _monthdayButtons) button.hidden = _repeat.selectedSegmentIndex != 2;
 }
 
 - (UILabel *)noteLabel:(NSString *)text body:(BOOL)body {
