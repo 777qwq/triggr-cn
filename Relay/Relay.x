@@ -66,8 +66,11 @@ static void TGReadSlidePrefs(void) {
     self = [super initWithTarget:self action:@selector(nop)];
     if (self) {
         self.cancelsTouchesInView = YES;
-        self.delaysTouchesBegan = NO;
-        self.delaysTouchesEnded = NO;
+        // Withhold edge-started touches until we've decided, so fast system
+        // gestures (back swipe) never see them when we win. Non-edge touches
+        // fail us on the first event and pass through untouched.
+        self.delaysTouchesBegan = YES;
+        self.delaysTouchesEnded = YES;
     }
     return self;
 }
