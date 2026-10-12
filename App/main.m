@@ -16,6 +16,20 @@
 // CPU raster handles these small images without touching the broken GPU path.
 static CIContext *tgSoftwareContext;
 
+// Root cause of the NULL call inside CI's GL context ctor is opaque from logs,
+// so cut the crash off at its topmost UIKit entry instead: symbol palette
+// styling (which routes through CUICatalog -> CoreImage GL) is replaced by a
+// plain GPU-free tint. Icons lose palette effects, keep their color.
+static void TGPatchSymbolStyling(void) {
+    SEL sel = NSSelectorFromString(@"_imageWithStylePresets:tintColor:traitCollection:");
+    Method m = class_getInstanceMethod(UIImage.class, sel);
+    if (!m) return;
+    method_setImplementation(m, imp_implementationWithBlock(^id(id self, NSArray *presets, UIColor *tint, UITraitCollection *tc) {
+        UIImage *tinted = tint ? [self imageWithTintColor:tint] : nil;
+        return tinted ?: self;
+    }));
+}
+
 static void TGPatchCoreImageGL(void) {
     // CoreImage's GL context ctor calls an OpenGLES symbol through a weak
     // binding that is NULL when the framework was never loaded. Settings has
@@ -85,6 +99,7 @@ static UIViewController *TGMessage(NSString *text) {
     root.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeAlways;
     self.window.rootViewController = navigation;
     [self.window makeKeyAndVisible];
+    TGPatchSymbolStyling();
     TGPatchCoreImageGL();
     return YES;
 }
