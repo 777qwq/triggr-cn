@@ -273,7 +273,7 @@ static inline NSString *TGTriggerWarning(NSString *trigger, BOOL replaces) {
         @"icon.flickdown": @"从图标起始的下滑搜索手势将执行此动作。",
         @"volume.updown": @"在半秒内先按音量加再按音量减。与两次按压并行执行。",
         @"volume.downup": @"在半秒内先按音量减再按音量加。与两次按压并行执行。",
-        @"time": @"在设备运行 Triggr 期间于此时间触发。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。",
+        @"time": @"在此时间运行，支持每周/每月重复与「运行前询问」。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。",
         @"battery": @"电量越过该百分比时执行一次，而非每次变化都执行。",
         @"statusbar.tap": @"若同时指派了双击，单击会稍作等待以判断是否出现第二击。",
         @"statusbar.left.tap": @"若「左侧双击」（或「双击」）也有指派，单击会稍作等待以判断是否为双击。",
@@ -308,15 +308,53 @@ static inline NSString *TGDaysTitle(NSString *days) {
     return @"每天";
 }
 
-// "time:0730:weekdays" -> hour 7, minute 30, days "weekdays"; NO if malformed.
+static inline NSString *TGWeekdayTitle(int weekday) { // 1 = Sunday
+    return @[@"周日", @"周一", @"周二", @"周三", @"周四", @"周五", @"周六"][weekday - 1];
+}
+
+// Repeat spec for scheduled events: everything after "time:<HHMM>:".
+// Old: "daily" | "weekdays" | "weekends". New: "weekly:1,3,5" (1 = Sunday) or
+// "monthly:1,15,last" (absent dates like Feb 30 are skipped; "last" = month's
+// final day). An optional ":ask" suffix means ask before running.
+static inline NSString *TGSpecTitle(NSString *spec) {
+    if ([spec hasPrefix:@"weekly:"]) {
+        NSMutableArray<NSString *> *names = [NSMutableArray array];
+        for (NSString *part in [[spec substringFromIndex:7] componentsSeparatedByString:@","]) {
+            int d = part.intValue;
+            if (d >= 1 && d <= 7) [names addObject:TGWeekdayTitle(d)];
+        }
+        return names.count ? [@"每" stringByAppendingString:[names componentsJoinedByString:@"、"]] : @"每周";
+    }
+    if ([spec hasPrefix:@"monthly:"]) {
+        NSMutableArray<NSString *> *names = [NSMutableArray array];
+        for (NSString *part in [[spec substringFromIndex:8] componentsSeparatedByString:@","]) {
+            if ([part isEqualToString:@"last"]) [names addObject:@"月末"];
+            else if (part.intValue >= 1 && part.intValue <= 31) [names addObject:[NSString stringWithFormat:@"%@日", part]];
+        }
+        return names.count ? [@"每月" stringByAppendingString:[names componentsJoinedByString:@"、"]] : @"每月";
+    }
+    return TGDaysTitle(spec);
+}
+
+// "time:0730:weekdays" -> hour 7, minute 30, spec "weekdays"; NO if malformed.
+// Accepts old (daily/weekdays/weekends) and new (weekly:/monthly:) specs; an
+// optional ":ask" suffix (ask before running) is stripped from the spec.
 static inline BOOL TGParseTime(NSString *trigger, int *hour, int *minute, NSString **days) {
-    NSArray *parts = [[trigger substringFromIndex:MIN(TGTimePrefix.length, trigger.length)] componentsSeparatedByString:@":"];
-    if (parts.count != 2 || [parts[0] length] != 4) return NO;
-    int hhmm = [parts[0] intValue];
-    *hour = hhmm / 100;
-    *minute = hhmm % 100;
-    *days = parts[1];
+    NSString *rest = [trigger substringFromIndex:MIN(TGTimePrefix.length, trigger.length)];
+    if (rest.length < 5 || [rest characterAtIndex:4] != ':') return NO;
+    NSString *hhmm = [rest substringToIndex:4];
+    int value = hhmm.intValue;
+    *hour = value / 100;
+    *minute = value % 100;
+    *days = [rest substringFromIndex:5];
+    if ([*days hasSuffix:@":ask"]) *days = [*days substringToIndex:(*days).length - 4];
+    if (!(*days).length) return NO;
     return *hour < 24 && *minute < 60;
+}
+
+// Does this scheduled trigger ask before running? ("time:0730:daily:ask")
+static inline BOOL TGTimeAsks(NSString *trigger) {
+    return [trigger hasPrefix:TGTimePrefix] && [trigger hasSuffix:@":ask"];
 }
 
 // "上滑" for "icon.flickup" or "icon.flickup:<bundle id>".
@@ -340,7 +378,7 @@ static inline NSString *TGCustomTriggerTitle(NSString *trigger) {
     if ([trigger hasPrefix:@"icon.flick"]) return [NSString stringWithFormat:@"在 %@ 上%@", value, TGFlickDirectionTitle(trigger)];
     int hour, minute;
     NSString *days;
-    if (TGParseTime(trigger, &hour, &minute, &days)) return [NSString stringWithFormat:@"%02d:%02d %@", hour, minute, TGDaysTitle(days)];
+    if (TGParseTime(trigger, &hour, &minute, &days)) return [NSString stringWithFormat:@"%02d:%02d %@", hour, minute, TGSpecTitle(days)];
     return trigger;
 }
 

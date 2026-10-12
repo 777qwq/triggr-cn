@@ -1311,6 +1311,42 @@ static BOOL TGFire(NSString *trigger) {
     return YES;
 }
 
+// Scheduled events with ":ask": a Shortcuts-style prompt. Times out after a
+// minute; dismissing just skips this one run, nothing is scheduled behind it.
+static UIWindow *tgAskWindow;
+
+static void TGCloseAsk(void) {
+    tgAskWindow.hidden = YES;
+    tgAskWindow = nil;
+}
+
+static void TGAskTime(NSString *trigger) {
+    NSArray *actions = TGActionFor(trigger);
+    if (!actions) return;
+    TGCloseAsk();
+    tgAskWindow = TGOverlayWindow(YES);
+    if (!tgAskWindow) return;
+    tgAskWindow.hidden = NO;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"定时事件"
+        message:[NSString stringWithFormat:@"运行「%@」？", TGTriggerTitle(trigger)]
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"运行" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        TGCloseAsk();
+        if (tgShowBanners) {
+            NSMutableArray *titles = [NSMutableArray array];
+            for (NSString *action in actions)
+                if (![action hasPrefix:TGPausePrefix] && ![action hasPrefix:TGMenuPrefix] && ![action isEqualToString:@"system.nothing"]) [titles addObject:TGSpringBoardTitle(action)];
+            if (titles.count) TGShowBanner([titles componentsJoinedByString:@" + "]);
+        }
+        TGRunActions(actions);
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) { TGCloseAsk(); }]];
+    [tgAskWindow.rootViewController presentViewController:alert animated:YES completion:nil];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (tgAskWindow) TGCloseAsk();
+    });
+}
+
 #pragma mark - API (other tweaks and the triggr tool)
 
 // Darwin notifications carry no payload, so SpringBoard listens for one name per
@@ -2479,24 +2515,45 @@ static void TGBatteryLevelChanged(void) {
 static NSTimer *tgTimeTimer;
 static id tgTimeObserver;
 
-static BOOL TGDayMatches(NSString *days, NSDate *date) {
-    NSInteger weekday = [NSCalendar.currentCalendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
+// Does the repeat spec match on this date? Old specs (daily/weekdays/weekends)
+// and new ones (weekly:1,3,5 / monthly:1,15,last). Monthly dates that don't
+// exist (Feb 30) simply never match, matching Shortcuts' "skip that month".
+static BOOL TGSpecMatches(NSString *spec, NSDate *date) {
+    NSCalendar *calendar = NSCalendar.currentCalendar;
+    if ([spec hasPrefix:@"weekly:"]) {
+        NSInteger weekday = [calendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
+        for (NSString *part in [[spec substringFromIndex:7] componentsSeparatedByString:@","])
+            if (part.intValue == weekday) return YES;
+        return NO;
+    }
+    if ([spec hasPrefix:@"monthly:"]) {
+        NSInteger day = [calendar component:NSCalendarUnitDay fromDate:date];
+        for (NSString *part in [[spec substringFromIndex:8] componentsSeparatedByString:@","]) {
+            if ([part isEqualToString:@"last"]) {
+                NSDate *nextDay = [calendar dateByAddingUnit:NSCalendarUnitDay value:1 toDate:date options:0];
+                if ([calendar component:NSCalendarUnitDay fromDate:nextDay] == 1) return YES; // tomorrow is the 1st
+            } else if (part.intValue == day) return YES;
+        }
+        return NO;
+    }
+    NSInteger weekday = [calendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
     BOOL weekend = weekday == 1 || weekday == 7;
-    if ([days isEqualToString:@"weekdays"]) return !weekend;
-    if ([days isEqualToString:@"weekends"]) return weekend;
-    return YES;
+    if ([spec isEqualToString:@"weekdays"]) return !weekend;
+    if ([spec isEqualToString:@"weekends"]) return weekend;
+    return YES; // daily, or anything unrecognised falls back to every day
 }
 
-// The next date (after `after`) this time trigger is due, or nil.
+// The next date (after `after`) this time trigger is due, or nil. Weekly and
+// monthly specs may be up to a year out, so scan far more days than before.
 static NSDate *TGNextDate(NSString *trigger, NSDate *after) {
     int hour, minute;
-    NSString *days;
-    if (!TGParseTime(trigger, &hour, &minute, &days)) return nil;
+    NSString *spec;
+    if (!TGParseTime(trigger, &hour, &minute, &spec)) return nil;
     NSCalendar *calendar = NSCalendar.currentCalendar;
-    for (int offset = 0; offset < 8; offset++) {
+    for (int offset = 0; offset < 370; offset++) {
         NSDate *day = [calendar dateByAddingUnit:NSCalendarUnitDay value:offset toDate:after options:0];
         NSDate *candidate = [calendar dateBySettingHour:hour minute:minute second:0 ofDate:day options:0];
-        if ([candidate compare:after] == NSOrderedDescending && TGDayMatches(days, candidate)) return candidate;
+        if ([candidate compare:after] == NSOrderedDescending && TGSpecMatches(spec, candidate)) return candidate;
     }
     return nil;
 }
@@ -2508,7 +2565,10 @@ static void TGTimeTimerFired(NSDate *target) {
     if (late < 300) {
         for (NSString *trigger in tgAssignedTriggers.copy) {
             NSDate *due = TGNextDate(trigger, [target dateByAddingTimeInterval:-1]);
-            if (due && fabs([due timeIntervalSinceDate:target]) < 1) TGFire(trigger);
+            if (due && fabs([due timeIntervalSinceDate:target]) < 1) {
+                if (TGTimeAsks(trigger)) TGAskTime(trigger);
+                else TGFire(trigger);
+            }
         }
     }
     TGScheduleTimes();

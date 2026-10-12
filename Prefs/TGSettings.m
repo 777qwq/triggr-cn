@@ -320,7 +320,7 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     return [names.allObjects sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
-#pragma mark - Time picker (Scheduled events)
+#pragma mark - Time picker (Scheduled events, Shortcuts-style)
 
 @interface TGTimePickerController : UIViewController
 @property (nonatomic, copy) void (^onSave)(NSString *trigger);
@@ -328,7 +328,66 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
 
 @implementation TGTimePickerController {
     UIDatePicker *_picker;
-    UISegmentedControl *_days;
+    UISegmentedControl *_repeat;
+    NSMutableArray<UIButton *> *_weekdayButtons; // tag 101..107 = weekday 1..7 (1 = Sunday)
+    NSMutableArray<UIButton *> *_monthdayButtons; // tag 1..31 = days of month, 99 = last day
+    UISwitch *_ask;
+    UILabel *_weeklyLabel;
+    UILabel *_monthlyLabel;
+}
+
+- (UIButton *)roundButtonWithTitle:(NSString *)title tag:(NSInteger)tag target:(id)target {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+    button.layer.cornerRadius = 16;
+    button.layer.masksToBounds = YES;
+    button.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    button.tag = tag;
+    [button setTitle:title forState:UIControlStateNormal];
+    [button addTarget:target action:@selector(toggle:) forControlEvents:UIControlEventTouchUpInside];
+    [button.widthAnchor constraintEqualToConstant:32].active = YES;
+    [button.heightAnchor constraintEqualToConstant:32].active = YES;
+    return button;
+}
+
+- (void)toggle:(UIButton *)sender {
+    sender.selected = !sender.selected;
+    [self refreshButton:sender];
+}
+
+- (void)refreshButton:(UIButton *)button {
+    UIColor *tint = button.tag == 99 ? UIColor.systemRedColor : UIColor.systemBlueColor;
+    button.backgroundColor = button.selected ? tint : UIColor.secondarySystemFillColor;
+    [button setTitleColor:button.selected ? UIColor.whiteColor : UIColor.labelColor forState:UIControlStateNormal];
+}
+
+- (void)repeatChanged {
+    _weeklyLabel.hidden = _repeat.selectedSegmentIndex != 3;
+    _monthlyLabel.hidden = _repeat.selectedSegmentIndex != 4;
+    for (UIButton *button in _weekdayButtons) button.hidden = _repeat.selectedSegmentIndex != 3;
+    for (UIButton *button in _monthdayButtons) button.hidden = _repeat.selectedSegmentIndex != 4;
+}
+
+- (UILabel *)noteLabel:(NSString *)text body:(BOOL)body {
+    UILabel *note = [UILabel new];
+    note.text = text;
+    note.numberOfLines = 0;
+    note.font = [UIFont preferredFontForTextStyle:body ? UIFontTextStyleBody : UIFontTextStyleFootnote];
+    note.textColor = body ? UIColor.labelColor : UIColor.secondaryLabelColor;
+    return note;
+}
+
+- (UIStackView *)buttonGridWithButtons:(NSArray<UIButton *> *)buttons perRow:(NSUInteger)perRow {
+    UIStackView *grid = [UIStackView new];
+    grid.axis = UILayoutConstraintAxisVertical;
+    grid.spacing = 6;
+    for (NSUInteger i = 0; i < buttons.count; i += perRow) {
+        NSRange range = NSMakeRange(i, MIN(perRow, buttons.count - i));
+        UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:[buttons subarrayWithRange:range]];
+        row.axis = UILayoutConstraintAxisHorizontal;
+        row.spacing = 6;
+        [grid addArrangedSubview:row];
+    }
+    return grid;
 }
 
 - (void)viewDidLoad {
@@ -336,33 +395,103 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     self.title = @"定时";
     self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSave target:self action:@selector(save)];
+
     _picker = [UIDatePicker new];
     _picker.datePickerMode = UIDatePickerModeTime;
     _picker.preferredDatePickerStyle = UIDatePickerStyleWheels;
-    _days = [[UISegmentedControl alloc] initWithItems:@[@"每天", @"工作日", @"周末"]];
-    _days.selectedSegmentIndex = 0;
-    UILabel *note = [UILabel new];
-    note.text = @"在此时间运行。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。";
-    note.numberOfLines = 0;
-    note.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-    note.textColor = UIColor.secondaryLabelColor;
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_picker, _days, note]];
+
+    _repeat = [[UISegmentedControl alloc] initWithItems:@[@"每天", @"工作日", @"周末", @"每周", @"每月"]];
+    _repeat.selectedSegmentIndex = 0;
+    [_repeat addTarget:self action:@selector(repeatChanged) forControlEvents:UIControlEventValueChanged];
+
+    _weekdayButtons = [NSMutableArray array];
+    NSMutableArray *weekdayViews = [NSMutableArray array];
+    for (int d = 1; d <= 7; d++) {
+        UIButton *button = [self roundButtonWithTitle:TGWeekdayTitle(d) tag:100 + d target:self];
+        [_weekdayButtons addObject:button];
+        [weekdayViews addObject:button];
+    }
+    UIStackView *weekdayGrid = [[UIStackView alloc] initWithArrangedSubviews:weekdayViews];
+    weekdayGrid.axis = UILayoutConstraintAxisHorizontal;
+    weekdayGrid.spacing = 6;
+
+    _monthdayButtons = [NSMutableArray array];
+    NSMutableArray *monthdayViews = [NSMutableArray array];
+    for (int d = 1; d <= 31; d++) {
+        UIButton *button = [self roundButtonWithTitle:[NSString stringWithFormat:@"%d", d] tag:d target:self];
+        [_monthdayButtons addObject:button];
+        [monthdayViews addObject:button];
+    }
+    UIButton *last = [self roundButtonWithTitle:@"末" tag:99 target:self];
+    [_monthdayButtons addObject:last];
+    [monthdayViews addObject:last];
+    UIStackView *monthlyGrid = [self buttonGridWithButtons:monthdayViews perRow:8];
+
+    _weeklyLabel = [self noteLabel:@"选择重复的星期。" body:NO];
+    _monthlyLabel = [self noteLabel:@"选择重复的日期。当月没有的日期（如 2 月 30 日）跳过；「末」为每月最后一天。" body:NO];
+
+    UILabel *askLabel = [self noteLabel:@"运行前询问" body:YES];
+    _ask = [[UISwitch alloc] init];
+    UIView *spacer = [UIView new];
+    UIStackView *askRow = [[UIStackView alloc] initWithArrangedSubviews:@[askLabel, spacer, _ask]];
+    askRow.axis = UILayoutConstraintAxisHorizontal;
+    [_ask.widthAnchor constraintGreaterThanOrEqualToConstant:51].active = YES;
+    [spacer.widthAnchor constraintGreaterThanOrEqualToConstant:8].active = YES;
+
+    UILabel *note = [self noteLabel:@"在此时间运行。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。" body:NO];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[
+        _picker, _repeat, _weeklyLabel, weekdayGrid, _monthlyLabel, monthlyGrid, askRow, note,
+    ]];
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 16;
+    stack.spacing = 14;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:stack];
+    UIScrollView *scroll = [UIScrollView new];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [scroll addSubview:stack];
+    [self.view addSubview:scroll];
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:guide.topAnchor constant:16],
-        [stack.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
-        [stack.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
+        [scroll.topAnchor constraintEqualToAnchor:guide.topAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor],
+        [scroll.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor],
+        [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],
+        [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:16],
+        [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-16],
+        [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-16],
+        [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32],
     ]];
+    [self repeatChanged];
+    for (UIButton *button in _weekdayButtons) [self refreshButton:button];
+    for (UIButton *button in _monthdayButtons) [self refreshButton:button];
 }
 
 - (void)save {
     NSDateComponents *time = [NSCalendar.currentCalendar components:NSCalendarUnitHour | NSCalendarUnitMinute fromDate:_picker.date];
-    NSString *days = @[@"daily", @"weekdays", @"weekends"][_days.selectedSegmentIndex];
-    if (self.onSave) self.onSave([NSString stringWithFormat:@"%@%02ld%02ld:%@", TGTimePrefix, (long)time.hour, (long)time.minute, days]);
+    NSString *spec = nil;
+    switch (_repeat.selectedSegmentIndex) {
+        case 1: spec = @"weekdays"; break;
+        case 2: spec = @"weekends"; break;
+        case 3: {
+            NSMutableArray<NSString *> *days = [NSMutableArray array];
+            for (UIButton *button in _weekdayButtons)
+                if (button.selected) [days addObject:[NSString stringWithFormat:@"%ld", (long)button.tag - 100]];
+            spec = days.count ? [NSString stringWithFormat:@"weekly:%@", [days componentsJoinedByString:@","]] : @"daily";
+            break;
+        }
+        case 4: {
+            NSMutableArray<NSString *> *days = [NSMutableArray array];
+            for (UIButton *button in _monthdayButtons)
+                if (button.selected) [days addObject:button.tag == 99 ? @"last" : [NSString stringWithFormat:@"%ld", (long)button.tag]];
+            spec = days.count ? [NSString stringWithFormat:@"monthly:%@", [days componentsJoinedByString:@","]] : @"daily";
+            break;
+        }
+        default: spec = @"daily"; break;
+    }
+    NSString *trigger = [NSString stringWithFormat:@"%@%02ld%02ld:%@", TGTimePrefix, (long)time.hour, (long)time.minute, spec];
+    if (_ask.on) trigger = [trigger stringByAppendingString:@":ask"];
+    if (self.onSave) self.onSave(trigger);
 }
 
 @end
