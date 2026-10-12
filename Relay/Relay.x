@@ -142,7 +142,10 @@ static void TGAttachEdgeRecognizer(UIWindow *window) {
         TGReadSlidePrefs();
         int token;
         notify_register_dispatch(TGPrefsChangedNotification, &token, dispatch_get_main_queue(), ^(int t) { TGReadSlidePrefs(); });
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
         for (UIWindow *window in UIApplication.sharedApplication.windows) TGAttachEdgeRecognizer(window);
+#pragma clang diagnostic pop
         [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidBecomeVisibleNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
             TGAttachEdgeRecognizer(n.object);
         }];
