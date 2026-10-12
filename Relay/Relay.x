@@ -35,10 +35,10 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 %end
 %end
 
-// Edge slide-ins: a fast straight slide starting on a screen edge. Tracked
-// here in every app (sendEvent), fired through the relay; SpringBoard runs the
-// action. Parallel by design: touches are never consumed.
-%group Slides
+// Edge slide-ins: a fast straight slide starting on a screen edge. A real
+// recognizer on every window (added as windows become visible) competes in the
+// standard gesture arena; cancelsTouchesInView lets it swallow the touch on
+// recognition, so apps see a clean cancel instead of half a scroll.
 static CGFloat tgMargin = 24, tgMin = 60, tgPerp = 40;
 static NSTimeInterval tgMaxDuration = 0.6;
 
@@ -55,59 +55,98 @@ static void TGReadSlidePrefs(void) {
     if ([v respondsToSelector:@selector(doubleValue)] && [v doubleValue] > 0) tgMaxDuration = [v doubleValue];
 }
 
+@interface TGEdgeSwipeRecognizer : UIGestureRecognizer
+@property (nonatomic, assign) BOOL tracking;
+@property (nonatomic, assign) CGPoint start;
+@property (nonatomic, assign) CFAbsoluteTime startTime;
+@end
+
+@implementation TGEdgeSwipeRecognizer
+- (instancetype)initWithTarget:(id)target action:(SEL)action {
+    self = [super initWithTarget:self action:@selector(nop)];
+    if (self) {
+        self.cancelsTouchesInView = YES;
+        self.delaysTouchesBegan = NO;
+        self.delaysTouchesEnded = NO;
+    }
+    return self;
+}
+- (void)nop {}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesBegan:touches withEvent:event];
+    if (self.numberOfTouches != 1 || self.tracking) return;
+    CGPoint p = [touches.anyObject locationInView:self.view];
+    CGSize size = self.view.bounds.size;
+    if (p.x < tgMargin || p.x > size.width - tgMargin || p.y < tgMargin || p.y > size.height - tgMargin) {
+        self.tracking = YES;
+        self.start = p;
+        self.startTime = CACurrentMediaTime();
+    }
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesMoved:touches withEvent:event];
+    if (!self.tracking || self.numberOfTouches != 1) return;
+    CGPoint p = [touches.anyObject locationInView:self.view];
+    CGSize size = self.view.bounds.size;
+    CGFloat dx = p.x - self.start.x, dy = p.y - self.start.y;
+    NSTimeInterval dt = CACurrentMediaTime() - self.startTime;
+    const char *name = NULL;
+    if (self.start.x < tgMargin) {
+        if (dx > tgMin && fabs(dy) < tgPerp && dt <= tgMaxDuration) name = TGRelaySlideLeft;
+        else if (dx < -tgMin * 0.5) { self.state = UIGestureRecognizerStateFailed; self.tracking = NO; return; }
+    } else if (self.start.x > size.width - tgMargin) {
+        if (dx < -tgMin && fabs(dy) < tgPerp && dt <= tgMaxDuration) name = TGRelaySlideRight;
+        else if (dx > tgMin * 0.5) { self.state = UIGestureRecognizerStateFailed; self.tracking = NO; return; }
+    } else if (self.start.y < tgMargin) {
+        if (dy > tgMin && fabs(dx) < tgPerp && dt <= tgMaxDuration) name = TGRelaySlideTop;
+        else if (dy < -tgMin * 0.5) { self.state = UIGestureRecognizerStateFailed; self.tracking = NO; return; }
+    } else {
+        if (dy < -tgMin && fabs(dx) < tgPerp && dt <= tgMaxDuration) name = TGRelaySlideBottom;
+        else if (dy > tgMin * 0.5) { self.state = UIGestureRecognizerStateFailed; self.tracking = NO; return; }
+    }
+    if (name) {
+        self.state = UIGestureRecognizerStateBegan; // cancels touches in view
+        self.state = UIGestureRecognizerStateEnded;
+        self.tracking = NO;
+        TGRelay(name, TGRelayWantsSlides);
+    }
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesEnded:touches withEvent:event];
+    self.tracking = NO;
+    if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
+}
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesCancelled:touches withEvent:event];
+    self.tracking = NO;
+    if (self.state != UIGestureRecognizerStateEnded) self.state = UIGestureRecognizerStateFailed;
+}
+- (void)reset {
+    [super reset];
+    self.tracking = NO;
+}
+@end
+
+static void TGAttachEdgeRecognizer(UIWindow *window) {
+    for (UIGestureRecognizer *g in window.gestureRecognizers)
+        if ([g isKindOfClass:TGEdgeSwipeRecognizer.class]) return;
+    [window addGestureRecognizer:[[TGEdgeSwipeRecognizer alloc] init]];
+}
+
+%group Slides
 %hook UIApplication
 - (void)sendEvent:(UIEvent *)event {
     %orig;
-    if (event.type != UIEventTypeTouches) return;
-    static NSMutableDictionary<NSValue *, NSValue *> *starts;
-    static NSMutableDictionary<NSValue *, NSDate *> *times;
-    static CFAbsoluteTime lastFire;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        starts = [NSMutableDictionary new]; times = [NSMutableDictionary new];
         TGReadSlidePrefs();
         int token;
         notify_register_dispatch(TGPrefsChangedNotification, &token, dispatch_get_main_queue(), ^(int t) { TGReadSlidePrefs(); });
+        for (UIWindow *window in UIApplication.sharedApplication.windows) TGAttachEdgeRecognizer(window);
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIWindowDidBecomeVisibleNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
+            TGAttachEdgeRecognizer(n.object);
+        }];
     });
-    CGSize size = UIScreen.mainScreen.bounds.size;
-    for (UITouch *touch in event.allTouches) {
-        NSValue *key = [NSValue valueWithNonretainedObject:touch];
-        CGPoint p = [touch locationInView:nil];
-        switch (touch.phase) {
-            case UITouchPhaseBegan:
-                starts[key] = [NSValue valueWithCGPoint:p];
-                times[key] = [NSDate date];
-                break;
-            case UITouchPhaseEnded: {
-                NSValue *startValue = starts[key];
-                NSDate *startTime = times[key];
-                [starts removeObjectForKey:key];
-                [times removeObjectForKey:key];
-                if (!startValue || !startTime) break;
-                CGPoint s = startValue.CGPointValue;
-                NSTimeInterval dt = -startTime.timeIntervalSinceNow;
-                if (dt <= 0 || dt > tgMaxDuration) break;
-                CGFloat dx = p.x - s.x, dy = p.y - s.y;
-                const char *name = NULL;
-                if (s.x < tgMargin && dx > tgMin && fabs(dy) < tgPerp) name = TGRelaySlideLeft;
-                else if (s.x > size.width - tgMargin && dx < -tgMin && fabs(dy) < tgPerp) name = TGRelaySlideRight;
-                else if (s.y < tgMargin && dy > tgMin && fabs(dx) < tgPerp) name = TGRelaySlideTop;
-                else if (s.y > size.height - tgMargin && dy < -tgMin && fabs(dx) < tgPerp) name = TGRelaySlideBottom;
-                if (!name) break;
-                CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
-                if (now - lastFire < 0.3) break; // multi-touch can end twice at once
-                lastFire = now;
-                TGRelay(name, TGRelayWantsSlides);
-                break;
-            }
-            case UITouchPhaseCancelled:
-                [starts removeObjectForKey:key];
-                [times removeObjectForKey:key];
-                break;
-            default:
-                break;
-        }
-    }
 }
 %end
 %end

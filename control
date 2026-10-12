@@ -1,6 +1,6 @@
 Package: com.johndie.triggr
 Name: Triggr汉化修改版
-Version: 1.0.4+cn5.3
+Version: 1.0.4+cn5.4
 Architecture: iphoneos-arm64
 Description: 基于 Triggr 开源项目汉化修改，兼容自测无效删除。\
  新增：\
