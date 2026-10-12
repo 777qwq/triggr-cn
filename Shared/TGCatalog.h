@@ -16,7 +16,11 @@
 #define TGProfilesKey @"配置"           // {name: setup}
 #define TGActiveProfileKey @"ActiveProfile"
 #define TGAllowAPIKey @"AllowAPI"           // other tweaks / the triggr tool may run actions, default off
-#define TGLockReplacesKey @"LockReplaces"   // assigned button presses replace iOS's own action (all buttons), default on
+#define TGLockReplacesKey @"LockReplaces"
+#define TGSlideMarginKey @"SlideMargin"     // edge sensing width, pt, default 24
+#define TGSlideDistanceKey @"SlideDistance" // min straight travel, pt, default 60
+#define TGSlidePerpKey @"SlidePerp"         // max perpendicular drift, pt, default 40
+#define TGSlideDurationKey @"SlideDuration" // max duration, seconds, default 0.6   // assigned button presses replace iOS's own action (all buttons), default on
 #define TGRecentActionsKey @"RecentActions" // the last actions picked, newest first (Settings only)
 // Settings' Test button: SpringBoard runs the assignment stored at TGTestKey ("<mode>/<trigger>") now.
 #define TGTestKey @"TestAssignment"

@@ -2448,6 +2448,29 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
 
 @implementation TGOptionsController
 
+- (PSSpecifier *)sliderRow:(NSString *)title key:(NSString *)key min:(float)mn max:(float)mx def:(float)def {
+    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:title target:self
+        set:@selector(setSlideValue:specifier:) get:@selector(slideValue:)
+        detail:nil cell:PSSliderCell edit:nil];
+    [spec setProperty:TGDomain forKey:@"defaults"];
+    [spec setProperty:key forKey:@"key"];
+    [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+    [spec setProperty:@(mn) forKey:@"min"];
+    [spec setProperty:@(mx) forKey:@"max"];
+    [spec setProperty:@(def) forKey:@"tgDefault"];
+    return spec;
+}
+
+- (float)slideValue:(PSSpecifier *)spec {
+    id v = [self readPreferenceValue:spec];
+    float def = [[spec propertyForKey:@"tgDefault"] floatValue];
+    return [v respondsToSelector:@selector(floatValue)] && [v floatValue] > 0 ? [v floatValue] : def;
+}
+
+- (void)setSlideValue:(NSNumber *)value specifier:(PSSpecifier *)spec {
+    [self setPreferenceValue:@(roundf(value.floatValue * 100) / 100) specifier:spec];
+}
+
 - (NSArray *)specifiers {
     if (!_specifiers) {
         self.title = @"选项";
@@ -2475,6 +2498,14 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
             forKey:@"footerText"];
         [specs addObject:statusBar];
         [specs addObject:TGSwitchRow(TGHasHomeButton() ? @"状态栏点按" : @"状态栏点按（实验性）", TGStatusBarTapKey, TGHasHomeButton(), self)];
+
+        PSSpecifier *edges = [PSSpecifier groupSpecifierWithName:@"屏幕边缘"];
+        [edges setProperty:@"边缘滑入手势的判定参数。感应宽度：起笔位置离屏幕边缘的最大距离；最短位移：判定滑入所需的直线位移；垂直偏移与用时超过上限则判定失败。单位为磅，用时为秒。" forKey:@"footerText"];
+        [specs addObject:edges];
+        [specs addObject:[self sliderRow:@"感应宽度" key:TGSlideMarginKey min:0 max:60 def:24]];
+        [specs addObject:[self sliderRow:@"最短位移" key:TGSlideDistanceKey min:20 max:200 def:60]];
+        [specs addObject:[self sliderRow:@"垂直偏移上限" key:TGSlidePerpKey min:10 max:120 def:40]];
+        [specs addObject:[self sliderRow:@"最长用时" key:TGSlideDurationKey min:0.2 max:1.5 def:0.6]];
 
         PSSpecifier *lock = [PSSpecifier groupSpecifierWithName:@"锁屏界面"];
         [lock setProperty:@"应用、URL 和快捷指令无法在锁屏界面上打开，因此它们总会等到解锁后才执行。开启后，shell 命令也会等解锁（设置了密码时）。其他动作照常立即执行。" forKey:@"footerText"];

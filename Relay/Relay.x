@@ -38,6 +38,22 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 // here in every app (sendEvent), fired through the relay; SpringBoard runs the
 // action. Parallel by design: touches are never consumed.
 %group Slides
+static CGFloat tgMargin = 24, tgMin = 60, tgPerp = 40;
+static NSTimeInterval tgMaxDuration = 0.6;
+
+static CGFloat TGSlidePref(NSString *key, CGFloat def) {
+    id v = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)key, (__bridge CFStringRef)TGDomain));
+    return [v respondsToSelector:@selector(floatValue)] && [v floatValue] > 0 ? [v floatValue] : def;
+}
+
+static void TGReadSlidePrefs(void) {
+    tgMargin = TGSlidePref(TGSlideMarginKey, 24);
+    tgMin = TGSlidePref(TGSlideDistanceKey, 60);
+    tgPerp = TGSlidePref(TGSlidePerpKey, 40);
+    id v = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)TGSlideDurationKey, (__bridge CFStringRef)TGDomain));
+    if ([v respondsToSelector:@selector(doubleValue)] && [v doubleValue] > 0) tgMaxDuration = [v doubleValue];
+}
+
 %hook UIApplication
 - (void)sendEvent:(UIEvent *)event {
     %orig;
@@ -46,7 +62,12 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
     static NSMutableDictionary<NSValue *, NSDate *> *times;
     static CFAbsoluteTime lastFire;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ starts = [NSMutableDictionary new]; times = [NSMutableDictionary new]; });
+    dispatch_once(&once, ^{
+        starts = [NSMutableDictionary new]; times = [NSMutableDictionary new];
+        TGReadSlidePrefs();
+        int token;
+        notify_register_dispatch(TGPrefsChangedNotification, &token, dispatch_get_main_queue(), ^(int t) { TGReadSlidePrefs(); });
+    });
     CGSize size = UIScreen.mainScreen.bounds.size;
     for (UITouch *touch in event.allTouches) {
         NSValue *key = [NSValue valueWithNonretainedObject:touch];
@@ -64,14 +85,13 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
                 if (!startValue || !startTime) break;
                 CGPoint s = startValue.CGPointValue;
                 NSTimeInterval dt = -startTime.timeIntervalSinceNow;
-                if (dt <= 0 || dt > 0.6) break;
+                if (dt <= 0 || dt > tgMaxDuration) break;
                 CGFloat dx = p.x - s.x, dy = p.y - s.y;
-                const CGFloat Margin = 24, Min = 60, MaxPerp = 40;
                 const char *name = NULL;
-                if (s.x < Margin && dx > Min && fabs(dy) < MaxPerp) name = TGRelaySlideLeft;
-                else if (s.x > size.width - Margin && dx < -Min && fabs(dy) < MaxPerp) name = TGRelaySlideRight;
-                else if (s.y < Margin && dy > Min && fabs(dx) < MaxPerp) name = TGRelaySlideTop;
-                else if (s.y > size.height - Margin && dy < -Min && fabs(dx) < MaxPerp) name = TGRelaySlideBottom;
+                if (s.x < tgMargin && dx > tgMin && fabs(dy) < tgPerp) name = TGRelaySlideLeft;
+                else if (s.x > size.width - tgMargin && dx < -tgMin && fabs(dy) < tgPerp) name = TGRelaySlideRight;
+                else if (s.y < tgMargin && dy > tgMin && fabs(dx) < tgPerp) name = TGRelaySlideTop;
+                else if (s.y > size.height - tgMargin && dy < -tgMin && fabs(dx) < tgPerp) name = TGRelaySlideBottom;
                 if (!name) break;
                 CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
                 if (now - lastFire < 0.3) break; // multi-touch can end twice at once
