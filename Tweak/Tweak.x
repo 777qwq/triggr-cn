@@ -2725,9 +2725,10 @@ static void TGUpdateOtherEvents(void) {
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    BOOL wantSlides = NO;
+    BOOL wantSlides = NO, wantSlideBottom = NO;
     for (NSString *trigger in tgAssignedTriggers) if ([trigger hasPrefix:@"slide."]) wantSlides = YES;
-    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | (wantSlides ? TGRelayWantsSlides : 0));
+    wantSlideBottom = [tgAssignedTriggers containsObject:@"slide.bottom"];
+    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | (wantSlides ? TGRelayWantsSlides : 0) | (wantSlideBottom ? TGRelayWantsSlideBottom : 0));
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");
     if (wantPower && !tgPowerObserver) {

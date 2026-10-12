@@ -16,3 +16,4 @@
 #define TGRelayWantsStatusBar 1ULL
 #define TGRelayWantsShake 2ULL
 #define TGRelayWantsSlides 4ULL
+#define TGRelayWantsSlideBottom 8ULL

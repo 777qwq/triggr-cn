@@ -136,6 +136,26 @@ static void TGAttachEdgeRecognizer(UIWindow *window) {
     [window addGestureRecognizer:[[TGEdgeSwipeRecognizer alloc] init]];
 }
 
+// slide.bottom fights the home indicator, the most isolated system gesture.
+// The SDK answer: defer system gestures on the bottom edge -- the first swipe
+// is delivered to the app (our recognizer gets it), a second swipe goes home.
+static BOOL TGBottomDeferred(void) {
+    static int token = -1;
+    if (token == -1) notify_register_check(TGRelayWanted, &token);
+    uint64_t state = 0;
+    if (token != -1) notify_get_state(token, &state);
+    return (state & TGRelayWantsSlideBottom) != 0;
+}
+
+%group BottomDefer
+%hook UIViewController
+- (UIRectEdge)preferredScreenEdgesDeferringSystemGestures {
+    if (TGBottomDeferred()) return UIRectEdgeBottom;
+    return %orig;
+}
+%end
+%end
+
 %group Slides
 %hook UIApplication
 - (void)sendEvent:(UIEvent *)event {
@@ -174,6 +194,9 @@ static void TGAttachEdgeRecognizer(UIWindow *window) {
     if (![bundle.bundlePath hasSuffix:@".app"]) return;
     %init(Shake);
     BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
-    if (!springBoard) %init(StatusBar);
+    if (!springBoard) {
+        %init(StatusBar);
+        %init(BottomDefer);
+    }
     %init(Slides); // edges work in apps and on the Home Screen alike
 }
