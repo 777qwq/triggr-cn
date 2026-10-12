@@ -161,13 +161,17 @@ static BOOL TGBottomDeferred(void) {
 %end
 
 %group SlideGuard
-%hook UINavigationController
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
-    if (tgEdgeHot && [gestureRecognizer isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) return NO;
-    return %orig;
-}
-%end
 %hook UIScreenEdgePanGestureRecognizer
+// Starve competing edge pans while our tracking is hot: without moves they
+// never leave the possible state; a Began is forced back to failed.
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (tgEdgeHot) return;
+    %orig;
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (tgEdgeHot) return;
+    %orig;
+}
 - (void)setState:(UIGestureRecognizerState)state {
     if (tgEdgeHot && state == UIGestureRecognizerStateBegan) state = UIGestureRecognizerStateFailed;
     %orig(state);
