@@ -17,6 +17,10 @@
 static CIContext *tgSoftwareContext;
 
 static void TGPatchCoreImageGL(void) {
+    // CoreImage's GL context ctor calls an OpenGLES symbol through a weak
+    // binding that is NULL when the framework was never loaded. Settings has
+    // it loaded; repacked apps don't. Load it explicitly.
+    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
     // CoreUI is lazy-loaded; force it in or the class lookup below misses.
     if (!dlopen("/System/Library/PrivateFrameworks/CoreUI.framework/CoreUI", RTLD_LAZY)) return;
     Class cls = NSClassFromString(@"CUIShapeEffectStack");
