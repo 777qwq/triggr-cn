@@ -1,17 +1,8 @@
 Package: com.johndie.triggr
 Name: Triggr汉化修改版
-Version: 1.0.4+cn4.11
+Version: 1.0.4+cn4.12
 Architecture: iphoneos-arm64
-Description: 基于 Triggr 开源项目汉化修改，兼容自测无效删除。\
- 新增：\
- 1.AutoTouch 动作：选择器列 .lua 脚本， 后台执行；\
- 2.密码解锁动作；\
- 3.关闭 Siri 动作；\
- \
- 修复：\
- 1.快捷指令动作：改经 springcuts 后台执行，不跳转；\
- 2.音量加/减动作；\
- 3.屏幕录制动作；
+Description: 基于 Triggr 开源项目汉化修改，兼容自测无效删除。
 Maintainer: 777qwq
 Author: 777qwq
 Section: Tweaks

@@ -69,6 +69,21 @@ static NSString *TGButtonText(NSString *text) {
     return [text stringByReplacingOccurrencesOfString:@"滑块" withString:@"Siri"];
 }
 
+// RootHide-family repacked processes can die inside CoreImage's GL context
+// while styling symbol images (keyboard candidate bar). Route symbol palette
+// styling through a GPU-free tint wherever this bundle is loaded (Settings and
+// the Home Screen app both load it).
+static void TGFixSymbolStyling(void) __attribute__((constructor));
+static void TGFixSymbolStyling(void) {
+    SEL sel = NSSelectorFromString(@"_imageWithStylePresets:tintColor:traitCollection:");
+    Method m = class_getInstanceMethod(UIImage.class, sel);
+    if (!m) return;
+    method_setImplementation(m, imp_implementationWithBlock(^id(id self, NSArray *presets, UIColor *tint, UITraitCollection *tc) {
+        UIImage *tinted = tint ? [self imageWithTintColor:tint] : nil;
+        return tinted ?: self;
+    }));
+}
+
 #pragma mark - Storage
 
 // Each assignment is its own key ("<mode>/<trigger>" = action id, "" = none),
