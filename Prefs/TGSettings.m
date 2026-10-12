@@ -1373,12 +1373,6 @@ static NSString *TGCategoryOf(NSString *action) {
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.text = existing;
         if (percent) field.keyboardType = UIKeyboardTypeNumberPad;
-        if ([prefix isEqualToString:TGUnlockPrefix]) {
-            // iOS 16.3: PAC fault while the alert transition loads the keyboard
-            // in the arm64e app slice; secure ASCII entry sidesteps it.
-            field.secureTextEntry = YES;
-            field.keyboardType = UIKeyboardTypeASCIICapable;
-        }
         field.autocorrectionType = UITextAutocorrectionTypeNo;
         field.autocapitalizationType = UITextAutocapitalizationTypeNone;
         field.clearButtonMode = UITextFieldViewModeWhileEditing;
