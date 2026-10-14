@@ -806,6 +806,8 @@ static NSString *TGCategoryOf(NSString *action) {
     else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
     for (int i = 0; i < count; i++) [rows addObject:[self rowForAction:@(items[i].identifier) title:@(items[i].title)]];
+    if ([category isEqualToString:@"system"])
+        [rows insertObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁…" prompt:@"设备的锁屏密码，存储在本机，用于锁屏状态下自动解锁"] atIndex:0];
     if ([category isEqualToString:@"media"])
         [rows addObject:[self rowForCommand:TGAirPlayPrefix title:@"AirPlay 到…" prompt:@"扬声器或电视名称，与 AirPlay 菜单中显示的一致（部分匹配即可）"]];
     if ([category isEqualToString:@"switches"]) {
@@ -832,7 +834,7 @@ static NSString *TGCategoryOf(NSString *action) {
         [rows addObject:[self rowForCommand:TGSettingsPrefix title:@"打开设置页…" prompt:nil]];
         [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
         [rows addObject:[self rowForCommand:TGURLPrefix title:@"打开 URL…" prompt:@"任意 URL 或 URL scheme，如 https://…、tel:…、music://"]];
-        [rows addObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁…" prompt:@"设备的锁屏密码，存储在本机，用于锁屏状态下自动解锁"]];
+        if (NSClassFromString(@"PlayingManager")) [rows addObject:[self rowForCommand:TGAutotouchPrefix title:@"运行 AutoTouch 脚本…" prompt:@"脚本名称，.lua 可省略"]];
     } else if ([category isEqualToString:@"text"]) {
         [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
         [rows addObject:[self rowForCommand:TGSpeakPrefix title:@"朗读文字…" prompt:@"设备朗读的文字"]];

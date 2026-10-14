@@ -1073,6 +1073,7 @@ static BOOL TGCanPerform(NSString *action) {
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
     if ([action hasPrefix:TGAutotouchPrefix]) return NSClassFromString(@"PlayingManager") != nil;
+    if ([action hasPrefix:TGUnlockPrefix]) return YES;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
     if ([action hasPrefix:TGExtensionPrefix]) {
         NSString *program = TGExtension(TGExtensionAction(action)[0])[@"Program"];

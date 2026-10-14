@@ -134,7 +134,7 @@ static const TGItem TGSystemActions[] = {
     {"system.home", "回到主屏幕"}, {"system.switcher", "App 切换器"},
     {"system.lastapp", "上一个应用"}, {"system.quitapp", "退出当前应用"},
     {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"},
-    {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.screenshot", "截屏"}, {"system.dismisssiri", "关闭Siri"},
+    {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.dismisssiri", "关闭Siri"}, {"system.screenshot", "截屏"},
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
     {"system.vibrate", "振动"}, {"system.nothing", "无操作"},
 };
@@ -495,9 +495,9 @@ static inline NSString *TGTriggerTitle(NSString *trigger) {
             if ([trigger isEqualToString:@(TGTriggerGroups[g].items[i].identifier)]) {
                 // Events ("接入充电器") read fine alone; presses need their button.
                 BOOL event = TGTriggerGroups[g].items == TGOther || TGTriggerGroups[g].items == TGStateChanges || TGTriggerGroups[g].items == TGMotion || TGTriggerGroups[g].items == TGMusic || TGTriggerGroups[g].items == TGNotifications || TGTriggerGroups[g].items == TGCalls;
-                if (TGTriggerGroups[g].items == TGIcons) return [NSString stringWithFormat:@"图标%s", TGTriggerGroups[g].items[i].title];
-                if (TGTriggerGroups[g].items == TGHomeGestures) return [NSString stringWithFormat:@"主屏幕%s", TGTriggerGroups[g].items[i].title];
-                return event ? @(TGTriggerGroups[g].items[i].title) : [NSString stringWithFormat:@"%s %s", TGTriggerGroups[g].title, TGTriggerGroups[g].items[i].title];
+                if (TGTriggerGroups[g].items == TGIcons) return [NSString stringWithFormat:@"图标%@", @(TGTriggerGroups[g].items[i].title)];
+                if (TGTriggerGroups[g].items == TGHomeGestures) return [NSString stringWithFormat:@"主屏幕%@", @(TGTriggerGroups[g].items[i].title)];
+                return event ? @(TGTriggerGroups[g].items[i].title) : [NSString stringWithFormat:@"%@ %@", @(TGTriggerGroups[g].title), @(TGTriggerGroups[g].items[i].title)];
             }
     return trigger;
 }
