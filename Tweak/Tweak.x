@@ -1626,7 +1626,8 @@ static BOOL TGVolumeBegan(int which) {
             TGFire(hold);
         });
     }
-    state->calledSystemOnDown = !tgReplaces || TGActionFor(press) == nil;
+    // cn5 语义：只要长按被指派，按下就吞掉系统音量步进；短按且单按未指派时在松手补播一次步进
+    state->calledSystemOnDown = !tgReplaces || (TGActionFor(press) == nil && TGActionFor(hold) == nil);
     return state->calledSystemOnDown;
 }
 
@@ -1654,6 +1655,10 @@ static BOOL TGVolumeEnded(int which) {
     if (state->holdFired || state->partOfBoth) tgVolumeLastTap = -1;
     else if ([tgAssignedTriggers containsObject:@"volume.updown"] || [tgAssignedTriggers containsObject:@"volume.downup"]) TGVolumeTapped(which);
     if ((!state->calledSystemOnDown || !tgReplaces) && !state->holdFired && !state->partOfBoth) { TGDiagLog(@"VEnd firesPress w=%d", which); TGFire(press); }
+    // 被吞掉的步进：确认为短按且单按未指派时补播一次
+    NSString *hold = which == 0 ? @"volume.uphold" : @"volume.downhold";
+    if (tgReplaces && !state->calledSystemOnDown && !state->holdFired && !state->partOfBoth && TGActionFor(press) == nil && TGActionFor(hold) != nil)
+        TGVolumeStep(UIApplication.sharedApplication, which == 0, NO);
     return state->calledSystemOnDown;
 }
 
