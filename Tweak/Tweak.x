@@ -684,11 +684,15 @@ static BOOL TGScreenRecord(BOOL dry) {
     SEL start = @selector(startSystemRecordingWithMicrophoneEnabled:handler:), stop = @selector(stopSystemRecording:);
     if (![recorder respondsToSelector:start] || ![recorder respondsToSelector:stop] || ![recorder respondsToSelector:@selector(systemRecording)]) return NO;
     if (dry) return YES;
-    // systemRecording lies on iOS 16 (stuck at NO after a Control Center
-    // start): try to stop first and fall through to start on failure.
-    __block BOOL stopped = NO;
-    ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) { stopped = YES; });
-    if (!stopped) ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id error) { });
+    // systemRecording lies on iOS 16 (reports 1 while idle). Toggle by
+    // attempting a stop first: error -5829 means "wasn't recording" -> start.
+    ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
+        NSInteger code = [error respondsToSelector:@selector(code)] ? [(NSError *)error code] : 0;
+        if (code == -5829) {
+            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id err2) {
+            });
+        }
+    });
     return YES;
 }
 

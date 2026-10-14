@@ -9,7 +9,15 @@
 @end
 
 static NSString *TGBundlePath(void) {
-    for (NSString *path in @[TGJB(@"/Library/PreferenceBundles/Triggr.bundle"), @"/Library/PreferenceBundles/Triggr.bundle"])
+    NSMutableArray<NSString *> *paths = [NSMutableArray array];
+    [paths addObject:TGJB(@"/Library/PreferenceBundles/Triggr.bundle")];
+    [paths addObject:@"/var/jb/Library/PreferenceBundles/Triggr.bundle"];
+    [paths addObject:@"/Library/PreferenceBundles/Triggr.bundle"];
+    // roothide 隐根：从本 App 自身真实路径反推 jbroot（App 一定在 <jbroot>/Applications 下）
+    NSString *appDir = [NSBundle mainBundle].bundlePath.stringByDeletingLastPathComponent;
+    NSString *jbroot = appDir.stringByDeletingLastPathComponent;
+    if ([jbroot hasPrefix:@"/"]) [paths insertObject:[jbroot stringByAppendingPathComponent:@"Library/PreferenceBundles/Triggr.bundle"] atIndex:0];
+    for (NSString *path in paths)
         if ([NSFileManager.defaultManager fileExistsAtPath:path]) return path;
     return nil;
 }
