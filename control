@@ -1,6 +1,6 @@
 Package: com.johndie.triggr
 Name: Triggr汉化修改版
-Version: 1.5.0+cn0.7
+Version: 1.5.0+cn0.8
 Architecture: iphoneos-arm64
 Description: 基于 Triggr 1.5.0 汉化修改，兼容自测无效删除。
  新增：亮屏、关闭 Siri。
