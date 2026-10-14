@@ -1,51 +1,15 @@
 // Triggr's Home Screen app: the same pages as Settings → Triggr, loaded from the
 // settings bundle, so both always show and change the same assignments.
 #import <UIKit/UIKit.h>
-#import <CoreImage/CoreImage.h>
 #import <dlfcn.h>
-#import <objc/runtime.h>
+#import "../Shared/TGPaths.h"
 
 @interface TGAppDelegate : UIResponder <UIApplicationDelegate>
 @property (nonatomic, strong) UIWindow *window;
 @end
 
-// On RootHide, repacked apps can't create an EAGL (GPU) context: CoreImage's
-// +[CUIShapeEffectStack sharedCIContext] (used for symbol styling, e.g. the
-// keyboard candidate bar's arrow) dies calling a NULL EAGL entry point. Apple's
-// own processes are fine. Swap in a software-rendered CIContext once at start:
-// CPU raster handles these small images without touching the broken GPU path.
-static CIContext *tgSoftwareContext;
-
-static void TGPatchCoreImageGL(void) {
-    // CoreImage's GL context ctor calls an OpenGLES symbol through a weak
-    // binding that is NULL when the framework was never loaded. Settings has
-    // it loaded; repacked apps don't. Load it explicitly.
-    dlopen("/System/Library/Frameworks/OpenGLES.framework/OpenGLES", RTLD_LAZY);
-    // CoreUI is lazy-loaded; force it in or the class lookup below misses.
-    if (!dlopen("/System/Library/PrivateFrameworks/CoreUI.framework/CoreUI", RTLD_LAZY)) return;
-    Class cls = NSClassFromString(@"CUIShapeEffectStack");
-    if (!cls) return;
-    Method m = class_getClassMethod(cls, NSSelectorFromString(@"sharedCIContext"));
-    if (!m) return;
-    method_setImplementation(m, imp_implementationWithBlock(^id(id self) {
-        static dispatch_once_t once;
-        dispatch_once(&once, ^{
-            tgSoftwareContext = [[CIContext alloc] initWithOptions:@{kCIContextUseSoftwareRenderer: @YES}];
-        });
-        return tgSoftwareContext;
-    }));
-}
-
 static NSString *TGBundlePath(void) {
-    NSMutableArray<NSString *> *paths = [NSMutableArray array];
-    [paths addObject:@"/var/jb/Library/PreferenceBundles/Triggr.bundle"];
-    [paths addObject:@"/Library/PreferenceBundles/Triggr.bundle"];
-    // roothide: derive the jbroot from this app's own real path (always exists)
-    NSString *appDir = [NSBundle mainBundle].bundlePath.stringByDeletingLastPathComponent;      // <jbroot>/Applications
-    NSString *jbroot = appDir.stringByDeletingLastPathComponent;                                // <jbroot>
-    if ([jbroot.lastPathComponent hasPrefix:@".jbroot"])
-        [paths addObject:[jbroot stringByAppendingPathComponent:@"Library/PreferenceBundles/Triggr.bundle"]];
-    for (NSString *path in paths)
+    for (NSString *path in @[TGJB(@"/Library/PreferenceBundles/Triggr.bundle"), @"/Library/PreferenceBundles/Triggr.bundle"])
         if ([NSFileManager.defaultManager fileExistsAtPath:path]) return path;
     return nil;
 }
@@ -85,7 +49,6 @@ static UIViewController *TGMessage(NSString *text) {
     root.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeAlways;
     self.window.rootViewController = navigation;
     [self.window makeKeyAndVisible];
-    TGPatchCoreImageGL();
     return YES;
 }
 

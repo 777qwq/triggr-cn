@@ -4,5 +4,8 @@
 <dict>
 	<key>platform-application</key><true/>
 	<key>com.apple.private.security.no-sandbox</key><true/>
+	<!-- RootHide: reach jailbreak files and app data like on rootless -->
+	<key>com.apple.private.security.storage.AppBundles</key><true/>
+	<key>com.apple.private.security.storage.AppDataContainers</key><true/>
 </dict>
 </plist>

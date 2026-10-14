@@ -63,25 +63,9 @@ static BOOL TGShowsTriggerGroup(const TGGroup *group) {
 static NSString *TGButtonText(NSString *text) {
     if (!text || TGHasHomeButton()) return text;
     NSString *name = TGLockButtonName();
-    text = [text stringByReplacingOccurrencesOfString:@"锁屏键" withString:name];
-    text = [text stringByReplacingOccurrencesOfString:@"显示关机滑块" withString:@"唤出 Siri"];
-    text = [text stringByReplacingOccurrencesOfString:@"关机滑块" withString:@"Siri"];
-    return [text stringByReplacingOccurrencesOfString:@"滑块" withString:@"Siri"];
-}
-
-// RootHide-family repacked processes can die inside CoreImage's GL context
-// while styling symbol images (keyboard candidate bar). Route symbol palette
-// styling through a GPU-free tint wherever this bundle is loaded (Settings and
-// the Home Screen app both load it).
-static void TGFixSymbolStyling(void) __attribute__((constructor));
-static void TGFixSymbolStyling(void) {
-    SEL sel = NSSelectorFromString(@"_imageWithStylePresets:tintColor:traitCollection:");
-    Method m = class_getInstanceMethod(UIImage.class, sel);
-    if (!m) return;
-    method_setImplementation(m, imp_implementationWithBlock(^id(id self, NSArray *presets, UIColor *tint, UITraitCollection *tc) {
-        UIImage *tinted = tint ? [self imageWithTintColor:tint] : nil;
-        return tinted ?: self;
-    }));
+    text = [text stringByReplacingOccurrencesOfString:@"锁键" withString:name];
+    text = [text stringByReplacingOccurrencesOfString:@"显示关机滑条" withString:@"唤出 Siri"];
+    return [text stringByReplacingOccurrencesOfString:@"关机滑条" withString:@"Siri"];
 }
 
 #pragma mark - Storage
@@ -126,7 +110,7 @@ static NSArray<NSString *> *TGReadAssignment(PSListController *list, NSString *m
 static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString *mode, NSString *trigger);
 static PSSpecifier *TGSubtitled(PSSpecifier *spec);
 
-// An app's name, looked up from its bundle id ("Open Music" -> "Music").
+// An app's name, looked up from its bundle id ("Open Music" -> "音乐").
 static NSString *TGAppName(NSString *identifier) {
     return [TGDisplayTitle([TGAppPrefix stringByAppendingString:identifier]) substringFromIndex:@"打开 ".length];
 }
@@ -136,7 +120,7 @@ static NSString *TGSettingsTriggerTitle(NSString *trigger) {
     if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@"来自 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGNotificationAppPrefix.length])];
     if ([trigger hasPrefix:@"icon.flick"] && TGIsCustomTrigger(trigger)) {
         NSRange colon = [trigger rangeOfString:@":"];
-        return [NSString stringWithFormat:@"%@ on %@", TGFlickDirectionTitle(trigger), TGAppName([trigger substringFromIndex:colon.location + 1])];
+        return [NSString stringWithFormat:@"在 %@ 上%@", TGFlickDirectionTitle(trigger), TGAppName([trigger substringFromIndex:colon.location + 1])];
     }
     return TGButtonText(TGTriggerTitle(trigger));
 }
@@ -180,7 +164,7 @@ static NSString *TGPlaceTitle(NSString *mode) {
 }
 
 static NSString *TGModePhrase(NSString *mode) {
-    if ([mode hasPrefix:TGAppModePrefix]) return [@"inside " stringByAppendingString:TGPlaceTitle(mode)];
+    if ([mode hasPrefix:TGAppModePrefix]) return [NSString stringWithFormat:@"应用内“%@”", TGPlaceTitle(mode)];
     return @{ @"anywhere": @"所有位置", @"home": @"主屏幕", @"app": @"应用内", @"lock": @"锁屏界面" }[mode] ?: @"该位置";
 }
 
@@ -223,7 +207,6 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (BOOL)statusBarTapsOn;
 @end
 
-
 @implementation TGListController
 
 - (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
@@ -262,11 +245,11 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
     NSString *mode = [spec propertyForKey:@"tgMode"];
     if (![mode isEqualToString:@"anywhere"]) {
         NSArray *anywhere = TGReadAssignment(self, @"anywhere", [spec propertyForKey:@"tgTrigger"]);
-        if (anywhere.count) return [@"Anywhere: " stringByAppendingString:TGListTitle(anywhere)];
+        if (anywhere.count) return [@"任意位置：" stringByAppendingString:TGListTitle(anywhere)];
     }
     // Nothing assigned: the button keeps doing its own thing; say what that is.
     NSString *stock = TGDefaultActionTitle([spec propertyForKey:@"tgTrigger"]);
-    return stock ? [@"Default: " stringByAppendingString:stock] : @"";
+    return stock ? [@"默认：" stringByAppendingString:stock] : @"";
 }
 
 - (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -336,7 +319,7 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     return [names.allObjects sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
 }
 
-#pragma mark - Time picker (Scheduled events, Shortcuts-style)
+#pragma mark - Time picker (Scheduled events)
 
 @interface TGTimePickerController : UIViewController
 @property (nonatomic, copy) void (^onSave)(NSString *trigger);
@@ -344,66 +327,8 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
 
 @implementation TGTimePickerController {
     UIDatePicker *_picker;
-    UISegmentedControl *_repeat;
-    NSMutableArray<UIButton *> *_weekdayButtons; // tag 101..107 = weekday 1..7 (1 = Sunday)
-    NSMutableArray<UIButton *> *_monthdayButtons; // tag 1..31 = days of month, 99 = last day
-    UISwitch *_ask;
-    UILabel *_weeklyLabel;
-    UILabel *_monthlyLabel;
-}
-
-- (UIButton *)roundButtonWithTitle:(NSString *)title tag:(NSInteger)tag target:(id)target {
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    button.layer.cornerRadius = 16;
-    button.layer.masksToBounds = YES;
-    button.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    button.tag = tag;
-    [button setTitle:title forState:UIControlStateNormal];
-    [button addTarget:target action:@selector(toggle:) forControlEvents:UIControlEventTouchUpInside];
-    [button.heightAnchor constraintEqualToConstant:32].active = YES;
-    return button;
-}
-
-- (void)toggle:(UIButton *)sender {
-    sender.selected = !sender.selected;
-    [self refreshButton:sender];
-}
-
-- (void)refreshButton:(UIButton *)button {
-    UIColor *tint = button.tag == 99 ? UIColor.systemRedColor : UIColor.systemBlueColor;
-    button.backgroundColor = button.selected ? tint : UIColor.secondarySystemFillColor;
-    [button setTitleColor:button.selected ? UIColor.whiteColor : UIColor.labelColor forState:UIControlStateNormal];
-}
-
-- (void)repeatChanged {
-    _weeklyLabel.hidden = _repeat.selectedSegmentIndex != 1;
-    _monthlyLabel.hidden = _repeat.selectedSegmentIndex != 2;
-    for (UIButton *button in _weekdayButtons) button.hidden = _repeat.selectedSegmentIndex != 1;
-    for (UIButton *button in _monthdayButtons) button.hidden = _repeat.selectedSegmentIndex != 2;
-}
-
-- (UILabel *)noteLabel:(NSString *)text body:(BOOL)body {
-    UILabel *note = [UILabel new];
-    note.text = text;
-    note.numberOfLines = 0;
-    note.font = [UIFont preferredFontForTextStyle:body ? UIFontTextStyleBody : UIFontTextStyleFootnote];
-    note.textColor = body ? UIColor.labelColor : UIColor.secondaryLabelColor;
-    return note;
-}
-
-- (UIStackView *)buttonGridWithButtons:(NSArray<UIButton *> *)buttons perRow:(NSUInteger)perRow {
-    UIStackView *grid = [UIStackView new];
-    grid.axis = UILayoutConstraintAxisVertical;
-    grid.spacing = 6;
-    for (NSUInteger i = 0; i < buttons.count; i += perRow) {
-        NSRange range = NSMakeRange(i, MIN(perRow, buttons.count - i));
-        UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:[buttons subarrayWithRange:range]];
-        row.axis = UILayoutConstraintAxisHorizontal;
-        row.distribution = UIStackViewDistributionFillEqually; // spread evenly across the width
-        row.spacing = 6;
-        [grid addArrangedSubview:row];
-    }
-    return grid;
+    UISegmentedControl *_days;
+    NSArray<UIButton *> *_dayButtons; // tag = weekday, 1 = Sunday
 }
 
 - (void)viewDidLoad {
@@ -411,102 +336,87 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     self.title = @"定时";
     self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
     self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSave target:self action:@selector(save)];
-
     _picker = [UIDatePicker new];
     _picker.datePickerMode = UIDatePickerModeTime;
     _picker.preferredDatePickerStyle = UIDatePickerStyleWheels;
-
-    _repeat = [[UISegmentedControl alloc] initWithItems:@[@"每天", @"每周", @"每月"]];
-    _repeat.selectedSegmentIndex = 0;
-    [_repeat addTarget:self action:@selector(repeatChanged) forControlEvents:UIControlEventValueChanged];
-
-    _weekdayButtons = [NSMutableArray array];
-    NSMutableArray *weekdayViews = [NSMutableArray array];
-    for (int d = 1; d <= 7; d++) {
-        UIButton *button = [self roundButtonWithTitle:TGWeekdayTitle(d) tag:100 + d target:self];
-        [_weekdayButtons addObject:button];
-        [weekdayViews addObject:button];
+    _days = [[UISegmentedControl alloc] initWithItems:@[@"每天", @"工作日", @"周末", @"自定义"]];
+    _days.selectedSegmentIndex = 0;
+    [_days addTarget:self action:@selector(presetChanged) forControlEvents:UIControlEventValueChanged];
+    NSCalendar *calendar = NSCalendar.currentCalendar;
+    NSMutableArray *buttons = [NSMutableArray array];
+    for (NSInteger i = 0; i < 7; i++) {
+        NSInteger weekday = (calendar.firstWeekday - 1 + i) % 7 + 1;
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+        button.tag = weekday;
+        [button setTitle:@[@"日",@"一",@"二",@"三",@"四",@"五",@"六"][weekday - 1] forState:UIControlStateNormal];
+        button.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+        button.layer.cornerRadius = 18;
+        button.accessibilityLabel = @[@"周日",@"周一",@"周二",@"周三",@"周四",@"周五",@"周六"][weekday - 1];
+        [button.heightAnchor constraintEqualToConstant:36].active = YES;
+        [button addTarget:self action:@selector(dayTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [buttons addObject:button];
     }
-    UIStackView *weekdayGrid = [[UIStackView alloc] initWithArrangedSubviews:weekdayViews];
-    weekdayGrid.axis = UILayoutConstraintAxisHorizontal;
-    weekdayGrid.distribution = UIStackViewDistributionFillEqually; // spread evenly across the width
-    weekdayGrid.spacing = 6;
-
-    _monthdayButtons = [NSMutableArray array];
-    NSMutableArray *monthdayViews = [NSMutableArray array];
-    for (int d = 1; d <= 31; d++) {
-        UIButton *button = [self roundButtonWithTitle:[NSString stringWithFormat:@"%d", d] tag:d target:self];
-        [_monthdayButtons addObject:button];
-        [monthdayViews addObject:button];
-    }
-    UIButton *last = [self roundButtonWithTitle:@"末" tag:99 target:self];
-    [_monthdayButtons addObject:last];
-    [monthdayViews addObject:last];
-    UIStackView *monthlyGrid = [self buttonGridWithButtons:monthdayViews perRow:8];
-
-    _weeklyLabel = [self noteLabel:@"选择重复的星期。" body:NO];
-    _monthlyLabel = [self noteLabel:@"选择重复的日期。当月没有的日期（如 2 月 30 日）跳过；「末」为每月最后一天。" body:NO];
-
-    UILabel *askLabel = [self noteLabel:@"运行前询问" body:YES];
-    _ask = [[UISwitch alloc] init];
-    UIView *spacer = [UIView new];
-    UIStackView *askRow = [[UIStackView alloc] initWithArrangedSubviews:@[askLabel, spacer, _ask]];
-    askRow.axis = UILayoutConstraintAxisHorizontal;
-    [_ask.widthAnchor constraintGreaterThanOrEqualToConstant:51].active = YES;
-    [spacer.widthAnchor constraintGreaterThanOrEqualToConstant:8].active = YES;
-
-    UILabel *note = [self noteLabel:@"在此时间运行。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。" body:NO];
-
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[
-        _picker, _repeat, _weeklyLabel, weekdayGrid, _monthlyLabel, monthlyGrid, askRow, note,
-    ]];
+    _dayButtons = buttons;
+    UIStackView *dayRow = [[UIStackView alloc] initWithArrangedSubviews:buttons];
+    dayRow.distribution = UIStackViewDistributionFillEqually;
+    dayRow.spacing = 6;
+    [self presetChanged];
+    UILabel *note = [UILabel new];
+    note.text = @"在所选星期的该时间运行。iOS 可能在睡眠时推迟定时；若延误超过 5 分钟则跳过。";
+    note.numberOfLines = 0;
+    note.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+    note.textColor = UIColor.secondaryLabelColor;
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_picker, _days, dayRow, note]];
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 14;
+    stack.spacing = 16;
     stack.translatesAutoresizingMaskIntoConstraints = NO;
-    UIScrollView *scroll = [UIScrollView new];
-    scroll.translatesAutoresizingMaskIntoConstraints = NO;
-    [scroll addSubview:stack];
-    [self.view addSubview:scroll];
+    [self.view addSubview:stack];
     UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
     [NSLayoutConstraint activateConstraints:@[
-        [scroll.topAnchor constraintEqualToAnchor:guide.topAnchor],
-        [scroll.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor],
-        [scroll.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor],
-        [scroll.bottomAnchor constraintEqualToAnchor:guide.bottomAnchor],
-        [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],
-        [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor constant:16],
-        [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor constant:-16],
-        [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-16],
-        [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor constant:-32],
+        [stack.topAnchor constraintEqualToAnchor:guide.topAnchor constant:16],
+        [stack.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
+        [stack.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
     ]];
-    [self repeatChanged];
-    for (UIButton *button in _weekdayButtons) [self refreshButton:button];
-    for (UIButton *button in _monthdayButtons) [self refreshButton:button];
+}
+
+- (void)setDay:(UIButton *)button on:(BOOL)on {
+    button.selected = on;
+    button.backgroundColor = on ? self.view.tintColor : UIColor.tertiarySystemFillColor;
+    [button setTitleColor:on ? UIColor.whiteColor : UIColor.labelColor forState:UIControlStateNormal];
+    [button setTitleColor:on ? UIColor.whiteColor : UIColor.labelColor forState:UIControlStateSelected];
+}
+
+- (void)presetChanged {
+    NSInteger preset = _days.selectedSegmentIndex;
+    if (preset == 3) return; // Custom keeps the current picks
+    for (UIButton *button in _dayButtons) {
+        BOOL weekend = button.tag == 1 || button.tag == 7;
+        [self setDay:button on:preset == 0 || (preset == 1 && !weekend) || (preset == 2 && weekend)];
+    }
+    self.navigationItem.rightBarButtonItem.enabled = YES;
+}
+
+// Weekday digits of the picked days, Sunday first: "12" = Sunday + Monday.
+- (NSString *)pickedDays {
+    NSMutableString *digits = [NSMutableString string];
+    for (NSInteger weekday = 1; weekday <= 7; weekday++)
+        for (UIButton *button in _dayButtons) if (button.tag == weekday && button.selected) [digits appendFormat:@"%ld", (long)weekday];
+    return digits;
+}
+
+- (void)dayTapped:(UIButton *)button {
+    [self setDay:button on:!button.selected];
+    NSString *days = [self pickedDays];
+    _days.selectedSegmentIndex = [days isEqualToString:@"1234567"] ? 0 : [days isEqualToString:@"23456"] ? 1 : [days isEqualToString:@"17"] ? 2 : 3;
+    self.navigationItem.rightBarButtonItem.enabled = days.length > 0;
 }
 
 - (void)save {
     NSDateComponents *time = [NSCalendar.currentCalendar components:NSCalendarUnitHour | NSCalendarUnitMinute fromDate:_picker.date];
-    NSString *spec = nil;
-    switch (_repeat.selectedSegmentIndex) {
-        case 1: {
-            NSMutableArray<NSString *> *days = [NSMutableArray array];
-            for (UIButton *button in _weekdayButtons)
-                if (button.selected) [days addObject:[NSString stringWithFormat:@"%ld", (long)button.tag - 100]];
-            spec = days.count ? [NSString stringWithFormat:@"weekly:%@", [days componentsJoinedByString:@","]] : @"daily";
-            break;
-        }
-        case 2: {
-            NSMutableArray<NSString *> *days = [NSMutableArray array];
-            for (UIButton *button in _monthdayButtons)
-                if (button.selected) [days addObject:button.tag == 99 ? @"last" : [NSString stringWithFormat:@"%ld", (long)button.tag]];
-            spec = days.count ? [NSString stringWithFormat:@"monthly:%@", [days componentsJoinedByString:@","]] : @"daily";
-            break;
-        }
-        default: spec = @"daily"; break;
-    }
-    NSString *trigger = [NSString stringWithFormat:@"%@%02ld%02ld:%@", TGTimePrefix, (long)time.hour, (long)time.minute, spec];
-    if (_ask.on) trigger = [trigger stringByAppendingString:@":ask"];
-    if (self.onSave) self.onSave(trigger);
+    NSString *days = [self pickedDays];
+    if (!days.length) return;
+    if (_days.selectedSegmentIndex < 3) days = @[@"daily", @"weekdays", @"weekends"][_days.selectedSegmentIndex];
+    if (self.onSave) self.onSave([NSString stringWithFormat:@"%@%02ld%02ld:%@", TGTimePrefix, (long)time.hour, (long)time.minute, days]);
 }
 
 @end
@@ -648,7 +558,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 
 // insert: a new pause at `index`; otherwise edit the pause at `index`.
 - (void)promptPauseAtIndex:(NSInteger)index insert:(BOOL)insert {
-    NSString *current = insert ? @"" : [self.items[index] substringFromIndex:TGPausePrefix.length];
+    NSString *current = insert ? @"1" : [self.items[index] substringFromIndex:TGPausePrefix.length];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"停顿" message:[NSString stringWithFormat:@"执行下一动作前的等待秒数（0.1–%g）。", TGPauseMax] preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.text = current;
@@ -681,7 +591,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"autotouch", @"AutoTouch"], @[@"menus", @"菜单"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"]] mutableCopy];
     // Installed action extensions, each its own category ("ext:<name>").
     for (NSString *name in TGExtensionNames()) {
         NSDictionary *extension = TGExtension(name);
@@ -707,7 +617,6 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
         @"open": @[@"arrow.up.right.square.fill", UIColor.systemIndigoColor],
         @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
         @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor],
-        @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
     };
     if (icons[category]) TGSetIcon(spec, icons[category][0], icons[category][1]);
     else if ([category hasPrefix:TGExtensionPrefix]) {
@@ -721,11 +630,9 @@ static NSString *TGCategoryOf(NSString *action) {
     if ([action hasPrefix:TGMenuPrefix]) return @"menus";
     NSArray *extension = TGExtensionAction(action);
     if (extension) return [TGExtensionPrefix stringByAppendingString:extension[0]];
-    for (NSString *prefix in @[TGBrightnessPrefix, TGMediaVolumePrefix, TGRingerVolumePrefix]) if ([action hasPrefix:prefix]) return @"levels";
+    for (NSString *prefix in @[TGBrightnessPrefix, TGBrightnessUpPrefix, TGBrightnessDownPrefix, TGMediaVolumePrefix, TGRingerVolumePrefix]) if ([action hasPrefix:prefix]) return @"levels";
     for (NSString *prefix in @[TGAppPrefix, TGSettingsPrefix, TGShortcutPrefix, TGURLPrefix]) if ([action hasPrefix:prefix]) return @"open";
     for (NSString *prefix in @[TGMessagePrefix, TGSpeakPrefix, TGShellPrefix]) if ([action hasPrefix:prefix]) return @"text";
-    if ([action hasPrefix:TGAutotouchPrefix]) return @"autotouch";
-    if ([action hasPrefix:TGUnlockPrefix]) return @"system";
     for (NSString *prefix in @[@"toggle.", @"on.", @"off."]) if ([action hasPrefix:prefix]) return @"switches";
     if ([action hasPrefix:@"media."] || [action hasPrefix:TGAirPlayPrefix]) return @"media";
     for (int i = 0; i < TG_COUNT(TGPowerActions); i++) if ([action isEqualToString:@(TGPowerActions[i].identifier)]) return @"power";
@@ -895,17 +802,10 @@ static NSString *TGCategoryOf(NSString *action) {
             [rows addObject:[self rowForAction:[NSString stringWithFormat:@"%@%@:%@", TGExtensionPrefix, name, item] title:item]];
         return rows;
     }
-    if ([category isEqualToString:@"autotouch"]) {
-        for (NSString *script in TGAutoTouchScripts())
-            [rows addObject:[self rowForAction:[TGAutotouchPrefix stringByAppendingString:script] title:script]];
-        return rows;
-    }
     if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
     else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
     for (int i = 0; i < count; i++) [rows addObject:[self rowForAction:@(items[i].identifier) title:@(items[i].title)]];
-    if ([category isEqualToString:@"system"])
-        [rows addObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁…" prompt:@"设备密码"]];
     if ([category isEqualToString:@"media"])
         [rows addObject:[self rowForCommand:TGAirPlayPrefix title:@"AirPlay 到…" prompt:@"扬声器或电视名称，与 AirPlay 菜单中显示的一致（部分匹配即可）"]];
     if ([category isEqualToString:@"switches"]) {
@@ -916,6 +816,8 @@ static NSString *TGCategoryOf(NSString *action) {
         }
     } else if ([category isEqualToString:@"levels"]) {
         [rows addObject:[self rowForCommand:TGBrightnessPrefix title:@"设置亮度…" prompt:@"亮度，0–100 %"]];
+        [rows addObject:[self rowForCommand:TGBrightnessUpPrefix title:@"提高亮度…" prompt:@"每次提高的亮度幅度，1–50 %（建议 10）"]];
+        [rows addObject:[self rowForCommand:TGBrightnessDownPrefix title:@"降低亮度…" prompt:@"每次降低的亮度幅度，1–50 %（建议 10）"]];
         [rows addObject:[self rowForCommand:TGMediaVolumePrefix title:@"设置媒体音量…" prompt:@"媒体音量，0–100 %"]];
         [rows addObject:[self rowForCommand:TGRingerVolumePrefix title:@"设置铃声音量…" prompt:@"铃声音量，0–100 %"]];
     } else if ([category isEqualToString:@"open"]) {
@@ -933,7 +835,7 @@ static NSString *TGCategoryOf(NSString *action) {
     } else if ([category isEqualToString:@"text"]) {
         [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
         [rows addObject:[self rowForCommand:TGSpeakPrefix title:@"朗读文字…" prompt:@"设备朗读的文字"]];
-        [rows addObject:[self rowForCommand:TGShellPrefix title:@"运行命令…" prompt:@"Shell 命令。以 mobile 用户经 /var/jb/bin/sh -c 执行。"]];
+        [rows addObject:[self rowForCommand:TGShellPrefix title:@"运行命令…" prompt:@"Shell 命令。以 mobile 用户经越狱环境的 sh -c 执行。"]];
     } else if ([category isEqualToString:@"menus"] && !_menuEditor) {
         for (NSDictionary *menu in TGReadMenus())
             [rows addObject:[self rowForAction:[TGMenuPrefix stringByAppendingString:menu[@"id"]] title:[menu[@"name"] description]]];
@@ -947,7 +849,7 @@ static NSString *TGCategoryOf(NSString *action) {
     for (int g = 0; g < TG_COUNT(TGActionGroups); g++)
         for (int i = 0; i < TGActionGroups[g].count; i++)
             [rows addObject:[self rowForAction:@(TGActionGroups[g].items[i].identifier) title:@(TGActionGroups[g].items[i].title)]];
-    for (NSString *category in @[@"levels", @"open", @"text", @"menus", @"autotouch"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
+    for (NSString *category in @[@"levels", @"open", @"text", @"menus"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
     for (NSArray<NSString *> *category in TGCategories())
         if ([category[0] hasPrefix:TGExtensionPrefix]) [rows addObjectsFromArray:[self rowsForCategory:category[0]]];
     NSMutableArray *specs = [NSMutableArray array];
@@ -1151,18 +1053,7 @@ static NSString *TGCategoryOf(NSString *action) {
         NSString *item = [self itemWithPrefix:prefix];
         if (item) cell.accessoryType = UITableViewCellAccessoryCheckmark;
         BOOL titled = [prefix isEqualToString:TGAppPrefix] || [prefix isEqualToString:TGSettingsPrefix];
-        if (item) {
-            if (titled) {
-                // Strip the "打开 "/"Settings: " prefix for display. Localized
-                // titles ("设置：…") have no space: NSNotFound + 1 overflows and
-                // substringFromIndex: throws. Fall back to the full title.
-                NSString *title = TGDisplayTitle(item);
-                NSRange space = [title rangeOfString:@" "];
-                detail = (space.location != NSNotFound && space.location + 1 < title.length) ? [title substringFromIndex:space.location + 1] : title;
-            } else {
-                detail = [item substringFromIndex:prefix.length];
-            }
-        }
+        if (item) detail = titled ? [TGDisplayTitle(item) substringFromIndex:[TGDisplayTitle(item) rangeOfString:@" "].location + 1] : [item substringFromIndex:prefix.length];
     }
     // Search mixes every category; say where each result lives.
     if (_query && !detail.length && !picked) {
@@ -1365,26 +1256,15 @@ static NSString *TGCategoryOf(NSString *action) {
         [self pickAirPlayDeviceAtIndexPath:indexPath specifier:spec existing:existingItem];
         return;
     }
-    if ([prefix isEqualToString:TGShortcutPrefix] && !TGSpringCutsBinary()) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"未检测到 SpringCuts"
-            message:@"未检测到 SpringCuts：请安装后即可后台执行快捷指令。" preferredStyle:UIAlertControllerStyleAlert];
-        [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
-        [self presentViewController:alert animated:YES completion:nil];
-        return;
-    }
     [self promptForCommand:spec prefix:prefix existing:existingItem];
 }
 
-// A full-width input page for command values. UIAlertController + keyboard is
-// unusable here on iOS 16.3: the Chinese candidate bar dies with a PAC fault in
-// CoreImage while the alert transition loads the keyboard. A pushed page that
-// focuses the field after the transition keeps the same keyboard off that path.
-
 // A text (or number) for a command action, in an alert.
 - (void)promptForCommand:(PSSpecifier *)spec prefix:(NSString *)prefix existing:(NSString *)existingItem {
-    BOOL percent = [prefix isEqualToString:TGBrightnessPrefix] || [prefix isEqualToString:TGMediaVolumePrefix] || [prefix isEqualToString:TGRingerVolumePrefix];
+    BOOL step = [prefix isEqualToString:TGBrightnessUpPrefix] || [prefix isEqualToString:TGBrightnessDownPrefix];
+    BOOL percent = step || [prefix isEqualToString:TGBrightnessPrefix] || [prefix isEqualToString:TGMediaVolumePrefix] || [prefix isEqualToString:TGRingerVolumePrefix];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:[spec.name stringByReplacingOccurrencesOfString:@"…" withString:@""] message:[spec propertyForKey:@"tgPrompt"] preferredStyle:UIAlertControllerStyleAlert];
-    NSString *existing = existingItem ? [existingItem substringFromIndex:prefix.length] : @"";
+    NSString *existing = existingItem ? [existingItem substringFromIndex:prefix.length] : step ? @"10" : @"";
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.text = existing;
         if (percent) field.keyboardType = UIKeyboardTypeNumberPad;
@@ -1396,7 +1276,8 @@ static NSString *TGCategoryOf(NSString *action) {
     __weak UIAlertController *weakAlert = alert;
     [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-        if (percent && text.length) text = [NSString stringWithFormat:@"%d", (int)MIN(MAX(text.intValue, 0), 100)];
+        if (step && text.length) text = [NSString stringWithFormat:@"%d", (int)MIN(MAX(text.intValue, 1), 50)];
+        else if (percent && text.length) text = [NSString stringWithFormat:@"%d", (int)MIN(MAX(text.intValue, 0), 100)];
         if (text.length) [self setItem:[prefix stringByAppendingString:text] forPrefix:prefix];
     }]];
     if (existingItem) {
@@ -1408,8 +1289,6 @@ static NSString *TGCategoryOf(NSString *action) {
 }
 
 @end
-
-
 
 #pragma mark - Trigger group (one button's triggers, or the custom events)
 
@@ -1462,7 +1341,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
             NSString *footer = triggers->footer ? @(triggers->footer) : nil;
             // Buttons follow Replace Button Actions; say which way it's set.
-            if (triggers->items == TGHomeButton || triggers->items == TGLockButton || triggers->items == TGVolume || triggers->items == TGTouchID || triggers->items == TGMuteSwitch) {
+            if (triggers->items == TGHomeButton || triggers->items == TGLockButton || triggers->items == TGVolume || triggers->items == TGTouchID || triggers->items == TGMuteSwitch || triggers->items == TGSideCombos) {
                 NSString *mode = [self replacesButtons]
                     ? @"「替换按键动作」已开启（选项）：被指派的按压将取代按键默认动作，未指派的按压照常。"
                     : @"「替换按键动作」已关闭（选项）：被指派的按压与按键默认动作并行执行。";
@@ -1471,13 +1350,13 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             // On Face ID devices Apple calls the lock button the side button.
             if (triggers->items == TGLockButton && !TGHasHomeButton() && UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone)
                 footer = [footer stringByAppendingString:[self replacesButtons]
-                    ? @" On Face ID devices an assigned Double or Triple Press replaces Wallet / Apple Pay or the Accessibility Shortcut; unassigned, they work as usual."
-                    : @" On Face ID devices a double-click still opens Wallet / Apple Pay and a triple-click still runs the Accessibility Shortcut, alongside Triggr."];
+                    ? @" Face ID 机型上，已指派的双击/三击会取代钱包/Apple Pay 或辅助功能快捷键；未指派时它们照常工作。"
+                    : @" Face ID 机型上，双击仍打开钱包/Apple Pay，三击仍运行辅助功能快捷键，与 Triggr 并行。"];
             if (footer) [group setProperty:TGButtonText(footer) forKey:@"footerText"];
             [specs addObject:group];
             BOOL tapsOn = [self statusBarTapsOn];
             if (triggers->items == TGStatusBar && !tapsOn)
-                [group setProperty:[([group propertyForKey:@"footerText"] ?: @"") stringByAppendingString:@" Single taps are off (Options → Status Bar Single Tap)."] forKey:@"footerText"];
+                [group setProperty:[([group propertyForKey:@"footerText"] ?: @"") stringByAppendingString:@" 单击已关闭（选项 → 状态栏单击）。"] forKey:@"footerText"];
             for (int i = 0; i < triggers->count; i++) {
                 if (!tapsOn && TGIsStatusBarSingleTap(@(triggers->items[i].identifier))) continue;
                 [specs addObject:TGTriggerRow(@(triggers->items[i].title), self, @selector(assignedActionTitle:), _mode, @(triggers->items[i].identifier))];
@@ -1685,7 +1564,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         }
         NSMutableArray *specs = [NSMutableArray array];
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
-        [group setProperty:rows.count ? @"点按可修改，左滑可移除。" : [NSString stringWithFormat:@"Nothing is assigned %@ yet.", TGModePhrase(_mode)] forKey:@"footerText"];
+        [group setProperty:rows.count ? @"点按可修改，左滑可移除。" : [NSString stringWithFormat:@"此处的指派还是空的（%@）。", TGModePhrase(_mode)] forKey:@"footerText"];
         [specs addObject:group];
         [specs addObjectsFromArray:[rows sortedArrayUsingComparator:TGCatalogOrder]];
         if (rows.count > 1) {
@@ -1713,7 +1592,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     NSUInteger count = 0;
     for (PSSpecifier *row in self.specifiers) if ([row propertyForKey:@"tgTrigger"]) count++;
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil
-        message:[NSString stringWithFormat:@"Remove all %lu assignments %@? Those triggers go back to their normal behaviour.", (unsigned long)count, TGModePhrase(_mode)]
+        message:[NSString stringWithFormat:@"移除全部 %lu 项指派（%@）？这些触发器将恢复系统默认行为。", (unsigned long)count, TGModePhrase(_mode)]
         preferredStyle:UIAlertControllerStyleActionSheet];
     [sheet addAction:[UIAlertAction actionWithTitle:@"全部移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
         for (PSSpecifier *row in self.specifiers.copy) if ([row propertyForKey:@"tgTrigger"]) [self setPreferenceValue:@"" specifier:row];
@@ -1761,7 +1640,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             // Said up front: what's set here only works in this place.
             PSSpecifier *intro = [PSSpecifier groupSpecifierWithName:nil];
             [intro setProperty:oneApp
-                ? [NSString stringWithFormat:@"Assignments made here only work %@, where they replace In Apps' and Anywhere's for the same trigger.", TGModePhrase(_mode)]
+                ? [NSString stringWithFormat:@"此处的指派只在%@生效，并取代同一触发器上“应用内”和“任意位置”的指派。", TGModePhrase(_mode)]
                 : [NSString stringWithFormat:@"此处指派仅在%@生效，并对同一触发器取代任意位置的指派；其他位置仍沿用任意位置的指派。", TGModePhrase(_mode)] forKey:@"footerText"];
             [specs addObject:intro];
         }
@@ -1779,11 +1658,11 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         if (anywhere) [group setProperty:@"此处指派在所有位置生效，除非其他位置对同一触发器另有指派。" forKey:@"footerText"];
         [specs addObject:group];
         NSDictionary<NSString *, NSArray *> *icons = @{
-            @"主屏幕按钮": @[@"circle.circle", UIColor.systemGrayColor], @"Touch ID": @[@"touchid", UIColor.systemRedColor],
-            @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"顶部键": @[@"lock.fill", UIColor.systemBlueColor], @"侧边键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor],
-            @"静音拨片": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
+            @"锁键": @[@"circle.circle", UIColor.systemGrayColor], @"Touch ID": @[@"touchid", UIColor.systemRedColor],
+            @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor], @"锁键 + 音量键": @[@"plus.rectangle.on.rectangle", UIColor.systemPurpleColor],
+            @"拨片开关": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
             @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
-            @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
+            @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
         };
         for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
             if (!TGShowsTriggerGroup(&TGTriggerGroups[g])) continue;
@@ -1791,7 +1670,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             const TGItem *items = TGTriggerGroups[g].items;
             if (oneApp && (items == TGIcons || items == TGHomeGestures || items == TGOther || items == TGStateChanges)) continue;
             NSString *title = @(TGTriggerGroups[g].title);
-            PSSpecifier *row = [self rowForGroup:g title:TGTriggerGroups[g].items == TGLockButton ? TGLockButtonName() : title];
+            PSSpecifier *row = [self rowForGroup:g title:TGTriggerGroups[g].items == TGLockButton ? TGLockButtonName() : TGButtonText(title)];
             if (icons[title]) TGSetIcon(row, icons[title][0], icons[title][1]);
             [specs addObject:row];
         }
@@ -1857,7 +1736,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         }
         NSMutableArray *specs = [NSMutableArray array];
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
-        [group setProperty:@"Give one app its own assignments: inside it they replace In Apps' and Anywhere's for the same trigger, everywhere else nothing changes." forKey:@"footerText"];
+        [group setProperty:@"为单个应用单独指派：在该应用内，同触发器会取代“应用内”和“任意位置”的指派，其他地方不受影响。" forKey:@"footerText"];
         [specs addObject:group];
         NSArray *places = [counts.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) { return [TGPlaceTitle(a) localizedStandardCompare:TGPlaceTitle(b)]; }];
         for (NSString *place in places) {
@@ -2013,7 +1892,7 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
                     [rows addObject:TGSubtitled(TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), place, trigger))];
                 }
                 if (!rows.count) continue;
-                [specs addObject:[PSSpecifier groupSpecifierWithName:[place hasPrefix:TGAppModePrefix] ? [@"In " stringByAppendingString:TGPlaceTitle(place)] : TGModeTitle(place)]];
+                [specs addObject:[PSSpecifier groupSpecifierWithName:[place hasPrefix:TGAppModePrefix] ? [NSString stringWithFormat:@"应用内“%@”", TGPlaceTitle(place)] : TGModeTitle(place)]];
                 [specs addObjectsFromArray:[rows sortedArrayUsingComparator:TGCatalogOrder]];
             }
             _specifiers = specs;
@@ -2225,7 +2104,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
     }
     if (hasCommands) *hasCommands = commands > 0;
     if (hasPersonal) *hasPersonal = personal;
-    return [NSString stringWithFormat:@"%lu assignments, %lu menus, %lu shell commands, %lu URLs or Shortcuts.",
+    return [NSString stringWithFormat:@"%lu 项指派、%lu 个菜单、%lu 条 shell 命令、%lu 个 URL 或快捷指令。",
         (unsigned long)assignments, (unsigned long)[setup[TGMenusKey] count], (unsigned long)commands, (unsigned long)urls];
 }
 
@@ -2292,7 +2171,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         [specs addObject:[self button:@"导入设置…" command:@"import"]];
 
         PSSpecifier *reset = [PSSpecifier groupSpecifierWithName:nil];
-        [reset setProperty:TGButtonText(@"清除所有指派、菜单和设置，并关闭允许 API（替换按键动作恢复开启）。已保存的配置会保留。") forKey:@"footerText"];
+        [reset setProperty:TGButtonText(@"清除全部指派、菜单和设置，并关闭允许 API（替换按键动作恢复开启）。已保存的方案保留。") forKey:@"footerText"];
         [specs addObject:reset];
         [specs addObject:[self button:@"恢复默认设置…" command:@"reset"]];
         _specifiers = specs;
@@ -2400,7 +2279,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
     NSString *summary = TGSetupSummary(setup, &commands, &personal);
     NSMutableString *message = [summary mutableCopy];
     if (personal) [message appendString:@"\n\n其中包含你的事件所用的 Wi-Fi 网络和蓝牙设备名称。"];
-    if (commands) [message appendString:@"\n\n其中包含你的 shell 命令，请确认不含隐私内容。"];
+    if (commands) [message appendString:@"\n\n其中包含你的 shell 命令；请确认不含隐私内容。"];
     [self confirm:@"导出设置" message:message button:@"共享" destructive:NO then:^{
         NSDictionary *file = @{ @"Triggr": @1, @"setup": setup };
         NSData *data = [NSJSONSerialization dataWithJSONObject:file options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys error:nil];
@@ -2430,8 +2309,8 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
     NSDictionary *setup = TGSanitizedSetup(file[@"setup"]);
     BOOL commands = NO;
     NSMutableString *message = [TGSetupSummary(setup, &commands, NULL) mutableCopy];
-    [message appendString:@"\n\n这将替换你当前的设置。如需保留，请先存为配置。"];
-    if (commands) [message appendString:@"\n\n该设置会在你的设备上运行 shell 命令。只导入来源可信的设置。"];
+    [message appendString:@"\n\n导入会替换当前配置。想保留的话，先存为方案。"];
+    if (commands) [message appendString:@"\n\n该配置会在你的设备上运行 shell 命令。只导入你信任的人提供的配置。"];
     [self confirm:@"导入设置？" message:message button:@"替换我的设置" destructive:YES then:^{
         [self applySetup:setup];
         [self writeValue:@"" forKey:TGActiveProfileKey];
@@ -2470,8 +2349,8 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
 
         PSSpecifier *statusBar = [PSSpecifier groupSpecifierWithName:@"状态栏"];
         [statusBar setProperty:TGHasHomeButton()
-            ? @"Tap, Left Tap and Right Tap on the status bar. Turn this off if you use iPhone X–style gestures, where pulling down from the top opens Control Center or Notification Center. Double Tap and Hold always work."
-            : @"Experimental on Face ID iPhones, so off by default: a tap at the top can also start pulling down Control Center or Notification Center. Double Tap and Hold always work."
+            ? @"状态栏的轻点、左侧轻点、右侧轻点。若你使用 iPhone X 式手势（从顶部下拉打开控制中心/通知中心），请关闭此项。双击和长按始终有效。"
+            : @"在 Face ID 机型上属实验性，默认关闭：顶部轻点也可能触发下拉控制中心/通知中心。双击和长按始终有效。"
             forKey:@"footerText"];
         [specs addObject:statusBar];
         [specs addObject:TGSwitchRow(TGHasHomeButton() ? @"状态栏点按" : @"状态栏点按（实验性）", TGStatusBarTapKey, TGHasHomeButton(), self)];
@@ -2482,7 +2361,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         [specs addObject:TGSwitchRow(@"命令需解锁", TGRequireUnlockKey, YES, self)];
 
         PSSpecifier *buttons = [PSSpecifier groupSpecifierWithName:@"按键"];
-        [buttons setProperty:TGButtonText(@"开启：被指派的按键将取代其默认动作（回主屏幕、音量调节、锁定、静音等）。若想保留默认动作，请添加对应动作，如锁屏键对应「熄屏」。关闭：所有动作与按键和静音拨片并行执行。唤醒、紧急 SOS 和强制重启始终照常工作。") forKey:@"footerText"];
+        [buttons setProperty:TGButtonText(@"开：已指派的按压会取代按键自身动作（回主屏、音量步进、锁屏、静音…）。想两者都保留，就补一个对应动作，如锁键配\"熄屏\"。关：一切照旧与按键并行。唤醒、紧急 SOS 和强制重启始终不受影响。") forKey:@"footerText"];
         [specs addObject:buttons];
         PSSpecifier *replace = [PSSpecifier preferenceSpecifierNamed:@"替换按键动作" target:self set:@selector(setPreferenceValue:specifier:)
             get:@selector(readPreferenceValue:) detail:nil cell:PSSwitchCell edit:nil];
@@ -2493,7 +2372,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         [specs addObject:replace];
 
         PSSpecifier *api = [PSSpecifier groupSpecifierWithName:@"API"];
-        [api setProperty:@"允许其他插件和 triggr 命令运行你的触发器、菜单和内置动作（绝不直接运行 shell 命令、URL 或应用）。任何应用都可能请求，因此不用就保持关闭。\"triggr list\" 可查看 ID。" forKey:@"footerText"];
+        [api setProperty:@"允许其他插件和 triggr 命令运行你的触发器、菜单与内置动作（不会直接执行 shell 命令、URL 或打开应用）。任何应用都可能发起请求，不用就保持关闭。“triggr list”可查看 ID。" forKey:@"footerText"];
         [specs addObject:api];
         [specs addObject:TGSwitchRow(@"允许 API", TGAllowAPIKey, NO, self)];
         _specifiers = specs;
@@ -2570,8 +2449,8 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
             [specs addObject:TGSubtitled(TGTriggerRow(title, self, @selector(assignedActionTitle:), @"anywhere", trigger))];
         }
     }
-    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"No trigger matches “%@”.", _query] forKey:@"footerText"];
-    else [group setProperty:@"For one place only (Home Screen, apps, Lock Screen), open that place above instead." forKey:@"footerText"];
+    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"没有匹配“%@”的触发器。", _query] forKey:@"footerText"];
+    else [group setProperty:@"只想对单一位置（主屏幕、应用内、锁屏）生效，请改在上方对应位置设置。" forKey:@"footerText"];
     return specs;
 }
 

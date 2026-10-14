@@ -21,12 +21,12 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
-#import <sqlite3.h>
 #import <LocalAuthentication/LocalAuthentication.h>
-#include <dlfcn.h>
 #import <AudioToolbox/AudioToolbox.h>
+#import <CallKit/CallKit.h>
 #import "../Shared/TGCatalog.h"
 #import "../Shared/TGHardware.h"
+#import "../Shared/TGPaths.h"
 #import "../Shared/TGRelay.h"
 
 @interface SBLockScreenManager : NSObject
@@ -128,7 +128,6 @@ static NSString *TGCurrentMode(void) {
 #pragma mark - Actions
 
 static BOOL TGCanPerform(NSString *action);
-static void TGDismissSiri(BOOL animated);
 static void TGShowMenu(NSString *menuID);
 
 // The action assigned to `trigger` in the current mode, or nil.
@@ -199,6 +198,14 @@ static BOOL TGSetBrightness(double level, BOOL dryRun) {
     return YES;
 }
 
+// Brightness Up / Down: a step from where it is now (0-1), kept within 0-1. The current level comes from the public
+// UIScreen brightness (BrightnessSystemClient's DisplayBrightness read 0 in SpringBoard).
+static BOOL TGStepBrightness(double step, BOOL dryRun) {
+    double now = UIScreen.mainScreen.brightness;
+    double level = MIN(MAX(now + step, 0), 1);
+    return TGSetBrightness(level, dryRun);
+}
+
 static void TGSpeak(NSString *text) {
     static AVSpeechSynthesizer *synthesizer;
     if (!synthesizer) synthesizer = [AVSpeechSynthesizer new];
@@ -210,6 +217,8 @@ static void TGOpenURL(NSString *string);
 // Actions with a value; YES when `action` is one of them (and available).
 static BOOL TGValueAction(NSString *action, BOOL dryRun) {
     if ([action hasPrefix:TGBrightnessPrefix]) return TGSetBrightness(TGPercent(action, TGBrightnessPrefix), dryRun);
+    if ([action hasPrefix:TGBrightnessUpPrefix]) return TGStepBrightness(TGPercent(action, TGBrightnessUpPrefix), dryRun);
+    if ([action hasPrefix:TGBrightnessDownPrefix]) return TGStepBrightness(-TGPercent(action, TGBrightnessDownPrefix), dryRun);
     if ([action hasPrefix:TGMediaVolumePrefix]) return TGSetVolume(TGPercent(action, TGMediaVolumePrefix), @"Audio/Video", dryRun);
     if ([action hasPrefix:TGRingerVolumePrefix]) return TGSetVolume(TGPercent(action, TGRingerVolumePrefix), @"Ringtone", dryRun);
     if ([action hasPrefix:TGMessagePrefix]) {
@@ -243,7 +252,7 @@ static void TGOpenURL(NSString *string) {
 
 // Runs as mobile (SpringBoard's user), detached, output discarded.
 // Starts the jailbreak's sh with these arguments (mobile user's PATH, no I/O).
-// iOS 18's SpringBoard may refuse /var/jb/bin/sh by its symlinked path; the
+// iOS 18's SpringBoard may refuse the jailbreak's sh by its symlinked path; the
 // same file by its real path is allowed, so that's tried next.
 static BOOL tgSpawnRefused; // SpringBoard may not start programs here (iOS 18): use triggrd
 
@@ -255,12 +264,12 @@ static int TGSpawnShell(const char *const argv[], pid_t *pid) {
     posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
     posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     // SpringBoard's environment has no rootless PATH; give commands one.
-    const char *envp[] = {"PATH=/var/jb/usr/local/bin:/var/jb/usr/bin:/var/jb/bin:/var/jb/usr/sbin:/var/jb/sbin:/usr/bin:/bin:/usr/sbin:/sbin",
-                          "HOME=/var/mobile", "USER=mobile", "LANG=en_US.UTF-8", NULL};
-    int error = posix_spawn(pid, "/var/jb/bin/sh", &actions, NULL, (char *const *)argv, (char *const *)envp);
+    const char *envp[] = {TG_SHELL_PATH, "HOME=/var/mobile", "USER=mobile", "LANG=en_US.UTF-8", NULL};
+    const char *shell = TGJB(@"/bin/sh").fileSystemRepresentation;
+    int error = posix_spawn(pid, shell, &actions, NULL, (char *const *)argv, (char *const *)envp);
     if (error) {
         char real[PATH_MAX];
-        if (realpath("/var/jb/bin/sh", real)) {
+        if (realpath(shell, real)) {
             int second = posix_spawn(pid, real, &actions, NULL, (char *const *)argv, (char *const *)envp);
             error = second;
             if (second == EPERM) tgSpawnRefused = YES;
@@ -343,17 +352,8 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
     SEL step = up ? @selector(volumeStepUp) : @selector(volumeStepDown);
     // iOS 16: volumeStepUp/Down only report the step (the empty @available
     // branch here once made assigned volume actions no-ops); apply the step
-    // with changeVolumeByDelta: just like iOS 15.
-    if (@available(iOS 16, *)) {
-        if ([volume respondsToSelector:step] && [volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
-            if (!dryRun) {
-                float delta = fabsf(((float (*)(id, SEL))objc_msgSend)(volume, step));
-                if (delta <= 0 || delta > 0.5f) delta = 1.0f / 16;
-                ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? delta : -delta);
-            }
-            return YES;
-        }
-    } else if ([volume respondsToSelector:step] && [volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
+    // with changeVolumeByDelta: on every iOS that answers it.
+    if ([volume respondsToSelector:step] && [volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
         // iOS 15: volumeStepUp/Down only return the step size (verified on 15.8),
         // so the step is applied with changeVolumeByDelta:.
         if (!dryRun) {
@@ -368,9 +368,7 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
         return YES;
     }
     SEL start = up ? @selector(increaseVolume) : @selector(decreaseVolume);
-    if (![volume respondsToSelector:start] || ![volume respondsToSelector:@selector(cancelVolumeEvent)]) {
-        return NO;
-    }
+    if (![volume respondsToSelector:start] || ![volume respondsToSelector:@selector(cancelVolumeEvent)]) return NO;
     if (!dryRun) {
         ((void (*)(id, SEL))objc_msgSend)(volume, start);
         ((void (*)(id, SEL))objc_msgSend)(volume, @selector(cancelVolumeEvent));
@@ -666,6 +664,17 @@ static BOOL TGSleep(BOOL dry) {
     return TGCall(springBoard, @selector(_simulateLockButtonPress), NO);
 }
 
+// Wake Screen: only acts on a dark screen (a press that starts on a dark screen
+// always just wakes the phone, so the simulated lock press is exactly that).
+static BOOL TGWake(BOOL dry) {
+    id springBoard = UIApplication.sharedApplication;
+    if (dry) return [springBoard respondsToSelector:@selector(_simulateLockButtonPress)];
+    if (TGScreenIsOn()) return YES;
+    if (![springBoard respondsToSelector:@selector(_simulateLockButtonPress)]) return NO;
+    ((void (*)(id, SEL))objc_msgSend)(springBoard, @selector(_simulateLockButtonPress));
+    return YES;
+}
+
 // Screen Recording: ReplayKit's system recording, as Control Center's button
 // (no microphone). Private methods, checked at runtime (seen on iOS 15.8).
 static BOOL TGScreenRecord(BOOL dry) {
@@ -673,20 +682,87 @@ static BOOL TGScreenRecord(BOOL dry) {
     if (!cls) { dlopen("/System/Library/Frameworks/ReplayKit.framework/ReplayKit", RTLD_NOW); cls = objc_getClass("RPScreenRecorder"); }
     id recorder = [cls respondsToSelector:@selector(sharedRecorder)] ? [cls performSelector:@selector(sharedRecorder)] : nil;
     SEL start = @selector(startSystemRecordingWithMicrophoneEnabled:handler:), stop = @selector(stopSystemRecording:);
-    BOOL hasStart = [recorder respondsToSelector:start], hasStop = [recorder respondsToSelector:stop], hasState = [recorder respondsToSelector:@selector(systemRecording)];
-    if (!hasStart || !hasStop || !hasState) {
-        return NO;
-    }
+    if (![recorder respondsToSelector:start] || ![recorder respondsToSelector:stop] || ![recorder respondsToSelector:@selector(systemRecording)]) return NO;
     if (dry) return YES;
-    // systemRecording lies on iOS 16 (reports 1 while idle). Toggle by
-    // attempting a stop first: error -5829 means "wasn't recording" -> start.
-    ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
-        NSInteger code = [error respondsToSelector:@selector(code)] ? [(NSError *)error code] : 0;
-        if (code == -5829) {
-            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id err2) {
-            });
+    // systemRecording lies on iOS 16 (stuck at NO after a Control Center
+    // start): try to stop first and fall through to start on failure.
+    __block BOOL stopped = NO;
+    ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) { stopped = YES; });
+    if (!stopped) ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id error) { });
+    return YES;
+}
+
+static void TGRunAutoTouch(NSString *name) {
+    NSArray<NSString *> *dirs = TGAutoTouchScriptDirectories();
+    if (!dirs.count) return;
+    NSString *path = TGAutoTouchFindScript(dirs, name);
+    // Normalize to the AppGroup /var/… form AutoTouch itself uses.
+    NSRange marker = [path rangeOfString:@"/.jbroot-"];
+    if (marker.location != NSNotFound) {
+        NSRange slash = [path rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, path.length - marker.location - 1)];
+        if (slash.location != NSNotFound) {
+            NSString *jbrootName = [path substringWithRange:NSMakeRange(marker.location + 1, slash.location - marker.location - 1)];
+            path = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingPathComponent:[jbrootName stringByAppendingString:[path substringFromIndex:slash.location]]];
         }
-    });
+    }
+    // The verified entry (from Powercuts' AutoTouchRunFileAction):
+    //   [[PlayingManager sharedInstance] makePlayingFor:path]  ->  [playing start]
+    Class cls = NSClassFromString(@"PlayingManager");
+    if (!cls) return;
+    @try {
+        id shared = [cls performSelector:@selector(sharedInstance)];
+        if (!shared) return;
+        id playing = [shared performSelector:@selector(makePlayingFor:) withObject:path];
+        if (!playing) return;
+        [playing performSelector:@selector(start)];
+    } @catch (NSException *e) {
+    }
+}
+
+static void TGRunShortcut(NSString *name) {
+    // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
+    // through sh fails under roothide, NSTask launches the binary directly).
+    NSString *bin = TGSpringCutsBinary();
+    if (bin) {
+        @try {
+            Class taskCls = NSClassFromString(@"NSTask");
+            if (taskCls) {
+                id task = [[taskCls alloc] init];
+                [task performSelector:@selector(setLaunchPath:) withObject:bin];
+                [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
+                [task performSelector:@selector(launch)];
+                return;
+            }
+            // popen fallback (RC's second route)
+            FILE *fp = popen([[NSString stringWithFormat:@"%@ -r \"%@\"", bin, name] UTF8String], "r");
+            if (fp) pclose(fp);
+            return;
+        } @catch (NSException *e) {
+        }
+    }
+    CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"),
+        CFSTR("未检测到 SpringCuts：请从 Havoc 源安装后即可后台执行快捷指令。"), CFSTR("好"));
+}
+
+static void TGUnlockDevice(NSString *password) {
+    id mgr = TGShared("SBLockScreenManager");
+    if (!mgr) return;
+    if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
+        ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
+    if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)]) {
+        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), password, YES);
+    } else {
+    }
+}
+
+// Dismiss the Siri overlay (from Powercuts' ActionsHelper); keeps the argument
+// for the legacy signature. NO when the controller or selector is missing.
+static BOOL TGDismissSiri(BOOL dry) {
+    id ctrl = TGShared("SBAssistantController");
+    if (!ctrl) return NO;
+    SEL sel = @selector(dismissAssistantViewIfNecessaryWithAnimation:);
+    if (![ctrl respondsToSelector:sel]) return NO;
+    if (!dry) ((void (*)(id, SEL, BOOL))objc_msgSend)(ctrl, sel, NO);
     return YES;
 }
 
@@ -803,6 +879,19 @@ static void TGWriteAirPlayList(void) {
     fetch();
 }
 
+// ElleKit starts SpringBoard in Safe Mode when Volume Up is held as it launches ("Volume up detected"), so a respring
+// fired by a Volume Up trigger (Lock + Volume Up Hold, Volume Up Hold…) waits until the button is let go (seen on
+// iOS 16.2: Up Hold -> Respring -> Safe Mode). Read from the raw button events, which SpringBoard always sees.
+static BOOL tgRawVolumeUpDown;
+
+static void TGRelaunchSpringBoard(id service, int attempt) {
+    if (tgRawVolumeUpDown && attempt < 100) { // up to 10 s
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ TGRelaunchSpringBoard(service, attempt + 1); });
+        return;
+    }
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(service, @selector(exitAndRelaunch:), YES);
+}
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -813,20 +902,10 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.respring": ^BOOL(BOOL dry) {
                 id service = TGShared("FBSystemService");
                 if (![service respondsToSelector:@selector(exitAndRelaunch:)]) return NO;
-                if (!dry) ((void (*)(id, SEL, BOOL))objc_msgSend)(service, @selector(exitAndRelaunch:), YES);
+                if (!dry) TGRelaunchSpringBoard(service, 0);
                 return YES;
             },
             @"system.nothing": ^BOOL(BOOL dry) { return YES; }, // only takes the trigger away from iOS
-            @"system.dismissSiri": ^BOOL(BOOL dry) {
-                id ctrl = TGShared("SBAssistantController");
-                if (!ctrl) return NO;
-                if (![ctrl respondsToSelector:@selector(dismissAssistantViewIfNecessaryWithAnimation:)]) {
-                    if (!dry) TGDismissSiri(NO); // dumps diagnostics in the debug build
-                    return NO;
-                }
-                if (!dry) ((void (*)(id, SEL, BOOL))objc_msgSend)(ctrl, @selector(dismissAssistantViewIfNecessaryWithAnimation:), YES);
-                return YES;
-            },
             @"system.vibrate": ^BOOL(BOOL dry) {
                 if (!dry) AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
                 return YES;
@@ -857,6 +936,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 }
                 return YES;
             },
+            @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
             @"system.siri": ^BOOL(BOOL dry) {
                 // As if Siri's button was held.
                 if (![objc_getClass("SiriSimpleActivationSource") instancesRespondToSelector:@selector(activateFromSource:)]) return NO;
@@ -868,6 +948,8 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             // own simulated press (private, guarded); verified on iOS 16.7 that it skips
             // -[SBLockHardwareButton singlePress:], so a replaced lock button can't loop.
             @"system.sleep": ^BOOL(BOOL dry) { return TGSleep(dry); },
+            // Wake the screen: only acts on a dark screen.
+            @"system.wake": ^BOOL(BOOL dry) { return TGWake(dry); },
             // The slide-to-power-off screen (private, guarded).
             @"system.powerdown": ^BOOL(BOOL dry) { return TGCall(TGShared("SBMainWorkspace"), @selector(presentPowerDownTransientOverlay), dry); },
             // FrontBoard's shutdown (private, guarded): YES restarts, NO powers off.
@@ -876,13 +958,13 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             // this file exists; its Safe Mode screen offers Dismiss, which removes it.
             @"system.safemode": ^BOOL(BOOL dry) {
                 BOOL ellekit = NO;
-                for (NSString *path in @[@"/var/jb/usr/lib/ellekit/libinjector.dylib", @"/usr/lib/ellekit/libinjector.dylib"])
+                for (NSString *path in @[TGJB(@"/usr/lib/ellekit/libinjector.dylib"), @"/usr/lib/ellekit/libinjector.dylib"])
                     if ([NSFileManager.defaultManager fileExistsAtPath:path]) ellekit = YES;
                 id service = TGShared("FBSystemService");
                 if (!ellekit || ![service respondsToSelector:@selector(exitAndRelaunch:)]) return NO;
                 if (!dry) {
                     BOOL flagged = [NSData.data writeToFile:@"/var/mobile/.eksafemode" atomically:NO];
-                    if (flagged) ((void (*)(id, SEL, BOOL))objc_msgSend)(service, @selector(exitAndRelaunch:), YES);
+                    if (flagged) TGRelaunchSpringBoard(service, 0);
                 }
                 return YES;
             },
@@ -987,7 +1069,6 @@ static BOOL TGCanPerform(NSString *action) {
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
     if ([action hasPrefix:TGAutotouchPrefix]) return NSClassFromString(@"PlayingManager") != nil;
-    if ([action hasPrefix:TGUnlockPrefix]) return YES;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
     if ([action hasPrefix:TGExtensionPrefix]) {
         NSString *program = TGExtension(TGExtensionAction(action)[0])[@"Program"];
@@ -995,90 +1076,6 @@ static BOOL TGCanPerform(NSString *action) {
     }
     TGActionBlock block = TGActionTable()[action] ?: TGSwitchAction(action);
     return block && block(YES);
-}
-
-// AutoTouch: its system dylib (ATTweak) runs in this process (SpringBoard) and
-// exports a plain C function runCommand(path) that drives its Lua engine
-// directly — Powercuts runs its Lua actions this way, silently, no app involved
-// (verified from ATTweak's symbol table). Some builds keep a second argument;
-// passing nil is harmless either way. No-op when AutoTouch isn't installed.
-static void TGRunAutoTouch(NSString *name) {
-    NSArray<NSString *> *dirs = TGAutoTouchScriptDirectories();
-    if (!dirs.count) return;
-    NSString *path = TGAutoTouchFindScript(dirs, name);
-    // Normalize to the AppGroup /var/… form AutoTouch itself uses.
-    NSRange marker = [path rangeOfString:@"/.jbroot-"];
-    if (marker.location != NSNotFound) {
-        NSRange slash = [path rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, path.length - marker.location - 1)];
-        if (slash.location != NSNotFound) {
-            NSString *jbrootName = [path substringWithRange:NSMakeRange(marker.location + 1, slash.location - marker.location - 1)];
-            path = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingPathComponent:[jbrootName stringByAppendingString:[path substringFromIndex:slash.location]]];
-        }
-    }
-    // The verified entry (from Powercuts' AutoTouchRunFileAction):
-    //   [[PlayingManager sharedInstance] makePlayingFor:path]  ->  [playing start]
-    Class cls = NSClassFromString(@"PlayingManager");
-    if (!cls) return;
-    @try {
-        id shared = [cls performSelector:@selector(sharedInstance)];
-        if (!shared) return;
-        id playing = [shared performSelector:@selector(makePlayingFor:) withObject:path];
-        if (!playing) return;
-        [playing performSelector:@selector(start)];
-    } @catch (NSException *e) {
-    }
-}
-
-// Passcode unlock (from Powercuts' ActionsHelper): wake the screen, then
-// SBLockScreenManager._attemptUnlockWithPasscode:finishUIUnlock:.
-static void TGUnlockDevice(NSString *password) {
-    id mgr = TGShared("SBLockScreenManager");
-    if (!mgr) return;
-    if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
-        ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
-    if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)]) {
-        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), password, YES);
-    } else {
-    }
-}
-
-// Dismiss the Siri view (Powercuts' old code). iOS 16 may have dropped the
-// legacy selector — if so, dump what exists on-device for the next step.
-static void TGDismissSiri(BOOL animated) {
-    id ctrl = TGShared("SBAssistantController");
-    if ([ctrl respondsToSelector:@selector(dismissAssistantViewIfNecessaryWithAnimation:)]) {
-        if (!animated) {} // legacy call ignores nothing; keep argument
-        ((void (*)(id, SEL, BOOL))objc_msgSend)(ctrl, @selector(dismissAssistantViewIfNecessaryWithAnimation:), animated);
-        return;
-    }
-}
-
-// Run a Shortcuts shortcut headlessly: resolve the shortcut's UUID from
-// Shortcuts.sqlite and activate it in-process via SBShortcutActivatorRequest
-// (no bounce through the Shortcuts app). Falls back to the URL scheme.
-static void TGRunShortcut(NSString *name) {
-    // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
-    // through sh fails under roothide, NSTask launches the binary directly).
-    NSString *bin = TGSpringCutsBinary();
-    if (bin) {
-        @try {
-            Class taskCls = NSClassFromString(@"NSTask");
-            if (taskCls) {
-                id task = [[taskCls alloc] init];
-                [task performSelector:@selector(setLaunchPath:) withObject:bin];
-                [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
-                [task performSelector:@selector(launch)];
-                return;
-            }
-            // popen fallback (RC's second route)
-            FILE *fp = popen([[NSString stringWithFormat:@"%@ -r \"%@\"", bin, name] UTF8String], "r");
-            if (fp) pclose(fp);
-            return;
-        } @catch (NSException *e) {
-        }
-    }
-    CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"),
-        CFSTR("未检测到 SpringCuts：请从 Havoc 源安装后即可后台执行快捷指令。"), CFSTR("好"));
 }
 
 static void TGPerform(NSString *action) {
@@ -1091,7 +1088,7 @@ static void TGPerform(NSString *action) {
         } else if ([action hasPrefix:TGAutotouchPrefix]) {
             TGRunAutoTouch([action substringFromIndex:TGAutotouchPrefix.length]);
         } else if ([action hasPrefix:TGUnlockPrefix]) {
-            if (![action isEqual:TGUnlockPrefix]) TGUnlockDevice([action substringFromIndex:TGUnlockPrefix.length]);
+            if (action.length > TGUnlockPrefix.length) TGUnlockDevice([action substringFromIndex:TGUnlockPrefix.length]);
         } else if ([action hasPrefix:TGURLPrefix]) {
             TGOpenURL([action substringFromIndex:TGURLPrefix.length]);
         } else if ([action hasPrefix:TGShellPrefix]) {
@@ -1110,14 +1107,15 @@ static void TGPerform(NSString *action) {
 
 // State changes an action can cause, so its own effects don't fire triggers
 // (no loops) while unrelated changes still do. Families: "wifi", "bluetooth",
-// "lowpower", "lock" (device locked/unlocked) and "display" (screen on/off).
-static CFTimeInterval tgCausedAt[5];
+// "lowpower", "lock" (device locked/unlocked), "display" (screen on/off) and "music" (playback, song).
+static CFTimeInterval tgCausedAt[6];
 static int TGStateFamily(NSString *trigger) {
     if ([trigger hasPrefix:@"wifi."]) return 0;
     if ([trigger hasPrefix:@"bluetooth."]) return 1;
     if ([trigger hasPrefix:@"lowpower."]) return 2;
     if ([trigger hasPrefix:@"device."]) return 3;
     if ([trigger hasPrefix:@"display."]) return 4;
+    if ([trigger hasPrefix:@"music."]) return 5;
     return -1;
 }
 
@@ -1136,8 +1134,10 @@ static void TGNoteCausedStates(NSString *action) {
         families = @[@3];
     } else if ([action isEqualToString:@"system.sleep"] || [action isEqualToString:@"system.respring"] || [action isEqualToString:@"system.safemode"]) {
         families = @[@3, @4];
+    } else if ([action hasPrefix:@"media."]) {
+        families = @[@5];
     } else if ([action hasPrefix:TGShellPrefix] || [action hasPrefix:TGAutotouchPrefix] || [action hasPrefix:TGShortcutPrefix]) {
-        families = @[@0, @1, @2, @3, @4]; // can change anything
+        families = @[@0, @1, @2, @3, @4, @5]; // can change anything
     }
     for (NSNumber *family in families) tgCausedAt[family.intValue] = now;
 }
@@ -1167,7 +1167,7 @@ static BOOL TGNeedsUnlock(NSArray<NSString *> *actions) {
     BOOL command = NO;
     for (NSString *action in actions) {
         if (TGActionOpensApp(action)) return YES;
-        if ([action hasPrefix:TGShellPrefix] || [action hasPrefix:TGAutotouchPrefix]) command = YES;
+        if ([action hasPrefix:TGShellPrefix]) command = YES;
     }
     // Public: YES when a passcode is set.
     return command && tgRequireUnlock && [[LAContext new] canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication error:nil];
@@ -1309,42 +1309,6 @@ static BOOL TGFire(NSString *trigger) {
     }
     TGRunActions(actions);
     return YES;
-}
-
-// Scheduled events with ":ask": a Shortcuts-style prompt. Times out after a
-// minute; dismissing just skips this one run, nothing is scheduled behind it.
-static UIWindow *tgAskWindow;
-
-static void TGCloseAsk(void) {
-    tgAskWindow.hidden = YES;
-    tgAskWindow = nil;
-}
-
-static void TGAskTime(NSString *trigger) {
-    NSArray *actions = TGActionFor(trigger);
-    if (!actions) return;
-    TGCloseAsk();
-    tgAskWindow = TGOverlayWindow(YES);
-    if (!tgAskWindow) return;
-    tgAskWindow.hidden = NO;
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"定时事件"
-        message:[NSString stringWithFormat:@"运行「%@」？", TGTriggerTitle(trigger)]
-        preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"运行" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        TGCloseAsk();
-        if (tgShowBanners) {
-            NSMutableArray *titles = [NSMutableArray array];
-            for (NSString *action in actions)
-                if (![action hasPrefix:TGPausePrefix] && ![action hasPrefix:TGMenuPrefix] && ![action isEqualToString:@"system.nothing"]) [titles addObject:TGSpringBoardTitle(action)];
-            if (titles.count) TGShowBanner([titles componentsJoinedByString:@" + "]);
-        }
-        TGRunActions(actions);
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:^(UIAlertAction *a) { TGCloseAsk(); }]];
-    [tgAskWindow.rootViewController presentViewController:alert animated:YES completion:nil];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (tgAskWindow) TGCloseAsk();
-    });
 }
 
 #pragma mark - API (other tweaks and the triggr tool)
@@ -1537,11 +1501,81 @@ static void TGCheckBothVolume(UIPressesEvent *event) {
     }
 }
 
+#pragma mark Side + volume chords
+
+// The side (lock) button and one volume button down together, read from the same raw events (type 104 = the side
+// button). It fires when the chord forms. With Replace on, the chord's side press doesn't lock, a volume button
+// pressed second doesn't step the volume, and on Face ID iPhones iOS's own screenshot for Side + Volume Up is skipped.
+// Holding the chord (power-off slider, Emergency SOS) is never touched: only presses are, never the holds.
+static int tgChord;                  // 0 none, 1 side + up, 2 side + down: while held
+static BOOL tgChordReplaced;         // the current / last chord ran instead of iOS's reaction
+static CFTimeInterval tgChordAt;
+static int tgChordLast;              // the kind of the last chord (iOS may take its screenshot on release)
+static BOOL tgChordSwallowLock;      // the side press of a replaced chord: its release mustn't lock
+static BOOL tgChordHoldFired;        // the current chord was held long enough for its Hold trigger
+static BOOL tgChordPressPending;     // a press waiting for the release (a Hold is assigned too)
+static NSUInteger tgChordGeneration;
+
+static BOOL TGAssignedPrefix(NSString *prefix);
+
+static void TGCheckSideChords(UIPressesEvent *event) {
+    BOOL up = NO, down = NO, side = NO;
+    NSMutableArray *types = nil;
+    for (UIPress *press in event.allPresses) {
+        if (press.phase > UIPressPhaseStationary) continue;
+        [types addObject:@(press.type)];
+        if (press.type == 102) up = YES;
+        else if (press.type == 103) down = YES;
+        else if (press.type == 104) side = YES;
+    }
+    int chord = side && up && !down ? 1 : side && down && !up ? 2 : 0;
+    if (chord == tgChord) return;
+    int ended = tgChord;
+    tgChord = chord;
+    if (ended && tgChordPressPending) {
+        // let go before the Hold: it was a press
+        tgChordPressPending = NO;
+        if (!tgChordHoldFired) TGFire(ended == 1 ? @"combo.sideup" : @"combo.sidedown");
+    }
+    if (!chord) return;
+    NSString *press = chord == 1 ? @"combo.sideup" : @"combo.sidedown";
+    NSString *hold = chord == 1 ? @"combo.sideuphold" : @"combo.sidedownhold";
+    tgChordAt = CACurrentMediaTime();
+    tgChordLast = chord;
+    tgChordHoldFired = NO;
+    NSUInteger generation = ++tgChordGeneration;
+    if (TGActionFor(hold)) {
+        // Hold runs alongside iOS (the power-off slider / SOS are never held back); the press waits for the release.
+        tgChordPressPending = TGActionFor(press) != nil;
+        tgChordReplaced = tgChordPressPending && tgReplaces;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(TGHoldDelay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (tgChord != chord || generation != tgChordGeneration) return;
+            tgChordHoldFired = YES;
+            tgChordPressPending = NO;
+            TGFire(hold);
+        });
+    } else {
+        tgChordPressPending = NO;
+        tgChordReplaced = TGFire(press) && tgReplaces;
+    }
+    if (tgChordReplaced) tgChordSwallowLock = YES;
+}
+
+static BOOL TGChordReplacing(void) {
+    return tgChordReplaced && CACurrentMediaTime() - tgChordAt < 2;
+}
+
 static BOOL TGVolumeBegan(int which) {
     NSString *press = which == 0 ? @"volume.up" : @"volume.down";
     NSString *hold = which == 0 ? @"volume.uphold" : @"volume.downhold";
     TGVolumeState *state = &tgVolume[which];
     *state = (TGVolumeState){ .down = YES, .downAt = CACurrentMediaTime(), .generation = state->generation + 1 };
+    if (tgChord && TGChordReplacing()) {
+        // the volume half of a replaced side chord: no volume step, no volume trigger
+        state->partOfBoth = YES;
+        state->calledSystemOnDown = NO;
+        return NO;
+    }
     if (tgBothDown) {
         // Second button of a both-buttons press: keep it away from the system when replacing.
         state->partOfBoth = YES;
@@ -1558,10 +1592,7 @@ static BOOL TGVolumeBegan(int which) {
             TGFire(hold);
         });
     }
-    // With Replace on, an assigned hold also swallows the press: iOS starts
-    // changing the volume the moment the button goes down, so letting the
-    // system see it would defeat the replacement.
-    state->calledSystemOnDown = !tgReplaces || (TGActionFor(press) == nil && TGActionFor(hold) == nil);
+    state->calledSystemOnDown = !tgReplaces || TGActionFor(press) == nil;
     return state->calledSystemOnDown;
 }
 
@@ -1583,16 +1614,11 @@ static void TGVolumeTapped(int which) {
 
 static BOOL TGVolumeEnded(int which) {
     NSString *press = which == 0 ? @"volume.up" : @"volume.down";
-    NSString *hold = which == 0 ? @"volume.uphold" : @"volume.downhold";
     TGVolumeState *state = &tgVolume[which];
     state->down = NO;
     if (state->holdFired || state->partOfBoth) tgVolumeLastTap = -1;
     else if ([tgAssignedTriggers containsObject:@"volume.updown"] || [tgAssignedTriggers containsObject:@"volume.downup"]) TGVolumeTapped(which);
     if ((!state->calledSystemOnDown || !tgReplaces) && !state->holdFired && !state->partOfBoth) TGFire(press);
-    // A hold assignment swallowed the press on the way down; if the button
-    // turns out to be a tap, replay the single volume step the system skipped.
-    if (tgReplaces && !state->calledSystemOnDown && !state->holdFired && !state->partOfBoth && TGActionFor(press) == nil && TGActionFor(hold) != nil)
-        TGVolumeStep(UIApplication.sharedApplication, which == 0, NO);
     return state->calledSystemOnDown;
 }
 
@@ -1755,6 +1781,10 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
     %orig;
 }
 - (void)singlePress:(id)recognizer {
+    if (tgChordSwallowLock) {
+        tgChordSwallowLock = NO;
+        if (CACurrentMediaTime() - tgChordAt < 5) { return; }
+    }
     if (!TGHasHomeButton()) {
         void (^faceIDSystem)(void) = ^{
             %orig;
@@ -1829,6 +1859,14 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
         if (recognizer.state != UIGestureRecognizerStateChanged) tgLockHoldReplaced = NO;
         return; // iOS never saw this hold begin
     }
+    %orig;
+}
+%end
+
+// Face ID iPhones: Side + Volume Up is iOS's screenshot. A replaced chord skips it.
+%hook SBCombinationHardwareButtonActions
+- (void)performTakeScreenshotAction {
+    if (tgChordLast == 1 && TGChordReplacing()) { return; }
     %orig;
 }
 %end
@@ -2260,6 +2298,123 @@ static void TGUpdateHomeGestures(BOOL want) {
 }
 %end
 
+#pragma mark - Screen edges
+// Activator's slide-in gestures (GitHub #3). They're SpringBoard system gestures (SBSystemGestureManager, the same
+// on iOS 15-18), so they see touches over apps too. The corner ones fail on the first touch outside their quarter of
+// the bottom edge, and iOS's own bottom-edge gestures (Control Center, Home) wait only for that, so swipes in the
+// middle behave as before.
+
+@interface SBSystemGestureManager : NSObject
++ (instancetype)mainDisplayManager;
+- (void)addGestureRecognizer:(UIGestureRecognizer *)recognizer withType:(unsigned long long)type;
+- (void)removeGestureRecognizer:(UIGestureRecognizer *)recognizer;
+@end
+
+static const unsigned long long TGEdgeGestureTypeBase = 0x7467000; // far from iOS's own type numbers
+static const CGFloat TGEdgeMargin = 20;    // a slide has to start this close to its edge
+static const CGFloat TGEdgeDistance = 60;  // and travel this far away from it
+
+// An edge pan as SpringBoard makes its own (UIScreenEdgePanGestureRecognizer -initWithTarget:action:type:options:):
+// iOS's system gesture routing only keeps feeding touches to edge-swipe recognizers once a touch moves.
+@interface UIScreenEdgePanGestureRecognizer (TGPrivate)
+- (instancetype)initWithTarget:(id)target action:(SEL)action type:(long long)type options:(unsigned long long)options;
+- (void)_setEdgeRegionSize:(double)size;
+@end
+
+@interface TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer
+@property (nonatomic, copy) NSString *trigger;
+@property (nonatomic) UIRectEdge edge;
+@property (nonatomic) NSUInteger fingers;
+@property (nonatomic) BOOL fired;
+@end
+
+@implementation TGEdgeRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesBegan:touches withEvent:event];
+    if (event.allTouches.count > self.fingers) { // one-finger slides don't count when two fingers come in
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+    }
+    self.fired = NO;
+    if (![tgAssignedTriggers containsObject:self.trigger]) self.state = UIGestureRecognizerStateFailed;
+}
+@end
+
+@interface TGEdgeTarget : NSObject
+@end
+@implementation TGEdgeTarget
+- (void)slid:(TGEdgeRecognizer *)recognizer {
+    if (recognizer.fired || (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded)) return;
+    CGPoint t = [recognizer translationInView:nil];
+    CGFloat along = recognizer.edge == UIRectEdgeBottom ? -t.y : recognizer.edge == UIRectEdgeLeft ? t.x : -t.x;
+    CGFloat across = recognizer.edge == UIRectEdgeBottom ? fabs(t.x) : fabs(t.y);
+    if (along < TGEdgeDistance || across > along) return; // far enough, and mostly away from the edge
+    recognizer.fired = YES; // once per slide, as soon as it's far enough
+    TGFire(recognizer.trigger);
+}
+@end
+
+static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
+// Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
+// init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
+static BOOL tgGestureManagerReady;
+
+static void TGUpdateEdgeGestures(void) {
+    if (!tgGestureManagerReady) return; // -[SBMainDisplaySystemGestureManager _init] calls this again
+    SBSystemGestureManager *manager = [objc_getClass("SBSystemGestureManager") mainDisplayManager];
+    if (!manager) return;
+    static TGEdgeTarget *target;
+    if (!target) target = [TGEdgeTarget new];
+    if (!tgEdgeRecognizers) tgEdgeRecognizers = [NSMutableArray array];
+    struct { const char *trigger; UIRectEdge edge; NSUInteger fingers; } edges[] = {
+        {"edge.left", UIRectEdgeLeft, 1}, {"edge.right", UIRectEdgeRight, 1},
+        {"edge.left2", UIRectEdgeLeft, 2}, {"edge.right2", UIRectEdgeRight, 2},
+    };
+    for (int i = 0; i < 4; i++) {
+        NSString *trigger = @(edges[i].trigger);
+        TGEdgeRecognizer *existing = nil;
+        for (TGEdgeRecognizer *r in tgEdgeRecognizers) if ([r.trigger isEqualToString:trigger]) existing = r;
+        BOOL want = [tgAssignedTriggers containsObject:trigger];
+        if (want && !existing) {
+            // type 2 as SpringBoard's own: real fingers work (verified by hand on iOS 16.2). Synthetic tapctl touches
+            // never do: the recognizer wants the digitizer's edge flag.
+            TGEdgeRecognizer *r = [[TGEdgeRecognizer alloc] initWithTarget:target action:@selector(slid:) type:2 options:0];
+            r.edges = edges[i].edge;
+            r.edge = edges[i].edge;
+            r.fingers = edges[i].fingers;
+            r.minimumNumberOfTouches = r.fingers;
+            r.maximumNumberOfTouches = r.fingers;
+            if ([r respondsToSelector:@selector(_setEdgeRegionSize:)]) [r _setEdgeRegionSize:TGEdgeMargin];
+            r.trigger = trigger;
+            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + i];
+            [tgEdgeRecognizers addObject:r];
+        } else if (!want && existing) {
+            [manager removeGestureRecognizer:existing];
+            [tgEdgeRecognizers removeObject:existing];
+        }
+    }
+}
+
+%hook SBMainDisplaySystemGestureManager
+- (id)_init {
+    id manager = %orig;
+    tgGestureManagerReady = YES;
+    dispatch_async(dispatch_get_main_queue(), ^{ TGUpdateEdgeGestures(); });
+    return manager;
+}
+%end
+
+%hook SBSystemGestureManager
+- (BOOL)_isGestureWithTypeAllowed:(unsigned long long)type {
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    return %orig;
+}
+- (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    return %orig;
+}
+%end
+
 #pragma mark - Notifications and calls
 
 // "Notification from <app>": only which app posted, never what it says. A
@@ -2275,8 +2430,98 @@ static void TGFireMatching(NSString *prefix, NSString *value);
     if (!tgWatchNotifications || CACurrentMediaTime() - tgSpringBoardStarted < 15) return;
     id section = [request respondsToSelector:@selector(sectionIdentifier)] ? [request performSelector:@selector(sectionIdentifier)] : nil;
     if ([section isKindOfClass:NSString.class]) TGFireMatching(TGNotificationAppPrefix, section);
+    if ([tgAssignedTriggers containsObject:@"notification.any"]) TGFire(@"notification.any");
 }
 %end
+
+#pragma mark - Phone calls
+// CallKit's public observer: each event once per call (it reports a call's state several times).
+@interface TGCallWatcher : NSObject <CXCallObserverDelegate>
+@property (nonatomic, strong) CXCallObserver *observer;
+@property (nonatomic, strong) NSMutableDictionary<NSUUID *, NSMutableSet<NSString *> *> *seen;
+@end
+
+@implementation TGCallWatcher
+- (void)callObserver:(CXCall *)observer callChanged:(CXCall *)call {
+    NSMutableSet *seen = self.seen[call.UUID];
+    if (!seen) self.seen[call.UUID] = seen = [NSMutableSet set];
+    NSString *event = call.hasEnded ? @"call.ended" : call.hasConnected ? @"call.answered" : call.isOutgoing ? @"call.outgoing" : @"call.incoming";
+    if ([seen containsObject:event]) return;
+    [seen addObject:event];
+    TGFire(event);
+    if (call.hasEnded) self.seen[call.UUID] = nil;
+}
+@end
+
+static TGCallWatcher *tgCallWatcher;
+static void TGUpdateCallWatcher(BOOL want) {
+    if (want && !tgCallWatcher) {
+        tgCallWatcher = [TGCallWatcher new];
+        tgCallWatcher.seen = [NSMutableDictionary dictionary];
+        tgCallWatcher.observer = [CXCallObserver new];
+        [tgCallWatcher.observer setDelegate:tgCallWatcher queue:dispatch_get_main_queue()];
+    } else if (!want && tgCallWatcher) {
+        [tgCallWatcher.observer setDelegate:nil queue:nil];
+        tgCallWatcher = nil;
+    }
+}
+
+#pragma mark - Music
+// SpringBoard's own Now Playing callbacks (same on iOS 15-18): the playing app started or stopped, or its info
+// changed. The song is read with MediaRemote's MRMediaRemoteGetNowPlayingInfo (private, looked up at runtime).
+@interface SBMediaController : NSObject
++ (instancetype)sharedInstance;
+- (BOOL)isPlaying;
+@end
+
+static BOOL tgWatchMusic, tgMusicPlaying;
+static NSString *tgMusicSong;
+static void TGStateChanged(BOOL *previous, BOOL now, NSString *onTrigger, NSString *offTrigger);
+static BOOL TGFireUnlessCaused(NSString *trigger);
+
+static void TGMusicInfoChanged(void) {
+    typedef void (*TGGetInfo)(dispatch_queue_t, void (^)(CFDictionaryRef));
+    static TGGetInfo getInfo;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *mr = dlopen("/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote", RTLD_LAZY);
+        getInfo = mr ? (TGGetInfo)dlsym(mr, "MRMediaRemoteGetNowPlayingInfo") : NULL;
+    });
+    if (!getInfo) return;
+    getInfo(dispatch_get_main_queue(), ^(CFDictionaryRef ref) {
+        NSDictionary *info = (__bridge NSDictionary *)ref;
+        id title = info[@"kMRMediaRemoteNowPlayingInfoTitle"], artist = info[@"kMRMediaRemoteNowPlayingInfoArtist"];
+        if (![title isKindOfClass:NSString.class] || ![title length]) return;
+        NSString *song = [NSString stringWithFormat:@"%@\n%@", [artist isKindOfClass:NSString.class] ? artist : @"", title];
+        if ([song isEqualToString:tgMusicSong]) return;
+        tgMusicSong = song;
+        // a respring re-announces whatever was playing
+        if (CACurrentMediaTime() - tgSpringBoardStarted < 15) return;
+        TGFireUnlessCaused(@"music.changed");
+    });
+}
+
+%hook SBMediaController
+- (void)_mediaRemoteNowPlayingInfoDidChange:(id)change {
+    %orig;
+    if (tgWatchMusic) TGMusicInfoChanged();
+}
+- (void)_mediaRemoteNowPlayingApplicationIsPlayingDidChange:(id)change {
+    %orig;
+    if (!tgWatchMusic) return;
+    BOOL playing = [self isPlaying];
+    TGStateChanged(&tgMusicPlaying, playing, @"music.started", @"music.stopped");
+    if (playing) TGMusicInfoChanged();
+}
+%end
+
+static void TGUpdateMusic(BOOL want) {
+    if (want && !tgWatchMusic) {
+        SBMediaController *media = [objc_getClass("SBMediaController") sharedInstance];
+        tgMusicPlaying = [media respondsToSelector:@selector(isPlaying)] && [media isPlaying];
+    }
+    tgWatchMusic = want;
+}
 
 #pragma mark - Proximity sensor
 // Triggr asks SpringBoard's proximity manager for detection like any other
@@ -2369,6 +2614,13 @@ static NSString *tgFrontApp;
     tgFrontApp = app;
 }
 - (BOOL)_handlePhysicalButtonEvent:(UIPressesEvent *)event {
+    if ([event isKindOfClass:UIPressesEvent.class]) {
+        BOOL upDown = NO;
+        for (UIPress *press in event.allPresses) if (press.type == 102 && press.phase <= UIPressPhaseStationary) upDown = YES;
+        tgRawVolumeUpDown = upDown;
+    }
+    if ((tgChord || TGAssignedPrefix(@"combo."))
+        && [event isKindOfClass:UIPressesEvent.class]) TGCheckSideChords(event);
     if ((tgBothDown || [tgAssignedTriggers containsObject:@"volume.both"] || [tgAssignedTriggers containsObject:@"volume.bothhold"])
         && [event isKindOfClass:UIPressesEvent.class]) TGCheckBothVolume(event);
     return %orig;
@@ -2414,6 +2666,15 @@ static void TGStateChanged(BOOL *previous, BOOL now, NSString *onTrigger, NSStri
         return;
     }
     TGFire(now ? onTrigger : offTrigger);
+}
+
+// A one-off event (no on/off pair) with the same "caused by Triggr" guard.
+static BOOL TGFireUnlessCaused(NSString *trigger) {
+    int family = TGStateFamily(trigger);
+    if (family >= 0 && CACurrentMediaTime() - tgCausedAt[family] < 1.0) {
+        return NO;
+    }
+    return TGFire(trigger);
 }
 
 static BOOL TGCallBool(id target, SEL selector) {
@@ -2479,7 +2740,7 @@ static int TGBatteryPercent(void) {
     NSArray *sources = blob ? CFBridgingRelease(IOPSCopyPowerSourcesList(blob)) : nil;
     for (id source in sources) {
         NSDictionary *description = (__bridge NSDictionary *)IOPSGetPowerSourceDescription(blob, (__bridge CFTypeRef)source);
-        id current = description[@"Current Capacity"], max = description[@"Max Capacity"];
+        id current = description[@"当前电量"], max = description[@"最大容量"];
         if (![current respondsToSelector:@selector(doubleValue)] || ![max respondsToSelector:@selector(doubleValue)] || [max doubleValue] <= 0) continue;
         percent = (int)lround([current doubleValue] * 100.0 / [max doubleValue]);
         break;
@@ -2515,45 +2776,25 @@ static void TGBatteryLevelChanged(void) {
 static NSTimer *tgTimeTimer;
 static id tgTimeObserver;
 
-// Does the repeat spec match on this date? Old specs (daily/weekdays/weekends)
-// and new ones (weekly:1,3,5 / monthly:1,15,last). Monthly dates that don't
-// exist (Feb 30) simply never match, matching Shortcuts' "skip that month".
-static BOOL TGSpecMatches(NSString *spec, NSDate *date) {
-    NSCalendar *calendar = NSCalendar.currentCalendar;
-    if ([spec hasPrefix:@"weekly:"]) {
-        NSInteger weekday = [calendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
-        for (NSString *part in [[spec substringFromIndex:7] componentsSeparatedByString:@","])
-            if (part.intValue == weekday) return YES;
-        return NO;
-    }
-    if ([spec hasPrefix:@"monthly:"]) {
-        NSInteger day = [calendar component:NSCalendarUnitDay fromDate:date];
-        for (NSString *part in [[spec substringFromIndex:8] componentsSeparatedByString:@","]) {
-            if ([part isEqualToString:@"last"]) {
-                NSDate *nextDay = [calendar dateByAddingUnit:NSCalendarUnitDay value:1 toDate:date options:0];
-                if ([calendar component:NSCalendarUnitDay fromDate:nextDay] == 1) return YES; // tomorrow is the 1st
-            } else if (part.intValue == day) return YES;
-        }
-        return NO;
-    }
-    NSInteger weekday = [calendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
+static BOOL TGDayMatches(NSString *days, NSDate *date) {
+    NSInteger weekday = [NSCalendar.currentCalendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
     BOOL weekend = weekday == 1 || weekday == 7;
-    if ([spec isEqualToString:@"weekdays"]) return !weekend;
-    if ([spec isEqualToString:@"weekends"]) return weekend;
-    return YES; // daily, or anything unrecognised falls back to every day
+    if ([days isEqualToString:@"weekdays"]) return !weekend;
+    if ([days isEqualToString:@"weekends"]) return weekend;
+    if (TGDaysAreCustom(days)) return [days containsString:@(weekday).stringValue];
+    return YES;
 }
 
-// The next date (after `after`) this time trigger is due, or nil. Weekly and
-// monthly specs may be up to a year out, so scan far more days than before.
+// The next date (after `after`) this time trigger is due, or nil.
 static NSDate *TGNextDate(NSString *trigger, NSDate *after) {
     int hour, minute;
-    NSString *spec;
-    if (!TGParseTime(trigger, &hour, &minute, &spec)) return nil;
+    NSString *days;
+    if (!TGParseTime(trigger, &hour, &minute, &days)) return nil;
     NSCalendar *calendar = NSCalendar.currentCalendar;
-    for (int offset = 0; offset < 370; offset++) {
+    for (int offset = 0; offset < 8; offset++) {
         NSDate *day = [calendar dateByAddingUnit:NSCalendarUnitDay value:offset toDate:after options:0];
         NSDate *candidate = [calendar dateBySettingHour:hour minute:minute second:0 ofDate:day options:0];
-        if ([candidate compare:after] == NSOrderedDescending && TGSpecMatches(spec, candidate)) return candidate;
+        if ([candidate compare:after] == NSOrderedDescending && TGDayMatches(days, candidate)) return candidate;
     }
     return nil;
 }
@@ -2565,10 +2806,7 @@ static void TGTimeTimerFired(NSDate *target) {
     if (late < 300) {
         for (NSString *trigger in tgAssignedTriggers.copy) {
             NSDate *due = TGNextDate(trigger, [target dateByAddingTimeInterval:-1]);
-            if (due && fabs([due timeIntervalSinceDate:target]) < 1) {
-                if (TGTimeAsks(trigger)) TGAskTime(trigger);
-                else TGFire(trigger);
-            }
+            if (due && fabs([due timeIntervalSinceDate:target]) < 1) TGFire(trigger);
         }
     }
     TGScheduleTimes();
@@ -2720,8 +2958,11 @@ static void TGUpdateOtherEvents(void) {
     TGUpdateStateEvents();
     TGUpdateIconFlicks(TGAssignedPrefix(@"icon.flick"));
     TGUpdateHomeGestures(TGAssignedPrefix(@"homescreen."));
-    tgWatchNotifications = TGAssignedPrefix(TGNotificationAppPrefix);
+    TGUpdateEdgeGestures();
+    tgWatchNotifications = TGAssignedPrefix(@"notification.");
     TGUpdateProximity(TGAssignedPrefix(@"proximity."));
+    TGUpdateMusic(TGAssignedPrefix(@"music."));
+    TGUpdateCallWatcher(TGAssignedPrefix(@"call."));
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;

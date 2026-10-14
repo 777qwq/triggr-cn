@@ -11,6 +11,7 @@
 #import <sys/wait.h>
 #import <sys/stat.h>
 #import "../Shared/TGCatalog.h"
+#import "../Shared/TGPaths.h"
 
 extern char **environ;
 
@@ -30,15 +31,14 @@ static NSSet<NSString *> *TGAllowedActions(void) {
 }
 
 static void TGRun(const char *const argv[]) {
-    const char *envp[] = {"PATH=/var/jb/usr/local/bin:/var/jb/usr/bin:/var/jb/bin:/var/jb/usr/sbin:/var/jb/sbin:/usr/bin:/bin:/usr/sbin:/sbin",
-                          "HOME=/var/mobile", "USER=mobile", "LANG=en_US.UTF-8", NULL};
+    const char *envp[] = {TG_SHELL_PATH, "HOME=/var/mobile", "USER=mobile", "LANG=en_US.UTF-8", NULL};
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
     posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
     posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     pid_t pid = 0;
-    if (posix_spawn(&pid, "/var/jb/bin/sh", &actions, NULL, (char *const *)argv, (char *const *)envp) == 0) {
+    if (posix_spawn(&pid, TGJB(@"/bin/sh").fileSystemRepresentation, &actions, NULL, (char *const *)argv, (char *const *)envp) == 0) {
         // Reaped on a background queue so a slow command never blocks the next.
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ int status; waitpid(pid, &status, 0); });
     }

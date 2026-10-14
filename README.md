@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://jond-ie.github.io/repo/"><img src="https://img.shields.io/badge/Install-John's%20Repo-blue" alt="Install from John's Repo"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="GPL-3.0"></a>
-  <img src="https://img.shields.io/badge/version-1.0.4-informational" alt="Version 1.0.4">
+  <img src="https://img.shields.io/badge/version-1.5.0-informational" alt="Version 1.5.0">
 </p>
 
 Press, tap, flick, pinch, shake or wave, and Triggr runs what you picked: go
@@ -65,12 +65,13 @@ Screen, or inside one specific app.
 
 | | |
 |---|---|
-| **Buttons** | Home (single, double, triple, short / long hold), Lock / Side (single, double, triple, hold), Volume (presses, holds, sequences, both), Mute switch, Touch ID |
+| **Buttons** | Home (single, double, triple, short / long hold), Lock / Side (single, double, triple, hold), Volume (presses, holds, sequences, both), **Lock / Side + Volume** (press or hold), Mute switch, Touch ID |
+| **Screen edges** | Slide in from the left or right edge, with one or two fingers, over apps too |
 | **Status bar** | Tap, double tap, hold, each also per left / right half; swipe left / right |
 | **Home Screen** | Icon flicks (per app too), pinch, spread, two-finger swipes, double tap on empty space |
 | **Sensors** | Shake, proximity cover and wave |
-| **Events** | Charger, headphones, Wi-Fi, Bluetooth, Low Power, lock / unlock, screen on / off, a specific network or device, battery level, an app opened, a notification from an app, a time of day |
-| **Actions** | System and power actions, 14 switches (toggle / on / off), media and AirPlay, brightness and volume levels, open apps, Settings pages, Shortcuts and URLs, messages, speech, shell commands, menus, extensions |
+| **Events** | Charger, headphones, Wi-Fi, Bluetooth, Low Power, lock / unlock, screen on / off, a specific network or device, battery level, an app opened, any notification or one from an app, phone calls (incoming, answered, outgoing, ended), music (started, paused, song changed), a time of day or chosen weekdays |
+| **Actions** | System and power actions, 14 switches (toggle / on / off), media and AirPlay, brightness and volume levels, brightness steps, open apps, Settings pages, Shortcuts and URLs, messages, speech, shell commands, menus, extensions |
 | **Places** | Anywhere, At Home Screen, In Apps, At Lock Screen, In Specific Apps |
 | **Extras** | Sequences with pauses, menus, profiles, export / import, block list, action banners, local API and `triggr` command |
 
@@ -83,6 +84,7 @@ rootless jailbreak (Dopamine). It has been tested on:
 |---|---|---|---|
 | A10 | arm64 | Home button / Touch ID | 15.8.6 |
 | A11 | arm64 | Home button / Touch ID | 16.7 |
+| A13 | arm64e | Face ID | 16.2 |
 | A13 | arm64e | Home button / Touch ID | 17.5.1 |
 | A13 | arm64e | Face ID | 18.6.2 |
 
@@ -113,15 +115,20 @@ Triggr from your package manager and please [report it](../../issues/new/choose)
 | Touch ID | Light Double Tap; Finger Rest, Finger Match (Lock Screen) | Light Double Tap replaces Reachability; Finger Rest and Match run alongside unlocking. |
 | Lock / Side Button | Single, Double, Triple, Hold | See **Lock button** below. On Face ID devices an assigned Double or Triple Press replaces Wallet / Apple Pay or the Accessibility Shortcut. |
 | Volume Buttons | Up, Down, Up Hold, Down Hold, Up then Down, Down then Up, Press Both, Hold Both | A press replaces the volume step; a hold fires after 0.5 s. |
+| Lock + Volume (Side + Volume on Face ID) | Up Press, Down Press, Up Hold, Down Hold | Both buttons together. A press replaces the lock and the volume step (and the screenshot on Face ID); with a Hold assigned too, the press runs on release. Holds fire after 0.5 s and run alongside iOS, so the power-off slider and Emergency SOS still appear. |
 | Mute Switch | Silent, Ring, Toggled | Replaces muting / unmuting when assigned. |
 | Status Bar | Tap, Double Tap, Hold; Left / Right Tap, Double Tap, Hold; Swipe Left, Swipe Right | Home Screen, Lock Screen and in apps. Left and Right are each half of the bar and run instead of the plain trigger on that side. Single taps can be turned off (**Options → Status Bar Single Tap**); they're off by default on Face ID iPhones, where a tap at the top can start pulling down Control Center. Swiping down stays iOS's. |
+| Screen Edges | Slide In from Left / Right; Two-Finger Slide In from Left / Right | SpringBoard system gestures: over apps, on the Home Screen and the Lock Screen. One-finger Slide In from Left takes the place of an app's swipe back; the two-finger versions (as in Activator) don't. |
 | Home Screen Icons | Flick Up, Down, Left, Right | A quick flick that starts on an app or folder icon. |
 | Home Screen Gestures | Pinch In, Spread, Two-Finger Swipe Up / Down, Double Tap Empty Space | On the Home Screen pages; one-finger scrolling, Spotlight and icons work as before. Ignored while editing or with a folder open. |
 | Motion | Shake Device | iOS's own shake detection: no sensor runs for Triggr. |
 | Proximity Sensor | Cover, Wave | The sensor stays on only while one is assigned and the screen is on. |
 | Charger & Headphones | Charger, Headphones connected / disconnected | Observed only while assigned. |
+| Phone Calls | Incoming Call, Call Answered, Outgoing Call, Call Ended | CallKit's public observer: the Phone app, FaceTime and other calling apps. With Live Voicemail on, a call that goes to voicemail counts as answered. |
+| Notifications | Any Notification | Only which app posted, never what it says. For one app, use Custom Events. |
+| Music | Playback Started, Paused or Stopped, Song Changed | Any app in Now Playing. Changes caused by Triggr's media actions are ignored for a second. |
 | State Changes | Wi-Fi, Bluetooth, Low Power on / off; joined / left a network; Device Locked / Unlocked; Screen On / Off | Changes Triggr causes itself are ignored for a second, so assignments can't loop. |
-| Custom Events | A specific Wi-Fi network, a specific Bluetooth device (connected / disconnected), battery above / below X %, an app opened, **a notification from an app**, a scheduled time, a flick on one app's icon | Networks and devices are picked from your saved ones. Notifications only count which app posted, never what it says. |
+| Custom Events | A specific Wi-Fi network, a specific Bluetooth device (connected / disconnected), battery above / below X %, an app opened, **a notification from an app**, a scheduled time (every day, weekdays, weekends or chosen days), a flick on one app's icon | Networks and devices are picked from your saved ones. Notifications only count which app posted, never what it says. |
 
 ### Actions
 

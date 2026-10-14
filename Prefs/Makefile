@@ -12,6 +12,11 @@ TG_VERSION := $(shell sed -n 's/^Version: //p' $(THEOS_PROJECT_DIR)/control)
 Triggr_CFLAGS = -fobjc-arc -F$(THEOS_PROJECT_DIR)/vendor -DTG_VERSION='@"$(TG_VERSION)"'
 Triggr_LDFLAGS = -F$(THEOS_PROJECT_DIR)/vendor
 
+# RootHide's Theos adds no search path for AltList (rootless adds /var/jb/...).
+ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
+Triggr_LDFLAGS += -rpath @loader_path/.jbroot/Library/Frameworks -rpath @loader_path/.jbroot/usr/lib
+endif
+
 include $(THEOS_MAKE_PATH)/bundle.mk
 
 internal-stage::

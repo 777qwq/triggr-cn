@@ -28,8 +28,8 @@ static inline BOOL TGHasHomeButton(void) {
 
 // Apple's name for the lock button where there's no Home button.
 static inline NSString *TGLockButtonName(void) {
-    if (TGHasHomeButton()) return @"锁屏键";
-    return UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad ? @"顶部键" : @"侧边键";
+    if (TGHasHomeButton()) return @"锁键";
+    return UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad ? @"顶部键" : @"侧键";
 }
 
 // Status bar single taps (plain, Left, Right). Off by default on Face ID iPhones,
