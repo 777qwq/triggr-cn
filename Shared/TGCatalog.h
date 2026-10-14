@@ -1,4 +1,5 @@
 #import "TGPaths.h"
+#import <dlfcn.h>
 // The single catalogue of modes, triggers and actions, shared by Settings and
 // the tweak so the two can never disagree about ids.
 //
