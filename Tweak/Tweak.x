@@ -960,7 +960,11 @@ static void TGSenderStart(void) {
     TGSenderClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
     if (!TGSenderClient) return;
     IOHIDEventSystemClientScheduleWithRunLoop(TGSenderClient, CFRunLoopGetMain(), kCFRunLoopCommonModes);
-    IOHIDEventSystemClientRegisterEventCallback(TGSenderClient, (void *)TGSenderCallback, NULL, NULL);
+    // arm64e PAC：裸 C 函数指针被 CFMachPort 回调时认证失败（Safe Mode 实证），Block 的 invoke 指针签名正规
+    void (^blk)(void *, void *, void *, IOHIDEventRef) = ^(void *t, void *r, void *s, IOHIDEventRef e) {
+        TGSenderCallback(t, r, s, e);
+    };
+    IOHIDEventSystemClientRegisterEventCallback(TGSenderClient, (__bridge void *)[blk copy], NULL, NULL);
 }
 static IOHIDEventSystemClientRef TGIOHIDClient;
 static BOOL TGIOHIDTouch(int type, float x, float y) {
