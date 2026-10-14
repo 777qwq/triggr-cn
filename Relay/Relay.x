@@ -53,22 +53,40 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 %end
 %end
 
+static BOOL TGBackSearch(UIViewController *vc, int depth) {
+    if (!vc || depth > 12) return NO;
+    if (vc.presentedViewController && TGBackSearch(vc.presentedViewController, depth+1)) return YES;
+    for (UIViewController *child in vc.childViewControllers)
+        if (TGBackSearch(child, depth+1)) return YES;
+    UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
+    if (nav && nav.viewControllers.count > 1 && nav.topViewController == vc) {
+        TGRelayDiag([NSString stringWithFormat:@"pop nav at %@ (depth %d, %lu levels)", vc, depth, (unsigned long)nav.viewControllers.count]);
+        [nav popViewControllerAnimated:YES];
+        return YES;
+    }
+    if (vc.presentingViewController && vc == vc.presentedViewController) {
+        TGRelayDiag(@"dismiss presented sheet");
+        [vc dismissViewControllerAnimated:YES completion:nil];
+        return YES;
+    }
+    return NO;
+}
+
 static void TGRelayDoBack(void) {
-    UIViewController *vc = nil;
     TGRelayDiag(@"back received");
+    // 候选顺序：活跃 scene 的 keyWindow root（可能有多个 scene，如 iPad 分屏）
+    BOOL done = NO;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if (![scene isKindOfClass:[UIWindowScene class]]) continue;
-        for (UIWindow *w in ((UIWindowScene *)scene).windows) if (w.isKeyWindow) vc = w.rootViewController;
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        if (ws.activationState != UISceneActivationStateForegroundActive) continue;
+        for (UIWindow *w in ws.windows) {
+            if (!w.isKeyWindow || !w.rootViewController) continue;
+            if (TGBackSearch(w.rootViewController, 0)) { done = YES; break; }
+        }
+        if (done) break;
     }
-    TGRelayDiag(vc ? [NSString stringWithFormat:@"keywindow root: %@", vc] : @"keywindow root: nil");
-    while (vc.presentedViewController) vc = vc.presentedViewController;
-    if (vc.navigationController && vc.navigationController.topViewController != vc.navigationController.viewControllers.firstObject) {
-        TGRelayDiag(@"pop nav");
-        [vc.navigationController popViewControllerAnimated:YES];
-        return;
-    }
-    if (vc.presentingViewController) { TGRelayDiag(@"dismiss presented"); [vc dismissViewControllerAnimated:YES completion:nil]; }
-    TGRelayDiag(@"nothing to pop/dismiss");
+    if (!done) TGRelayDiag(@"no poppable navigation found");
 }
 
 %ctor {
