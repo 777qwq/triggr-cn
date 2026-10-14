@@ -899,106 +899,6 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 }
 
             #include <mach/mach_time.h>
-// ---- IOHID 合成触摸（SimulateTouch 配方，SB 进程内派发；iOS16+RootHide 实证可行=AutoTouch 同上下文） ----
-typedef struct CF_BRIDGED_TYPE(id) IOHIDEvent *IOHIDEventRef;
-typedef struct CF_BRIDGED_TYPE(id) IOHIDEventSystemClient *IOHIDEventSystemClientRef;
-extern IOHIDEventRef IOHIDEventCreateDigitizerEvent(CFAllocatorRef allocator, uint64_t timeStamp, uint32_t type, uint32_t index, uint32_t identity, uint32_t eventFlags, uint32_t buttonMask, float x, float y, float z, float tipPressure, float barrelPressure, Boolean range, Boolean touch, uint32_t options);
-extern IOHIDEventRef IOHIDEventCreateDigitizerFingerEvent(CFAllocatorRef allocator, uint64_t timeStamp, uint32_t index, uint32_t identity, uint32_t eventFlags, float x, float y, float z, float tipPressure, float barrelPressure, Boolean range, Boolean touch, uint32_t options);
-extern void IOHIDEventAppendEvent(IOHIDEventRef parent, IOHIDEventRef child, uint32_t options);
-extern void IOHIDEventSetFloatValue(IOHIDEventRef event, uint32_t field, float value);
-extern void IOHIDEventSetIntegerValue(IOHIDEventRef event, uint32_t field, int64_t value);
-extern IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef allocator);
-extern void IOHIDEventSystemClientDispatchEvent(IOHIDEventSystemClientRef client, IOHIDEventRef event);
-
-extern void IOHIDEventSystemClientScheduleWithRunLoop(IOHIDEventSystemClientRef client, CFRunLoopRef runLoop, CFStringRef mode);
-extern void IOHIDEventSystemClientRegisterEventCallback(IOHIDEventSystemClientRef client, void *callback, void *target, void *refcon);
-extern void IOHIDEventSystemClientUnregisterEventCallback(IOHIDEventSystemClientRef client);
-extern void IOHIDEventSystemClientUnscheduleWithRunLoop(IOHIDEventSystemClientRef client, CFRunLoopRef runLoop, CFStringRef mode);
-extern uint64_t IOHIDEventGetSenderID(IOHIDEventRef event);
-extern void IOHIDEventSetSenderID(IOHIDEventRef event, uint64_t senderID);
-extern int32_t IOHIDEventGetType(IOHIDEventRef event);
-#define kIOHIDEventTypeDigitizer 11
-
-static void TGDiagLog(NSString *msg) {
-    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
-    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
-}
-
-static uint64_t TGSenderID;
-static IOHIDEventSystemClientRef TGSenderClient;
-static NSString *TGSenderPlist = @"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist";
-
-static void TGSenderLoad(void) {
-    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:TGSenderPlist];
-    if (!d) return;
-    // 设备重启后 senderID 会变：boot 时间戳不一致则作废重探
-    double boot = [[NSDate date] timeIntervalSince1970] - [NSProcessInfo.processInfo systemUptime];
-    if ([d[@"boot"] doubleValue] == boot) TGSenderID = [d[@"senderID"] unsignedLongLongValue];
-}
-static void TGSenderSave(void) {
-    double boot = [[NSDate date] timeIntervalSince1970] - [NSProcessInfo.processInfo systemUptime];
-    [[NSDictionary dictionaryWithObjectsAndKeys:@(TGSenderID), @"senderID", @(boot), @"boot", nil] writeToFile:TGSenderPlist atomically:YES];
-}
-static void TGSenderCallback(void *target, void *refcon, void *service, IOHIDEventRef event) {
-    if (IOHIDEventGetType(event) != kIOHIDEventTypeDigitizer || TGSenderID != 0) return;
-    TGSenderID = IOHIDEventGetSenderID(event);
-    TGSenderSave();
-    TGDiagLog([NSString stringWithFormat:@"senderID captured: %qX", TGSenderID]);
-    if (TGSenderClient) {
-        IOHIDEventSystemClientUnregisterEventCallback(TGSenderClient);
-        IOHIDEventSystemClientUnscheduleWithRunLoop(TGSenderClient, CFRunLoopGetMain(), kCFRunLoopCommonModes);
-        TGSenderClient = NULL;
-    }
-}
-// SB 启动即监听：第一次真实触摸会送来 digitizer 事件，从中偷 senderID
-static void TGSenderStart(void) {
-    TGSenderLoad();
-    if (TGSenderID) return;
-    TGSenderClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
-    if (!TGSenderClient) return;
-    IOHIDEventSystemClientScheduleWithRunLoop(TGSenderClient, CFRunLoopGetMain(), kCFRunLoopCommonModes);
-    // arm64e PAC：裸 C 函数指针被 CFMachPort 回调时认证失败（Safe Mode 实证），Block 的 invoke 指针签名正规
-    void (^blk)(void *, void *, void *, IOHIDEventRef) = ^(void *t, void *r, void *s, IOHIDEventRef e) {
-        TGSenderCallback(t, r, s, e);
-    };
-    IOHIDEventSystemClientRegisterEventCallback(TGSenderClient, (__bridge void *)[blk copy], NULL, NULL);
-}
-static IOHIDEventSystemClientRef TGIOHIDClient;
-static BOOL TGIOHIDTouch(int type, float x, float y) {
-    if (!TGIOHIDClient) {
-        TGIOHIDClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
-        if (!TGIOHIDClient) return NO;
-    }
-    CGSize screen = UIScreen.mainScreen.bounds.size;
-    IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(kCFAllocatorDefault, mach_absolute_time(), 3, 99, 1, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0);
-    IOHIDEventSetIntegerValue(parent, 0xb0019, 1);
-    IOHIDEventSetIntegerValue(parent, 0x4, 1);
-    uint32_t flags = type == 2 ? 2 : 3; // 2=up 3=down/move
-    IOHIDEventRef child = IOHIDEventCreateDigitizerFingerEvent(kCFAllocatorDefault, mach_absolute_time(), 0, 3, flags, x / screen.width, y / screen.height, 0.0f, 0.0f, 0.0f, 1, type != 2, 0);
-    IOHIDEventSetFloatValue(child, 0xb0014, 0.04f);
-    IOHIDEventSetFloatValue(child, 0xb0015, 0.04f);
-    IOHIDEventAppendEvent(parent, child, 0);
-    if (TGSenderID) IOHIDEventSetSenderID(parent, TGSenderID);
-    IOHIDEventSystemClientDispatchEvent(TGIOHIDClient, parent);
-    return TGSenderID != 0;
-}
-
-static void TGIOHIDBackSwipe(void) {
-    CGSize screen = UIScreen.mainScreen.bounds.size;
-    float x0 = 6, y = screen.height / 2, x1 = screen.width * 0.4;
-    int steps = 24;
-    TGIOHIDTouch(1, x0, y);
-    for (int i = 1; i <= steps; i++) {
-        float x = x0 + (x1 - x0) * i / steps;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(i * 14 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-            TGIOHIDTouch(i == steps ? 2 : 0, x, y);
-        });
-    }
-}
-
 
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
@@ -1045,15 +945,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return YES;
             },
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
-@"system.back": ^BOOL(BOOL dry) {
-            if (dry) return YES;
-            // 首选：IOHID 合成触摸（SB 进程内派发，全 App 通用）
-            if (TGSenderID && TGIOHIDTouch(1, 6, UIScreen.mainScreen.bounds.size.height / 2)) {
-                TGIOHIDBackSwipe();
-                return YES;
-            }
-            return NO; // 纯 IOHID 对照版：无其他返回通道
-        },
+@"system.back": ^BOOL(BOOL dry) { if (dry) return YES; notify_post(TGRelayBack); return YES; },
             @"system.siri": ^BOOL(BOOL dry) {
                 // As if Siri's button was held.
                 if (![objc_getClass("SiriSimpleActivationSource") instancesRespondToSelector:@selector(activateFromSource:)]) return NO;
@@ -3128,7 +3020,6 @@ static void TGUpdateOtherEvents(void) {
 
 %ctor {
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) return;
-    TGSenderStart();
     TGReadAssignments();
     int token;
     notify_register_dispatch(TGPrefsChangedNotification, &token, dispatch_get_main_queue(), ^(int t) { TGReadAssignments(); });
