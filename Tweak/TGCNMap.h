@@ -461,6 +461,7 @@ static NSString *TGCNMap_EN[] = {
 @"Siri",
 @"Inside",
 @"inside ",
+@"Ignore / Cancel",
 };
 
 static NSString *TGCNMap_ZH[] = {
@@ -925,6 +926,7 @@ static NSString *TGCNMap_ZH[] = {
 @"\u5524\u9192Siri",
 @"\u5e94\u7528\u5185",
 @"\u5e94\u7528\u5185\u201c",
+@"\u5ffd\u7565 / \u53d6\u6d88",
 };
 
-#define TGCN_MAP_COUNT 461
+#define TGCN_MAP_COUNT 462
