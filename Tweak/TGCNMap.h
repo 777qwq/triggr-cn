@@ -458,6 +458,9 @@ static NSString *TGCNMap_EN[] = {
 @"No trigger matches \u201c%@\u201d.",
 @"Connected to ",
 @"Disconnected from ",
+@"Siri",
+@"Inside",
+@"inside ",
 };
 
 static NSString *TGCNMap_ZH[] = {
@@ -919,6 +922,9 @@ static NSString *TGCNMap_ZH[] = {
 @"\u6ca1\u6709\u5339\u914d\u201c%@\u201d\u7684\u89e6\u53d1\u5668\u3002",
 @"\u8fde\u63a5\u5230\u201c",
 @"\u4ece\u201c\u65ad\u5f00 ",
+@"\u5524\u9192Siri",
+@"\u5e94\u7528\u5185",
+@"\u5e94\u7528\u5185\u201c",
 };
 
-#define TGCN_MAP_COUNT 458
+#define TGCN_MAP_COUNT 461
