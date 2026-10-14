@@ -45,11 +45,32 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 %end
 %end
 
+static void TGRelayDoBack(void) {
+    UIViewController *vc = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        for (UIWindow *w in ((UIWindowScene *)scene).windows) if (w.isKeyWindow) vc = w.rootViewController;
+    }
+    while (vc.presentedViewController) vc = vc.presentedViewController;
+    if (vc.navigationController && vc.navigationController.topViewController != vc.navigationController.viewControllers.firstObject) {
+        [vc.navigationController popViewControllerAnimated:YES];
+        return;
+    }
+    if (vc.presentingViewController) [vc dismissViewControllerAnimated:YES completion:nil];
+}
+
 %ctor {
     // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
     NSBundle *bundle = NSBundle.mainBundle;
     if (![bundle.bundlePath hasSuffix:@".app"]) return;
     %init(Shake);
     BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
-    if (!springBoard) %init(StatusBar);
+    if (!springBoard) {
+        %init(StatusBar);
+        // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
+        static int backToken = -1;
+        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
+            TGRelayDoBack();
+        });
+    }
 }

@@ -134,7 +134,7 @@ static const TGItem TGSystemActions[] = {
     {"system.home", "回到主屏幕"}, {"system.switcher", "App 切换器"},
     {"system.lastapp", "上一个应用"}, {"system.quitapp", "退出当前应用"},
     {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"},
-    {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.dismisssiri", "关闭Siri"}, {"system.screenshot", "截屏"},
+    {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.back", "返回上级"}, {"system.dismisssiri", "关闭Siri"}, {"system.screenshot", "截屏"},
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
     {"system.vibrate", "振动"}, {"system.nothing", "无操作"},
 };
@@ -621,12 +621,14 @@ static inline NSString *TGActionTitle(NSString *action) {
         id title = TGExtension(extension[0])[@"ItemTitle"];
         return [NSString stringWithFormat:@"%@: %@", [title isKindOfClass:NSString.class] ? title : extension[0], extension[1]];
     }
+    if ([action hasPrefix:TGUnlockPrefix]) return @"密码解锁";
     if ([action hasPrefix:TGShortcutPrefix]) return [@"快捷指令：" stringByAppendingString:[action substringFromIndex:TGShortcutPrefix.length]];
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
     if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
     if ([action hasPrefix:TGAppPrefix]) return [@"打开 " stringByAppendingString:[action substringFromIndex:TGAppPrefix.length]];
     if ([action hasPrefix:TGPausePrefix]) return [NSString stringWithFormat:@"停顿 %@", [action substringFromIndex:TGPausePrefix.length]];
     if ([action hasPrefix:TGMenuPrefix]) return @"菜单";
+    if ([action hasPrefix:TGAutotouchPrefix]) return [@"AutoTouch：" stringByAppendingString:[action substringFromIndex:TGAutotouchPrefix.length]];
     if ([action hasPrefix:TGBrightnessPrefix]) return [NSString stringWithFormat:@"亮度 %@%%", [action substringFromIndex:TGBrightnessPrefix.length]];
     if ([action hasPrefix:TGBrightnessUpPrefix]) return [NSString stringWithFormat:@"亮度 +%@%%", [action substringFromIndex:TGBrightnessUpPrefix.length]];
     if ([action hasPrefix:TGBrightnessDownPrefix]) return [NSString stringWithFormat:@"亮度 −%@%%", [action substringFromIndex:TGBrightnessDownPrefix.length]];

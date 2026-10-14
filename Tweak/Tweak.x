@@ -965,6 +965,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return YES;
             },
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
+            @"system.back": ^BOOL(BOOL dry) { if (dry) return YES; notify_post(TGRelayBack); return YES; },
             @"system.siri": ^BOOL(BOOL dry) {
                 // As if Siri's button was held.
                 if (![objc_getClass("SiriSimpleActivationSource") instancesRespondToSelector:@selector(activateFromSource:)]) return NO;

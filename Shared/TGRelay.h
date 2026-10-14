@@ -9,5 +9,6 @@
 #define TGRelayShake "com.johndie.triggr/shake"
 // A Darwin notification state set by SpringBoard: which events are assigned.
 #define TGRelayWanted "com.johndie.triggr/relay-wanted"
+#define TGRelayBack "com.johndie.triggr/back"
 #define TGRelayWantsStatusBar 1ULL
 #define TGRelayWantsShake 2ULL

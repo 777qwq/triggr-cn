@@ -11,6 +11,8 @@ Triggr_EXTRA_FRAMEWORKS = AltList
 TG_VERSION := $(shell sed -n 's/^Version: //p' $(THEOS_PROJECT_DIR)/control)
 Triggr_CFLAGS = -fobjc-arc -F$(THEOS_PROJECT_DIR)/vendor -DTG_VERSION='@"$(TG_VERSION)"'
 Triggr_LDFLAGS = -F$(THEOS_PROJECT_DIR)/vendor
+# rpath 显式自加（theos rolling 曾整体丢失，AltList 解析失败=bundle 无法加载）
+Triggr_LDFLAGS += -rpath /var/jb/Library/Frameworks -rpath /var/jb/usr/lib -rpath @loader_path/.jbroot/Library/Frameworks -rpath @loader_path/.jbroot/usr/lib
 
 # RootHide's Theos adds no search path for AltList (rootless adds /var/jb/...).
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
