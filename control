@@ -1,6 +1,6 @@
 Package: com.triggr.cn.l10n
 Name: Triggr 汉化补丁
-Version: 1.5.0-cn.1
+Version: 1.5.0-cn.2
 Architecture: iphoneos-arm64
 Description: Triggr 的汉化补丁，配合 Triggr 1.5.0+ 使用。
 Maintainer: 777qwq
