@@ -56,6 +56,10 @@ __attribute__((unused)) static const struct { __unsafe_unretained NSString *en; 
     {@"Battery Drops Below ", @"\u7535\u91cf\u4f4e\u4e8e "},
     {@"Runs at ",         @"\u5b9a\u65f6 "},
     {@"Flick on ",        @"\u5728 \u201c"},
+    {@"Anywhere: ",       @"\u4efb\u610f\u4f4d\u7f6e\uff1a"},
+    {@"Default: ",        @"\u9ed8\u8ba4\uff1a"},
+    {@"Brightness Up ",   @"\u4eae\u5ea6 +"},
+    {@"Brightness Down ", @"\u4eae\u5ea6 \u2212"},
 };
 
 static inline NSString *TGCNFull(NSString *s) {
