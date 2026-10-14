@@ -150,6 +150,25 @@ static BOOL TGBackSearch(UIViewController *vc, int depth) {
     return NO;
 }
 
+// 全树扫描：任意可见且可弹的导航栈（严格遍历失败后的宽容路径）
+static UINavigationController *TGPoppableNav(UIViewController *vc, int depth) {
+    if (!vc || depth > 12) return nil;
+    if (vc.presentedViewController) {
+        UINavigationController *n = TGPoppableNav(vc.presentedViewController, depth+1);
+        if (n) return n;
+    }
+    for (UIViewController *child in vc.childViewControllers) {
+        UINavigationController *n = TGPoppableNav(child, depth+1);
+        if (n) return n;
+    }
+    UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
+    if (nav && nav.viewControllers.count > 1 && nav.topViewController.viewIfLoaded.window && nav.topViewController == vc)
+        return nav;
+    if (nav && nav.viewControllers.count > 1 && nav.topViewController.viewIfLoaded.window)
+        return nav;
+    return nil;
+}
+
 static void TGRelayDoBack(void) {
     TGRelayDiag(@"back received");
     // 第一优先：系统原生返回（逃逸元素搜索）
@@ -175,6 +194,25 @@ static void TGRelayDoBack(void) {
             if (TGBackSearch(w.rootViewController, 0)) { done = YES; break; }
         }
         if (done) break;
+    }
+    // 兜底二：全树扫描宽容路径
+    if (!done) {
+        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+            UIWindowScene *ws = (UIWindowScene *)scene;
+            if (ws.activationState != UISceneActivationStateForegroundActive) continue;
+            for (UIWindow *w in ws.windows) {
+                if (!w.rootViewController) continue;
+                UINavigationController *nav = TGPoppableNav(w.rootViewController, 0);
+                if (nav) {
+                    TGRelayDiag([NSString stringWithFormat:@"scan pop: %lu levels of %@", (unsigned long)nav.viewControllers.count, nav.topViewController]);
+                    [nav popViewControllerAnimated:YES];
+                    done = YES;
+                    break;
+                }
+            }
+            if (done) break;
+        }
     }
     if (!done) TGRelayDiag(@"no back route found");
 }
