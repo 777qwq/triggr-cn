@@ -54,25 +54,7 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 %end
 
 
-// ---- 返回上级：合成左滑驱动系统交互过渡（PanCake 同款机制，无真实触摸） ----
-@interface _UINavigationInteractiveTransitionBase : NSObject
--(void)handleNavigationTransition:(UIPanGestureRecognizer*)arg1;
-@end
-
-@interface TGFakeSwipePan : UIPanGestureRecognizer
-@property (nonatomic, assign) CGFloat progress;   // 0..1
-@end
-@implementation TGFakeSwipePan
-- (CGPoint)translationInView:(UIView *)view {
-    CGFloat w = view.bounds.size.width ?: 390;
-    return CGPointMake(self.progress * w * 0.62, 0); // 左缘向右滑（终点须过 50% 完成阈值）
-}
-- (CGPoint)locationInView:(UIView *)view {
-    CGFloat h = view.bounds.size.height ?: 800;
-    return CGPointMake(self.progress * 60 + 2, h / 2);
-}
-@end
-
+// ---- 返回上级：递归找最近的可弹导航栈，标准 pop ----
 static BOOL TGBackSearch(UIViewController *vc, int depth);
 static BOOL TGBackSearch(UIViewController *vc, int depth) {
     if (!vc || depth > 12) return NO;
@@ -81,32 +63,8 @@ static BOOL TGBackSearch(UIViewController *vc, int depth) {
         if (TGBackSearch(child, depth+1)) return YES;
     UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
     if (nav && nav.viewControllers.count > 1 && nav.topViewController == vc) {
-        TGRelayDiag([NSString stringWithFormat:@"synth swipe on nav at %@ (depth %d, %lu levels)", vc, depth, (unsigned long)nav.viewControllers.count]);
-        id controller = [nav valueForKey:@"_cachedInteractionController"];
-        if (!controller || ![controller respondsToSelector:@selector(handleNavigationTransition:)]) {
-            TGRelayDiag(@"no interaction controller, direct pop");
-            [nav popViewControllerAnimated:YES];
-            return YES;
-        }
-        TGFakeSwipePan *pan = [[TGFakeSwipePan alloc] init];
-        [pan setValue:@(UIGestureRecognizerStateBegan) forKey:@"state"];
-        ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), pan);
-        __block CGFloat p = 0;
-        dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-        dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, 16 * NSEC_PER_MSEC, 0);
-        dispatch_source_set_event_handler(timer, ^{
-            p += 0.07;
-            pan.progress = MIN(p, 1.0);
-            if (p < 1.0) {
-                [pan setValue:@(UIGestureRecognizerStateChanged) forKey:@"state"];
-                ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), pan);
-            } else {
-                [pan setValue:@(UIGestureRecognizerStateEnded) forKey:@"state"];
-                ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), pan);
-                dispatch_source_cancel(timer);
-            }
-        });
-        dispatch_resume(timer);
+        TGRelayDiag([NSString stringWithFormat:@"pop nav at %@ (depth %d, %lu levels)", vc, depth, (unsigned long)nav.viewControllers.count]);
+        [nav popViewControllerAnimated:YES];
         return YES;
     }
     if (vc.presentingViewController && vc == vc.presentedViewController) {
