@@ -8,13 +8,6 @@
 #import <objc/message.h>
 #import "../Shared/TGRelay.h"
 
-static void TGRelayDiag(NSString *msg) {
-    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
-    NSString *line = [NSString stringWithFormat:@"[%@][Relay %@] %@\n", [NSDate date], NSBundle.mainBundle.bundleIdentifier ?: @"?", msg];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
-    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
-}
 
 static void TGRelay(const char *name, uint64_t wantedBit) {
     static int token = -1;
@@ -63,12 +56,10 @@ static BOOL TGBackSearch(UIViewController *vc, int depth) {
         if (TGBackSearch(child, depth+1)) return YES;
     UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
     if (nav && nav.viewControllers.count > 1 && nav.topViewController == vc) {
-        TGRelayDiag([NSString stringWithFormat:@"pop nav at %@ (depth %d, %lu levels)", vc, depth, (unsigned long)nav.viewControllers.count]);
         [nav popViewControllerAnimated:YES];
         return YES;
     }
     if (vc.presentingViewController && vc == vc.presentedViewController) {
-        TGRelayDiag(@"dismiss presented sheet");
         [vc dismissViewControllerAnimated:YES completion:nil];
         return YES;
     }
@@ -76,7 +67,6 @@ static BOOL TGBackSearch(UIViewController *vc, int depth) {
 }
 
 static void TGRelayDoBack(void) {
-    TGRelayDiag(@"back received");
     BOOL done = NO;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if (![scene isKindOfClass:[UIWindowScene class]]) continue;
@@ -88,7 +78,6 @@ static void TGRelayDoBack(void) {
         }
         if (done) break;
     }
-    if (!done) TGRelayDiag(@"no poppable navigation found");
 }
 
 %ctor {
@@ -99,11 +88,10 @@ static void TGRelayDoBack(void) {
     BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
     if (!springBoard) {
         %init(StatusBar);
-        TGRelayDiag(@"relay ctor");
         // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
         static int backToken = -1;
         notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
-            TGRelayDiag(@"back notify dispatch"); TGRelayDoBack();
+ TGRelayDoBack();
         });
     }
 }

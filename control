@@ -1,11 +1,9 @@
 Package: com.johndie.triggr
-Name: Triggr汉化修改版
-Version: 1.5.0+cn0.17
+Name: Triggr汉化修改
+Version: 1.5.0+cn1
 Architecture: iphoneos-arm64
-Description: 基于 Triggr 1.5.0 汉化修改，兼容自测无效删除。
- 新增：亮屏、关闭 Siri。
- 修复：快捷指令改后台执行（SpringCuts）、音量加减、屏幕录制切换。
- Maintainer: 777qwq
+Description: 基于triggr1.5.0修改。自测
+Maintainer: 777qwq
 Author: 777qwq
 Section: Tweaks
 Depends: mobilesubstrate, firmware (>= 15.0)
