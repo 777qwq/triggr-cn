@@ -53,25 +53,42 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 %end
 %end
 
-static void TGRelayDoBack(void) {
-    TGRelayDiag(@"back received");
-    // 系统导航：辅助功能逃逸手势（双指 Z），Apple 官方的"返回"通道
-    UIApplication *app = UIApplication.sharedApplication;
-    SEL pub = NSSelectorFromString(@"UIAccessibilityPerformEscape");
-    SEL priv = NSSelectorFromString(@"_accessibilityPerformEscape");
-    if ([app respondsToSelector:pub]) {
-        TGRelayDiag(@"escape via UIAccessibilityPerformEscape");
-        ((BOOL (*)(id, SEL))objc_msgSend)(app, pub);
-        return;
+
+static BOOL TGBackSearch(UIViewController *vc, int depth);
+static BOOL TGBackSearch(UIViewController *vc, int depth) {
+    if (!vc || depth > 12) return NO;
+    if (vc.presentedViewController && TGBackSearch(vc.presentedViewController, depth+1)) return YES;
+    for (UIViewController *child in vc.childViewControllers)
+        if (TGBackSearch(child, depth+1)) return YES;
+    UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
+    if (nav && nav.viewControllers.count > 1 && nav.topViewController == vc) {
+        TGRelayDiag([NSString stringWithFormat:@"pop nav at %@ (depth %d, %lu levels)", vc, depth, (unsigned long)nav.viewControllers.count]);
+        [nav popViewControllerAnimated:YES];
+        return YES;
     }
-    if ([app respondsToSelector:priv]) {
-        TGRelayDiag(@"escape via _accessibilityPerformEscape");
-        ((BOOL (*)(id, SEL))objc_msgSend)(app, priv);
-        return;
+    if (vc.presentingViewController && vc == vc.presentedViewController) {
+        TGRelayDiag(@"dismiss presented sheet");
+        [vc dismissViewControllerAnimated:YES completion:nil];
+        return YES;
     }
-    TGRelayDiag(@"no escape selector on this iOS");
+    return NO;
 }
 
+static void TGRelayDoBack(void) {
+    TGRelayDiag(@"back received");
+    BOOL done = NO;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        if (ws.activationState != UISceneActivationStateForegroundActive) continue;
+        for (UIWindow *w in ws.windows) {
+            if (!w.isKeyWindow || !w.rootViewController) continue;
+            if (TGBackSearch(w.rootViewController, 0)) { done = YES; break; }
+        }
+        if (done) break;
+    }
+    if (!done) TGRelayDiag(@"no poppable navigation found");
+}
 
 %ctor {
     // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
