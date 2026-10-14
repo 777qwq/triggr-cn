@@ -445,6 +445,10 @@ static NSString *TGCNMap_EN[] = {
 @"Assignments made here only work inside apps, where they replace Anywhere's for the same trigger. Everywhere else, Anywhere's still apply.",
 @"Assignments made here only work on the Lock Screen, where they replace In Apps' and Anywhere's for the same trigger.",
 @"Assignments made here only work on the Lock Screen, where they replace Anywhere's for the same trigger. Everywhere else, Anywhere's still apply.",
+@"Anywhere: ",
+@"Default: ",
+@"Brightness Up ",
+@"Brightness Down ",
 };
 
 static NSString *TGCNMap_ZH[] = {
@@ -893,6 +897,10 @@ static NSString *TGCNMap_ZH[] = {
 @"\u6b64\u5904\u7684\u6307\u6d3e\u53ea\u5728\u5e94\u7528\u5185\uff0c\u5e76\u53d6\u4ee3\u540c\u4e00\u89e6\u53d1\u5668\u4e0a\u201c\u4efb\u610f\u4f4d\u7f6e\u201d\u7684\u6307\u6d3e\uff1b\u5176\u4ed6\u4f4d\u7f6e\u4ecd\u4ee5\u201c\u4efb\u610f\u4f4d\u7f6e\u201d\u4e3a\u51c6\u3002",
 @"\u6b64\u5904\u7684\u6307\u6d3e\u53ea\u5728\u9501\u5c4f\u754c\u9762\uff0c\u5e76\u53d6\u4ee3\u540c\u4e00\u89e6\u53d1\u5668\u4e0a\u201c\u5e94\u7528\u5185\u201d\u548c\u201c\u4efb\u610f\u4f4d\u7f6e\u201d\u7684\u6307\u6d3e\u3002",
 @"\u6b64\u5904\u7684\u6307\u6d3e\u53ea\u5728\u9501\u5c4f\u754c\u9762\uff0c\u5e76\u53d6\u4ee3\u540c\u4e00\u89e6\u53d1\u5668\u4e0a\u201c\u4efb\u610f\u4f4d\u7f6e\u201d\u7684\u6307\u6d3e\uff1b\u5176\u4ed6\u4f4d\u7f6e\u4ecd\u4ee5\u201c\u4efb\u610f\u4f4d\u7f6e\u201d\u4e3a\u51c6\u3002",
+@"\u4efb\u610f\u4f4d\u7f6e\uff1a",
+@"\u9ed8\u8ba4\uff1a",
+@"\u4eae\u5ea6 +",
+@"\u4eae\u5ea6 \u2212",
 };
 
-#define TGCN_MAP_COUNT 445
+#define TGCN_MAP_COUNT 449
