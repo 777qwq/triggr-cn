@@ -1,4 +1,4 @@
-// TriggrCN map (pure ASCII, \u escapes) - regenerated for Triggr 1.5.0
+// TriggrCN map (pure ASCII, \u escapes) - full coverage from cn1 unified build
 static NSString *TGCNMap_EN[] = {
 @"",
 @"Menu: ",
@@ -449,6 +449,15 @@ static NSString *TGCNMap_EN[] = {
 @"Default: ",
 @"Brightness Up ",
 @"Brightness Down ",
+@"Connected to \u201c%@\u201d",
+@"Disconnected from \u201c%@\u201d",
+@"Nothing is assigned %@ yet.",
+@"Remove all %lu assignments %@? Those triggers go back to their normal behaviour.",
+@"Assignments made here only work %@, where they replace In Apps' and Anywhere's for the same trigger.",
+@"%lu assignments, %lu menus, %lu shell commands, %lu URLs or Shortcuts.",
+@"No trigger matches \u201c%@\u201d.",
+@"Connected to ",
+@"Disconnected from ",
 };
 
 static NSString *TGCNMap_ZH[] = {
@@ -901,6 +910,15 @@ static NSString *TGCNMap_ZH[] = {
 @"\u9ed8\u8ba4\uff1a",
 @"\u4eae\u5ea6 +",
 @"\u4eae\u5ea6 \u2212",
+@"\u8fde\u63a5\u5230\u201c%@\u201d",
+@"\u4ece\u201c%@\u201d\u65ad\u5f00",
+@"\u6b64\u5904\u7684\u6307\u6d3e\u8fd8\u662f\u7a7a\u7684\uff08%@\uff09\u3002",
+@"\u79fb\u9664\u5168\u90e8 %lu \u9879\u6307\u6d3e\uff08%@\uff09\uff1f\u8fd9\u4e9b\u89e6\u53d1\u5668\u5c06\u6062\u590d\u7cfb\u7edf\u9ed8\u8ba4\u884c\u4e3a\u3002",
+@"\u6b64\u5904\u7684\u6307\u6d3e\u53ea\u5728%@\u751f\u6548\uff0c\u5e76\u53d6\u4ee3\u540c\u4e00\u89e6\u53d1\u5668\u4e0a\u201c\u5e94\u7528\u5185\u201d\u548c\u201c\u4efb\u610f\u4f4d\u7f6e\u201d\u7684\u6307\u6d3e\u3002",
+@"%lu \u9879\u6307\u6d3e\u3001%lu \u4e2a\u83dc\u5355\u3001%lu \u6761 shell \u547d\u4ee4\u3001%lu \u4e2a URL \u6216\u5feb\u6377\u6307\u4ee4\u3002",
+@"\u6ca1\u6709\u5339\u914d\u201c%@\u201d\u7684\u89e6\u53d1\u5668\u3002",
+@"\u8fde\u63a5\u5230\u201c",
+@"\u4ece\u201c\u65ad\u5f00 ",
 };
 
-#define TGCN_MAP_COUNT 449
+#define TGCN_MAP_COUNT 458
