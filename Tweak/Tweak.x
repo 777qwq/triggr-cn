@@ -12,6 +12,27 @@
 // which just reports their status bar taps and shakes (see Shared/TGRelay.h).
 
 #import <UIKit/UIKit.h>
+
+// ---- CN diagnostic log (cn0.5): volume state machine tracing ----
+static void TGDiagLog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1,2);
+static void TGDiagLog(NSString *fmt, ...) {
+    static NSString *path = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ path = @"/var/mobile/Documents/triggr_diag.log"; });
+    va_list args; va_start(args, fmt);
+    NSString *msg = [[NSString alloc] initWithFormat:fmt arguments:args];
+    va_end(args);
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSDictionary *attr = [fm attributesOfItemAtPath:path error:nil];
+    if (attr && [attr fileSize] > 512*1024) [fm removeItemAtPath:path error:nil];
+    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
+    [h seekToEndOfFile];
+    [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]];
+    [h closeFile];
+}
+
 #import <UIKit/UIGestureRecognizerSubclass.h>
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -697,6 +718,7 @@ static BOOL TGScreenRecord(BOOL dry) {
 }
 
 static void TGRunAutoTouch(NSString *name) {
+    TGDiagLog(@"AutoTouch run name=%@", name);
     NSArray<NSString *> *dirs = TGAutoTouchScriptDirectories();
     if (!dirs.count) return;
     NSString *path = TGAutoTouchFindScript(dirs, name);
@@ -724,10 +746,12 @@ static void TGRunAutoTouch(NSString *name) {
 }
 
 static void TGRunShortcut(NSString *name) {
+    TGDiagLog(@"Shortcut run name=%@", name);
     // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
     // through sh fails under roothide, NSTask launches the binary directly).
     NSString *bin = TGSpringCutsBinary();
     if (bin) {
+        TGDiagLog(@"springcuts bin=%@", bin);
         @try {
             Class taskCls = NSClassFromString(@"NSTask");
             if (taskCls) {
@@ -750,7 +774,7 @@ static void TGRunShortcut(NSString *name) {
 
 static void TGUnlockDevice(NSString *password) {
     id mgr = TGShared("SBLockScreenManager");
-    if (!mgr) return;
+    if (!mgr) { TGDiagLog(@"Unlock: no SBLockScreenManager"); return; } TGDiagLog(@"Unlock: mgr ok, wake=%d attempt=%d", [mgr respondsToSelector:@selector(_wakeScreenForTapToWake)], [mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)]);
     if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
         ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
     if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)]) {
@@ -1304,6 +1328,7 @@ static void TGShowMenu(NSString *menuID) {
 static BOOL TGCallBool(id target, SEL selector);
 
 static BOOL TGFire(NSString *trigger) {
+    TGDiagLog(@"TGFire %@", trigger);
     NSArray *actions = TGActionFor(trigger);
     if (!actions) return NO;
     if (tgShowBanners) {
@@ -1487,6 +1512,7 @@ static void TGCheckBothVolume(UIPressesEvent *event) {
     BOOL both = up && down;
     if (both == tgBothDown) return;
     tgBothDown = both;
+    TGDiagLog(@"BothTransition both=%d up=%d down=%d", both, up, down);
     BOOL holdAssigned = TGActionFor(@"volume.bothhold") != nil;
     if (both) {
         tgVolume[0].partOfBoth = tgVolume[1].partOfBoth = YES;
@@ -1573,6 +1599,7 @@ static BOOL TGChordReplacing(void) {
 static BOOL TGVolumeBegan(int which) {
     NSString *press = which == 0 ? @"volume.up" : @"volume.down";
     NSString *hold = which == 0 ? @"volume.uphold" : @"volume.downhold";
+    TGDiagLog(@"VBegin w=%d replaces=%d pressAssigned=%d holdAssigned=%d", which, tgReplaces, TGActionFor(press)!=nil, TGActionFor(hold)!=nil);
     TGVolumeState *state = &tgVolume[which];
     *state = (TGVolumeState){ .down = YES, .downAt = CACurrentMediaTime(), .generation = state->generation + 1 };
     if (tgChord && TGChordReplacing()) {
@@ -1594,6 +1621,7 @@ static BOOL TGVolumeBegan(int which) {
             TGVolumeState *s = &tgVolume[which];
             if (!s->down || s->generation != generation || s->partOfBoth) return;
             s->holdFired = YES;
+            TGDiagLog(@"VHoldFired w=%d gen=%lu", which, (unsigned long)generation);
             TGFire(hold);
         });
     }
@@ -1621,9 +1649,10 @@ static BOOL TGVolumeEnded(int which) {
     NSString *press = which == 0 ? @"volume.up" : @"volume.down";
     TGVolumeState *state = &tgVolume[which];
     state->down = NO;
+    TGDiagLog(@"VEnd w=%d holdFired=%d partOfBoth=%d calledSystem=%d replaces=%d", which, state->holdFired, state->partOfBoth, state->calledSystemOnDown, tgReplaces);
     if (state->holdFired || state->partOfBoth) tgVolumeLastTap = -1;
     else if ([tgAssignedTriggers containsObject:@"volume.updown"] || [tgAssignedTriggers containsObject:@"volume.downup"]) TGVolumeTapped(which);
-    if ((!state->calledSystemOnDown || !tgReplaces) && !state->holdFired && !state->partOfBoth) TGFire(press);
+    if ((!state->calledSystemOnDown || !tgReplaces) && !state->holdFired && !state->partOfBoth) { TGDiagLog(@"VEnd firesPress w=%d", which); TGFire(press); }
     return state->calledSystemOnDown;
 }
 

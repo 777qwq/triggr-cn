@@ -266,6 +266,32 @@ static inline NSString *TGAutoTouchFindScript(NSArray<NSString *> *dirs, NSStrin
     return nil;
 }
 
+static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
+    NSMutableArray *names = [NSMutableArray array];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *dir in TGAutoTouchScriptDirectories()) {
+        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
+        for (NSString *file in files) {
+            if ([file hasPrefix:@"."]) continue;
+            NSString *full = [dir stringByAppendingPathComponent:file];
+            BOOL isDir = NO;
+            [fm fileExistsAtPath:full isDirectory:&isDir];
+            if (isDir) {
+                for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
+                    if (([sub.pathExtension isEqualToString:@"lua"] || [sub.pathExtension isEqualToString:@"at"]) && ![sub hasPrefix:@"."]) {
+                        NSString *rel = [NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension];
+                        if (![names containsObject:rel]) [names addObject:rel];
+                    }
+                }
+            } else if ([file.pathExtension isEqualToString:@"lua"] || [file.pathExtension isEqualToString:@"at"]) {
+                if (![names containsObject:file.stringByDeletingPathExtension])
+                    [names addObject:file.stringByDeletingPathExtension];
+            }
+        }
+    }
+    return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
 #define TGShortcutPrefix @"shortcut:"
 #define TGAutotouchPrefix @"autotouch:" // AutoTouch script name (without .lua)
 #define TGUnlockPrefix @"unlock:" // device passcode (stored in the action id, like shell commands)

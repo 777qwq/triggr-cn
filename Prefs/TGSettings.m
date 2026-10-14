@@ -591,7 +591,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
     // Installed action extensions, each its own category ("ext:<name>").
     for (NSString *name in TGExtensionNames()) {
         NSDictionary *extension = TGExtension(name);
@@ -616,7 +616,7 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
         @"levels": @[@"slider.horizontal.3", UIColor.systemOrangeColor],
         @"open": @[@"arrow.up.right.square.fill", UIColor.systemIndigoColor],
         @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
-        @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor],
+        @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor], @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
     };
     if (icons[category]) TGSetIcon(spec, icons[category][0], icons[category][1]);
     else if ([category hasPrefix:TGExtensionPrefix]) {
@@ -633,6 +633,7 @@ static NSString *TGCategoryOf(NSString *action) {
     for (NSString *prefix in @[TGBrightnessPrefix, TGBrightnessUpPrefix, TGBrightnessDownPrefix, TGMediaVolumePrefix, TGRingerVolumePrefix]) if ([action hasPrefix:prefix]) return @"levels";
     for (NSString *prefix in @[TGAppPrefix, TGSettingsPrefix, TGShortcutPrefix, TGURLPrefix]) if ([action hasPrefix:prefix]) return @"open";
     for (NSString *prefix in @[TGMessagePrefix, TGSpeakPrefix, TGShellPrefix]) if ([action hasPrefix:prefix]) return @"text";
+    if ([action hasPrefix:TGAutotouchPrefix]) return @"autotouch";
     for (NSString *prefix in @[@"toggle.", @"on.", @"off."]) if ([action hasPrefix:prefix]) return @"switches";
     if ([action hasPrefix:@"media."] || [action hasPrefix:TGAirPlayPrefix]) return @"media";
     for (int i = 0; i < TG_COUNT(TGPowerActions); i++) if ([action isEqualToString:@(TGPowerActions[i].identifier)]) return @"power";
@@ -802,6 +803,11 @@ static NSString *TGCategoryOf(NSString *action) {
             [rows addObject:[self rowForAction:[NSString stringWithFormat:@"%@%@:%@", TGExtensionPrefix, name, item] title:item]];
         return rows;
     }
+    if ([category isEqualToString:@"autotouch"]) {
+        for (NSString *script in TGAutoTouchScripts())
+            [rows addObject:[self rowForAction:[TGAutotouchPrefix stringByAppendingString:script] title:script]];
+        return rows;
+    }
     if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
     else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
@@ -834,8 +840,7 @@ static NSString *TGCategoryOf(NSString *action) {
         [rows addObject:[self rowForCommand:TGSettingsPrefix title:@"打开设置页…" prompt:nil]];
         [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
         [rows addObject:[self rowForCommand:TGURLPrefix title:@"打开 URL…" prompt:@"任意 URL 或 URL scheme，如 https://…、tel:…、music://"]];
-        if (NSClassFromString(@"PlayingManager")) [rows addObject:[self rowForCommand:TGAutotouchPrefix title:@"运行 AutoTouch 脚本…" prompt:@"脚本名称，.lua 可省略"]];
-    } else if ([category isEqualToString:@"text"]) {
+            } else if ([category isEqualToString:@"text"]) {
         [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
         [rows addObject:[self rowForCommand:TGSpeakPrefix title:@"朗读文字…" prompt:@"设备朗读的文字"]];
         [rows addObject:[self rowForCommand:TGShellPrefix title:@"运行命令…" prompt:@"Shell 命令。以 mobile 用户经越狱环境的 sh -c 执行。"]];
