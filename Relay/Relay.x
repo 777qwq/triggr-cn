@@ -65,7 +65,7 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 @implementation TGFakeSwipePan
 - (CGPoint)translationInView:(UIView *)view {
     CGFloat w = view.bounds.size.width ?: 390;
-    return CGPointMake(self.progress * w * 0.45, 0); // 左缘向右滑
+    return CGPointMake(self.progress * w * 0.62, 0); // 左缘向右滑（终点须过 50% 完成阈值）
 }
 - (CGPoint)locationInView:(UIView *)view {
     CGFloat h = view.bounds.size.height ?: 800;
