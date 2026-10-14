@@ -3039,8 +3039,11 @@ static void TGUpdateOtherEvents(void) {
 }
 
 %ctor {
+    TGDiagLog(@"ctor: bundle=%@", NSBundle.mainBundle.bundleIdentifier ?: @"(nil)");
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) return;
+    TGDiagLog(@"ctor: SpringBoard confirmed, reading assignments");
     TGReadAssignments();
+    TGDiagLog(@"ctor: %lu assignments read", (unsigned long)tgAssignments.count);
     int token;
     notify_register_dispatch(TGPrefsChangedNotification, &token, dispatch_get_main_queue(), ^(int t) { TGReadAssignments(); });
     // Settings' Test button: run one stored assignment right away (only ever one
