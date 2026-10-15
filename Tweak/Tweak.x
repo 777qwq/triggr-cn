@@ -952,7 +952,7 @@ static void TGTouchSend(int type, float x, float y) {
     IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(kCFAllocatorDefault, ts, 3, 0, 1, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0);
     if (!parent) return;
     Boolean t = (type != 2);
-    uint32_t fl = (type == 2) ? 4 : 3;
+    uint32_t fl = (type == 0) ? 4 : 3; // 逆向实锤：down=4, move/up=3（cinc w4,w8,eq）
     IOHIDEventRef finger = IOHIDEventCreateDigitizerFingerEvent(kCFAllocatorDefault, ts, 0, 2, fl, x, y, 0.0f, 0.0f, 0.0f, t, t, 0);
     if (!finger) { CFRelease(parent); return; }
     IOHIDEventSetFloatValue(finger, 0xb0014, 0.04f);
