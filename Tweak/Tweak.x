@@ -1005,7 +1005,10 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             if (NSClassFromString(@"PlayingManager")) {
                 NSArray *dirs = TGAutoTouchScriptDirectories();
                 NSString *lua = @"local w, h = 430, 932\n"
-                                @"if type(getScreenResolution) == 'function' then w, h = getScreenResolution() end\n"
+                                @"if type(getScreenSize) == 'function' then\n"
+                                @"    local s = getScreenSize()\n"
+                                @"    if s and s.width and s.height then w, h = s.width, s.height end\n"
+                                @"end\n"
                                 @"local x0, y = 6, math.floor(h / 2)\n"
                                 @"local x1 = math.floor(w * 0.4)\n"
                                 @"touchDown(1, x0, y)\n"
