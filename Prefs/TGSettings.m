@@ -263,19 +263,37 @@ static void TGPrefsDBProbe(void) {
         Class dbCls = NSClassFromString(@"WFDatabase");
         if (!dbCls) { TGDiagLogP(@"prefs: no WFDatabase"); return; }
         @try {
-            id db = ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase));
-            if (!db) { TGDiagLogP(@"prefs: db=nil"); return; }
+            // Manual init (Actra-proven): +defaultDatabase is nil outside its host
+            // process; a plain SQLite store description on the shortcuts database
+            // works. migrations+lockfile follow official defaults.
+            Class descCls = NSClassFromString(@"NSPersistentStoreDescription");
+            if (!descCls) { TGDiagLogP(@"prefs: no NSPersistentStoreDescription"); return; }
+            id desc = ((id (*)(id, SEL, id))objc_msgSend)([descCls alloc],
+                @selector(initWithSQLiteStoreURL:), [NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
+            if (!desc) { TGDiagLogP(@"prefs: desc=nil"); return; }
+            [desc setShouldAddStoreAsynchronously:NO];
+            id db = ((id (*)(id, SEL, id, BOOL, BOOL, id *))objc_msgSend)([dbCls alloc],
+                @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
+                desc, YES, YES, (id *)NULL);
+            if (!db) { TGDiagLogP(@"prefs: manual init nil"); return; }
+            TGDiagLogP([NSString stringWithFormat:@"prefs: manual db ok (%@)", NSStringFromClass([db class])]);
             SEL listSel = @selector(sortedVisibleWorkflowsByName);
             if (![db respondsToSelector:listSel]) { TGDiagLogP(@"prefs: db no list"); return; }
             id list = ((id (*)(id, SEL))objc_msgSend)(db, listSel);
-            TGDiagLogP([NSString stringWithFormat:@"prefs: db=%@ count=%lu", NSStringFromClass([db class]), (unsigned long)[list count]]);
-            NSUInteger n = [list count] < 6 ? [list count] : 6;
+            NSUInteger n = [list count];
+            TGDiagLogP([NSString stringWithFormat:@"prefs: workflows=%lu", (unsigned long)n]);
+            // Persist name->UUID map for the SB side (zero DB work there).
+            NSMutableDictionary<NSString *, NSString *> *map = [NSMutableDictionary dictionary];
             for (NSUInteger i = 0; i < n; i++) {
                 id ref = [list objectAtIndex:i];
                 NSString *nm = [ref respondsToSelector:@selector(name)] ? [ref name] : nil;
                 NSString *idn = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
-                TGDiagLogP([NSString stringWithFormat:@"prefs: [%@] -> %@", nm, idn]);
+                if (nm.length && idn.length) map[nm] = idn;
+                if (i < 6) TGDiagLogP([NSString stringWithFormat:@"prefs: [%@] -> %@", nm, idn]);
             }
+            CFPreferencesSetAppValue(CFSTR("shortcutUUIDMap"), (__bridge CFPropertyListRef)map, CFSTR("TGDomain"));
+            CFPreferencesAppSynchronize(CFSTR("TGDomain"));
+            TGDiagLogP([NSString stringWithFormat:@"prefs: map written (%lu entries)", (unsigned long)map.count]);
         } @catch (NSException *e) {
             TGDiagLogP([NSString stringWithFormat:@"prefs exc: %@", e]);
         }

@@ -765,12 +765,11 @@ static void TGDiagLog(NSString *msg) {
 
 
 static void TGRunShortcut(NSString *name) {
-    // Shortcut channel v2: VoiceShortcutClient background runner, dynamic
-    // dispatch only. WFDatabase never initializes outside its host process
-    // (nil in SB and in Settings on 16.3.1, cn2.3/cn2.5 probes), so the
-    // identifier is passed through as-is: UUID fast path, or raw name handed
-    // to the BackgroundShortcutRunner service for server-side resolution
-    // (experiment, cn2.6). Result delegate logs on 16+.
+    // Shortcut channel v2 (Actra-proven architecture): the SB side never
+    // touches the shortcuts database (WFDatabase won't initialize there).
+    // Config value: raw UUID passes through; a name is resolved via the
+    // shortcutUUIDMap the Prefs side builds by manually initializing
+    // WFDatabase over Shortcuts.sqlite. Result delegate logs on 16+.
     static id observer;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -778,6 +777,14 @@ static void TGRunShortcut(NSString *name) {
         dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
         dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
     });
+    NSString *ident = name;
+    if (![[NSUUID alloc] initWithUUIDString:name]) {
+        NSDictionary *map = CFBridgingRelease(CFPreferencesCopyAppValue(CFSTR("shortcutUUIDMap"), CFSTR("com.johndie.triggr")));
+        NSString *uuid = map[name];
+        if (uuid.length) ident = uuid;
+        else TGDiagLog([NSString stringWithFormat:@"shortcut: no uuid mapping for %@ (open Triggr settings once)", name]);
+    }
+
     Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
                    ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
     if (!clientCls) { TGDiagLog(@"shortcut: no runner client class"); return; }
@@ -791,7 +798,7 @@ static void TGRunShortcut(NSString *name) {
         SEL startSel = @selector(start);
         if (![client respondsToSelector:startSel]) { TGDiagLog(@"shortcut: no start"); return; }
         ((void (*)(id, SEL))objc_msgSend)(client, startSel);
-        TGDiagLog([NSString stringWithFormat:@"shortcut started: %@ via %@", name, NSStringFromClass(clientCls)]);
+        TGDiagLog([NSString stringWithFormat:@"shortcut started: %@ via %@", ident, NSStringFromClass(clientCls)]);
     } @catch (NSException *e) {
         TGDiagLog([NSString stringWithFormat:@"shortcut exc: %@", e]);
     }
