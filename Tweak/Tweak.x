@@ -930,7 +930,9 @@ static BOOL TGTouchProbe(void) {
         }
         if (class_getInstanceMethod(c, a) && class_getInstanceMethod(c, b) && class_getInstanceMethod(c, d)) {
             TGTouchSels[0] = a; TGTouchSels[1] = b; TGTouchSels[2] = d;
-            TGTouchReceiver = [[c alloc] init];
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                TGTouchReceiver = [[c alloc] init];
+            });
             TGTouchReady = YES;
             TGDiagLog([NSString stringWithFormat:@"probe: EventSimulate instance methods %s", variants[v]]);
             return YES;
@@ -1002,7 +1004,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             // 首选：复用 AutoTouch 的 Touch 类（运行时自省选择器，规避转发崩溃）
             if (!TGTouchReady) TGTouchProbe();
             if (TGTouchReady) {
-                dispatch_async(dispatch_get_main_queue(), ^{
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                     CGSize s = UIScreen.mainScreen.bounds.size;
                     double x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
                     int steps = 24;
