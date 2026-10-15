@@ -900,59 +900,6 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 
             #include <mach/mach_time.h>
 
-static void TGDiagLog(NSString *msg) {
-    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
-    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
-}
-static id TGTouchReceiver;
-static SEL TGTouchSels[3];
-static BOOL TGTouchReady = NO;
-// 只认 AutoTouch 的 EventSimulate 类（逆向实锤的接收者）；选择器两种拼写都试；绝不盲调其他类
-static BOOL TGTouchProbe(void) {
-    Class c = objc_getClass("EventSimulate");
-    if (!c) { TGDiagLog(@"probe: no EventSimulate"); return NO; }
-    const char *variants[2] = {"x:y:", "atX:andY:"};
-    for (int v = 0; v < 2; v++) {
-        char n1[32], n2[32], n3[32];
-        snprintf(n1, 32, "touchDown:%s", variants[v]);
-        snprintf(n2, 32, "touchMove:%s", variants[v]);
-        snprintf(n3, 32, "touchUp:%s", variants[v]);
-        SEL a = sel_registerName(n1), b = sel_registerName(n2), d = sel_registerName(n3);
-        if (class_getClassMethod(c, a) && class_getClassMethod(c, b) && class_getClassMethod(c, d)) {
-            TGTouchSels[0] = a; TGTouchSels[1] = b; TGTouchSels[2] = d;
-            TGTouchReceiver = Nil; // 类方法
-            TGTouchReady = YES;
-            TGDiagLog([NSString stringWithFormat:@"probe: EventSimulate class methods %s", variants[v]]);
-            return YES;
-        }
-        if (class_getInstanceMethod(c, a) && class_getInstanceMethod(c, b) && class_getInstanceMethod(c, d)) {
-            TGTouchSels[0] = a; TGTouchSels[1] = b; TGTouchSels[2] = d;
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                TGTouchReceiver = [[c alloc] init];
-            });
-            TGTouchReady = YES;
-            TGDiagLog([NSString stringWithFormat:@"probe: EventSimulate instance methods %s", variants[v]]);
-            return YES;
-        }
-    }
-    // 记录 EventSimulate 实际拥有的 touch 相关方法名，供下一步修复
-    unsigned int mc = 0;
-    NSString *report = @"";
-    for (int pass = 0; pass < 2; pass++) {
-        Method *ml = class_copyMethodList(pass == 0 ? object_getClass(c) : c, &mc);
-        for (unsigned int i = 0; i < mc; i++) {
-            NSString *n = [NSString stringWithUTF8String:sel_getName(method_getName(ml[i]))];
-            if ([n.lowercaseString containsString:@"touch"]) report = [report stringByAppendingFormat:@"%@(%@) ", n, pass == 0 ? @"+" : @"-"];
-        }
-        free(ml);
-    }
-    TGDiagLog([NSString stringWithFormat:@"probe: EventSimulate touch methods: %@", report]);
-    return NO;
-}
-
 
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
@@ -999,35 +946,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return YES;
             },
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
-@"system.back": ^BOOL(BOOL dry) {
-            if (dry) return YES;
-            // 首选：复用 AutoTouch 的 Touch 类（运行时自省选择器，规避转发崩溃）
-            if (!TGTouchReady) TGTouchProbe();
-            if (TGTouchReady) {
-                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                    CGSize s = UIScreen.mainScreen.bounds.size;
-                    double x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
-                    int steps = 24;
-                    void (*msg)(id, SEL, long long, double, double) = (void (*)(id, SEL, long long, double, double))objc_msgSend;
-                    id rcv = TGTouchReceiver ? TGTouchReceiver : (id)objc_getClass("Touch");
-                    @try {
-                        msg(rcv, TGTouchSels[0], 0, x0, y);
-                        for (int i = 1; i <= steps; i++) {
-                            double x = x0 + (x1 - x0) * i / steps;
-                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(i * 14 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-                                @try {
-                                    msg(TGTouchReceiver ? TGTouchReceiver : (id)objc_getClass("Touch"), TGTouchSels[i == steps ? 2 : 1], 0, x, y);
-                                } @catch (NSException *e) { TGDiagLog([NSString stringWithFormat:@"touch step err: %@", e]); }
-                            });
-                        }
-                    } @catch (NSException *e) { TGDiagLog([NSString stringWithFormat:@"touch down err: %@", e]); }
-                });
-                return YES;
-            }
-            // 次选：App 内 Relay（逃逸/递归 pop/全树扫描）
-            notify_post(TGRelayBack);
-            return YES;
-        },
+@"system.back": ^BOOL(BOOL dry) { if (dry) return YES; notify_post(TGRelayBack); return YES; },
             @"system.siri": ^BOOL(BOOL dry) {
                 // As if Siri's button was held.
                 if (![objc_getClass("SiriSimpleActivationSource") instancesRespondToSelector:@selector(activateFromSource:)]) return NO;
