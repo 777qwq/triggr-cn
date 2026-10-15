@@ -901,7 +901,7 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
             #include <mach/mach_time.h>
 
 
-static void TGDiagLog(NSString *msg) {
+__attribute__((unused)) static void TGDiagLog(NSString *msg) {
     NSString *path = @"/var/mobile/Documents/triggr_diag.log";
     NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
     NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
@@ -956,52 +956,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // 按 App 记忆：Relay 成功过的 App 走即时 Relay；失败过的直接 Lua 零延迟；未知 App Relay+400ms 判定
-            static NSMutableDictionary<NSString *, NSNumber *> *memo;
-            static volatile BOOL acked;
-            static dispatch_once_t tokOnce;
-            dispatch_once(&tokOnce, ^{
-                memo = [NSMutableDictionary new];
-                int tok;
-                notify_register_dispatch("cn.triggr.back.ack", &tok, dispatch_get_global_queue(0, 0), ^(int t) { acked = YES; });
-            });
-            NSString *app = TGFrontAppIdentifier() ?: @"?";
-            BOOL knownBad = [memo[app] boolValue]; // YES=此 App Relay 处理不了
-            acked = NO;
-            void (^LuaFallback)(void) = ^{
-                if (!NSClassFromString(@"PlayingManager")) return; // 无 AutoTouch 用户到此为止
-                NSString *dir = @"/var/mobile/Library/triggr";
-                [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-                NSString *path = [dir stringByAppendingPathComponent:@"back.lua"];
-                NSString *lua = @"touchDown(2, 0, 1800);\n"
-                                @"usleep(45873.00);\n"
-                                @"touchMove(2, 150, 1800);\n"
-                                @"usleep(41660.00);\n"
-                                @"touchMove(2, 300, 1800);\n"
-                                @"usleep(41700.00);\n"
-                                @"touchMove(2, 450, 1800);\n"
-                                @"usleep(4168.00);\n"
-                                @"touchUp(2, 500, 1800);\n";
-                if (![NSFileManager.defaultManager fileExistsAtPath:path]) [lua writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
-                dispatch_async(dispatch_get_main_queue(), ^{ // PlayingManager 建 UIWindow 必须主线程
-                    @try {
-                        Class cls = NSClassFromString(@"PlayingManager");
-                        id shared = [cls performSelector:@selector(sharedInstance)];
-                        id playing = [shared performSelector:@selector(makePlayingFor:) withObject:path];
-                        [playing performSelector:@selector(start)];
-                        TGDiagLog(@"back: lua fallback played");
-                    } @catch (NSException *e) {
-                        TGDiagLog([NSString stringWithFormat:@"back: lua err %@", e]);
-                    }
-                });
-            };
-            if (knownBad) { LuaFallback(); return YES; } // 记忆在案：直接 Lua，零延迟
-            notify_post(TGRelayBack);
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                if (acked) { memo[app] = @NO; return; } // Relay 处理成功，记好
-                memo[app] = @YES;                        // Relay 处理不了，记住
-                LuaFallback();
-            });
+            notify_post(TGRelayBack); // Relay：App 内左滑手势已常驻；此动作为菜单触发的程序化返回
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

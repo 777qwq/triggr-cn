@@ -56,6 +56,66 @@ static void TGRelayDiag(NSString *msg) {
     [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
 }
 
+static UINavigationController *TGPoppableNav(UIViewController *vc, int depth);
+// ---- 左滑返回（leftPan 同款）：App 内边缘手势驱动导航返回 ----
+@interface TGEdgeBackDelegate : NSObject <UIGestureRecognizerDelegate>
+- (void)tgEdgePan:(UIPanGestureRecognizer *)g;
+@end
+@implementation TGEdgeBackDelegate
+- (void)tgEdgePan:(UIPanGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateEnded) return;
+    CGPoint t = [g translationInView:g.view];
+    CGPoint v = [g velocityInView:g.view];
+    if (t.x < 44 && v.x < 400) return; // 距离/速度阈值，轻触不算
+    UINavigationController *nav = nil;
+    UIResponder *r = g.view;
+    while (r) { // leftPan 式局部查找：从手势视图沿响应链找导航
+        if ([r isKindOfClass:UIViewController.class]) {
+            UIViewController *vc = (UIViewController *)r;
+            if (vc.navigationController && vc.navigationController.viewControllers.count > 1) { nav = vc.navigationController; break; }
+        }
+        r = r.nextResponder;
+    }
+    if (!nav) nav = TGPoppableNav(g.view.window.rootViewController, 0);
+    if (!nav || nav.viewControllers.count <= 1) return;
+    if (NSClassFromString(@"UIImpactFeedbackGenerator")) {
+        id h = [[NSClassFromString(@"UIImpactFeedbackGenerator") alloc] initWithStyle:(NSInteger)1];
+        [h performSelector:@selector(impactOccurred)];
+    }
+    [nav popViewControllerAnimated:YES];
+}
+- (BOOL)gestureRecognizerShouldBegin:(UIPanGestureRecognizer *)g {
+    return [g velocityInView:g.view].x > 60; // 只认右滑
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)o {
+    return NO; // 独占（leftPan 同款）
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)o {
+    return YES; // 内容手势须等边缘手势失败——边缘优先（leftPan 同款 hook 语义）
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldReceiveTouch:(UITouch *)t {
+    return YES;
+}
+@end
+static TGEdgeBackDelegate *TGEdgeDel;
+
+%group EdgeBack
+%hook UIWindow
+- (void)didMoveToWindow {
+    %orig;
+    if (!self || !self.window) return;
+    static char kTGEdgeKey;
+    if (objc_getAssociatedObject(self, &kTGEdgeKey)) return;
+    if (!TGEdgeDel) TGEdgeDel = [TGEdgeBackDelegate new];
+    UIScreenEdgePanGestureRecognizer *g = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:TGEdgeDel action:@selector(tgEdgePan:)];
+    g.edges = UIRectEdgeLeft;
+    g.delegate = TGEdgeDel;
+    objc_setAssociatedObject(self, &kTGEdgeKey, g, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [self addGestureRecognizer:g];
+}
+%end
+%end
+
 // ---- 返回上级：系统原生返回（辅助功能逃逸）+ 递归 pop 兜底 ----
 static IMP TGVCBaseEscapeImp(void) {
     static IMP imp;
@@ -226,6 +286,7 @@ static void TGRelayDoBack(void) {
     BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
     if (!springBoard) {
         %init(StatusBar);
+        %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
         // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
         static int backToken = -1;
         notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
