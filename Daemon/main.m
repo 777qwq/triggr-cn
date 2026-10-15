@@ -151,6 +151,12 @@ static void TGTouchSend(int type, float x, float y) {
 static void TGBackSwipe(void) {
     NSDictionary *f = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist"];
     float w = [f[@"w"] floatValue], h = [f[@"h"] floatValue];
+    if (!TGTouchSender) {
+        // 回调捕获不可用（mobile 守护进程收不到数字仪事件）→ 用 SB 端历史捕获值
+        NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist"];
+        TGTouchSender = [d[@"senderID"] unsignedLongLongValue];
+        TGTouchLog([NSString stringWithFormat:@"fallback senderID: %qX", TGTouchSender]);
+    }
     TGTouchLog([NSString stringWithFormat:@"swipe fire: w=%.0f h=%.0f sender=%qX", w, h, TGTouchSender]);
     if (w < 100 || h < 100) return;
     float x0 = 6, y = h / 2, x1 = w * 0.4;
