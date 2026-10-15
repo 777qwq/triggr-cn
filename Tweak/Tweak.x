@@ -779,10 +779,10 @@ static void TGRunShortcut(NSString *name) {
     });
     NSString *ident = name;
     if (![[NSUUID alloc] initWithUUIDString:name]) {
-        NSDictionary *map = CFBridgingRelease(CFPreferencesCopyAppValue(CFSTR("shortcutUUIDMap"), CFSTR("com.johndie.triggr")));
+        NSDictionary *map = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Triggr/shortcut_map.plist"];
         NSString *uuid = map[name];
         if (uuid.length) ident = uuid;
-        else TGDiagLog([NSString stringWithFormat:@"shortcut: no uuid mapping for %@ (open Triggr settings once)", name]);
+        else TGDiagLog([NSString stringWithFormat:@"shortcut: no mapping for %@ (map=%@)", name, map ? [NSString stringWithFormat:@"ok %lu", (unsigned long)map.count] : @"nil"]);
     }
 
     Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")

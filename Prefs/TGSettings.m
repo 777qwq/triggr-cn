@@ -299,11 +299,15 @@ static void TGPrefsDBProbe(void) {
                 NSString *nm = [ref respondsToSelector:@selector(name)] ? [ref name] : nil;
                 NSString *idn = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
                 if (nm.length && idn.length) map[nm] = idn;
-                if (i < 6) TGDiagLogP([NSString stringWithFormat:@"prefs: [%@] -> %@", nm, idn]);
+                TGDiagLogP([NSString stringWithFormat:@"prefs: [%@] -> %@", nm, idn]);
             }
-            CFPreferencesSetAppValue(CFSTR("shortcutUUIDMap"), (__bridge CFPropertyListRef)map, CFSTR("TGDomain"));
-            CFPreferencesAppSynchronize(CFSTR("TGDomain"));
-            TGDiagLogP([NSString stringWithFormat:@"prefs: map written (%lu entries)", (unsigned long)map.count]);
+            // File channel, not CFPreferences: on this jbroot device the Settings
+            // process and SB read different preference stores (same lesson that
+            // moved assignments to file storage). Both sides see
+            // /var/mobile/Library/Triggr/ — proven by diag.log itself.
+            [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
+            BOOL okMap = [map writeToFile:@"/var/mobile/Library/Triggr/shortcut_map.plist" atomically:YES];
+            TGDiagLogP([NSString stringWithFormat:@"prefs: map written %@ (%lu entries)", okMap ? @"ok" : @"FAILED", (unsigned long)map.count]);
         } @catch (NSException *e) {
             TGDiagLogP([NSString stringWithFormat:@"prefs exc: %@", e]);
         }
