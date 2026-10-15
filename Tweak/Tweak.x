@@ -920,21 +920,30 @@ extern uint32_t _dyld_image_count(void);
 static IOHIDEventSystemClientRef TGHIDClient;
 static uint64_t TGSenderID2;
 
+static uint64_t v_log(uint64_t v, NSString *src);
+static void TGDiagLog(NSString *msg);
 static uint64_t TGFetchSenderID(void) {
     if (TGSenderID2) return TGSenderID2;
+    uint64_t slot = 0;
     for (uint32_t i = 0; i < _dyld_image_count(); i++) {
         const char *nm = _dyld_get_image_name(i);
         if (nm && strstr(nm, "ATTweak.dylib")) {
-            uint64_t v = *(uint64_t *)((uint8_t *)_dyld_get_image_header(i) + 0x1654818);
-            if (v && v != 0xFFFFFFFFFFFFFFFF) { TGSenderID2 = v; return v; }
+            slot = *(uint64_t *)((uint8_t *)_dyld_get_image_header(i) + 0x1654818);
+            if (slot && slot != 0xFFFFFFFFFFFFFFFF) { TGSenderID2 = slot; return v_log(slot, @"ATTweak-slot"); }
         }
     }
+    TGDiagLog([NSString stringWithFormat:@"ATTweak slot=%qX (ffffffff=未探测)", slot]);
     NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist"];
     if (d) {
         uint64_t v = [d[@"senderID"] unsignedLongLongValue];
-        if (v) { TGSenderID2 = v; return v; }
+        if (v) return v_log(v, @"plist");
     }
     return 0;
+}
+static void TGDiagLog(NSString *msg);
+static uint64_t v_log(uint64_t v, NSString *src) {
+    TGDiagLog([NSString stringWithFormat:@"senderID from %@: %qX", src, v]);
+    return v;
 }
 static void TGDiagLog(NSString *msg) {
     NSString *path = @"/var/mobile/Documents/triggr_diag.log";
