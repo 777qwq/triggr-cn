@@ -776,7 +776,20 @@ static void TGRunShortcut(NSString *name) {
     if (!dbCls) { TGDiagLog(@"shortcut: no WFDatabase"); return; }
     id db = ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase));
     SEL refSel = @selector(uniqueVisibleReferenceForWorkflowName:);
-    if (!db || ![db respondsToSelector:refSel]) { TGDiagLog(@"shortcut: no db/ref query"); return; }
+    if (!db || ![db respondsToSelector:refSel]) {
+        Dl_info di; const char *img = "";
+        if (db && dladdr((__bridge void *)[db class], &di) && di.dli_fname) img = di.dli_fname;
+        TGDiagLog([NSString stringWithFormat:@"db/ref fail: db=%@ img=%s resp=%d",
+            db ? NSStringFromClass([db class]) : @"nil", img, db ? (int)[db respondsToSelector:refSel] : -1]);
+        Class proxyCls = NSClassFromString(@"WFDatabaseProxy");
+        id pdb = proxyCls ? ((id (*)(id, SEL))objc_msgSend)(proxyCls, @selector(defaultDatabase)) : nil;
+        TGDiagLog([NSString stringWithFormat:@"proxy: cls=%@ db=%@ resp=%d",
+            proxyCls ? NSStringFromClass(proxyCls) : @"nil",
+            pdb ? NSStringFromClass([pdb class]) : @"nil",
+            pdb ? (int)[pdb respondsToSelector:refSel] : -1]);
+        if (pdb && [pdb respondsToSelector:refSel]) db = pdb;
+        if (!db || ![db respondsToSelector:refSel]) return;
+    }
     id ref = ((id (*)(id, SEL, id))objc_msgSend)(db, refSel, name);
     if (!ref) { TGDiagLog([NSString stringWithFormat:@"shortcut: not found: %@", name]); return; }
     NSString *ident = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
