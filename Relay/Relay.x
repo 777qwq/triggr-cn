@@ -63,26 +63,36 @@ static UINavigationController *TGPoppableNav(UIViewController *vc, int depth);
 @end
 @implementation TGEdgeBackDelegate
 - (void)tgEdgePan:(UIPanGestureRecognizer *)g {
-    if (g.state != UIGestureRecognizerStateEnded) return;
-    CGPoint t = [g translationInView:g.view];
-    CGPoint v = [g velocityInView:g.view];
-    if (t.x < 44 && v.x < 400) return; // 距离/速度阈值，轻触不算
-    UINavigationController *nav = nil;
-    UIResponder *r = g.view;
-    while (r) { // leftPan 式局部查找：从手势视图沿响应链找导航
-        if ([r isKindOfClass:UIViewController.class]) {
-            UIViewController *vc = (UIViewController *)r;
-            if (vc.navigationController && vc.navigationController.viewControllers.count > 1) { nav = vc.navigationController; break; }
+    UINavigationController *nav = objc_getAssociatedObject(g, (void *)0x114514);
+    if (g.state == UIGestureRecognizerStateBegan) {
+        UIResponder *r = g.view;
+        while (r && !nav) {
+            if ([r isKindOfClass:UIViewController.class]) {
+                UIViewController *vc = (UIViewController *)r;
+                if (vc.navigationController && vc.navigationController.viewControllers.count > 1) { nav = vc.navigationController; break; }
+            }
+            r = r.nextResponder;
         }
-        r = r.nextResponder;
+        if (!nav) nav = TGPoppableNav(g.view.window.rootViewController, 0);
+        if (!nav || nav.viewControllers.count <= 1) return;
+        objc_setAssociatedObject(g, (void *)0x114514, nav, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (NSClassFromString(@"UIImpactFeedbackGenerator")) {
+            id h = [[NSClassFromString(@"UIImpactFeedbackGenerator") alloc] initWithStyle:(NSInteger)1];
+            [h performSelector:@selector(impactOccurred)];
+        }
     }
-    if (!nav) nav = TGPoppableNav(g.view.window.rootViewController, 0);
-    if (!nav || nav.viewControllers.count <= 1) return;
-    if (NSClassFromString(@"UIImpactFeedbackGenerator")) {
-        id h = [[NSClassFromString(@"UIImpactFeedbackGenerator") alloc] initWithStyle:(NSInteger)1];
-        [h performSelector:@selector(impactOccurred)];
+    if (!nav) return;
+    // 真实手指 pan 喂给系统交互过渡：指纹跟随+系统动画+可取消（leftPan 同款体验）
+    id controller = [nav valueForKey:@"_cachedInteractionController"];
+    if (controller && [controller respondsToSelector:@selector(handleNavigationTransition:)]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), g);
+        return;
     }
-    [nav popViewControllerAnimated:YES];
+    if (g.state == UIGestureRecognizerStateEnded) { // 无交互过渡时兜底阈值 pop
+        CGPoint t = [g translationInView:g.view];
+        CGPoint v = [g velocityInView:g.view];
+        if (t.x > 50 || v.x > 300) [nav popViewControllerAnimated:YES];
+    }
 }
 - (BOOL)gestureRecognizerShouldBegin:(UIPanGestureRecognizer *)g {
     return [g velocityInView:g.view].x > 60; // 只认右滑
