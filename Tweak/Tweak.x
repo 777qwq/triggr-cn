@@ -725,29 +725,77 @@ static void TGRunAutoTouch(NSString *name) {
     }
 }
 
+// Shortcut channel v2 (cn2.1): WorkflowKit in-process background runner.
+// Verified against iOS 16.3 runtime headers:
+//   WFDatabase.defaultDatabase
+//     -uniqueVisibleReferenceForWorkflowName:  (name -> WFWorkflowReference, .identifier = UUID)
+//   WFSpringBoardWorkflowRunnerClient (VoiceShortcutClient, SB-native runner)
+//     -initWithWorkflowIdentifier: + -start, self-delegates the run result.
+//   (WFWidgetWorkflowRunnerClient only has initWithWorkflowIdentifier: on 16.3 —
+//    the location: variant came later; used as a fallback class only.)
+// Cross-version facts (headers: lechium 15.5 / qingralf 16 / MTACS 17):
+//   defaultDatabase + uniqueVisibleReferenceForWorkflowName: + initWithWorkflowIdentifier:
+//   + start all present on 15/16/17. Result delegate: 15's SB client is a standalone
+//   class with NO setDelegate: (self-delegates internally -> fire-and-forget there);
+//   16/17 inherit setDelegate: and call didFinishRunningWorkflowWithOutput:error:cancelled:.
+// Dynamic dispatch only — no WorkflowKit/VoiceShortcutClient link dependency.
+
+// cn2.1 test-only diagnostics (file log; removed at release). Device has no Console.
+static void TGDiagLog(NSString *msg) {
+    static NSString *path;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ path = @"/var/mobile/Library/Triggr/diag.log"; });
+    NSDateFormatter *df = [NSDateFormatter new];
+    df.dateFormat = @"MM-dd HH:mm:ss";
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [df stringFromDate:[NSDate date]], msg];
+    FILE *fp = fopen(path.fileSystemRepresentation, "a");
+    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
+}
+
+@interface TGShortcutRunObserver : NSObject
+@end
+@implementation TGShortcutRunObserver
+- (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled {
+    TGDiagLog([NSString stringWithFormat:@"shortcut done: output=%@ err=%@ cancelled=%d", output, error, cancelled]);
+}
+@end
+
+
 static void TGRunShortcut(NSString *name) {
-    // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
-    // through sh fails under roothide, NSTask launches the binary directly).
-    NSString *bin = TGSpringCutsBinary();
-    if (bin) {
-        @try {
-            Class taskCls = NSClassFromString(@"NSTask");
-            if (taskCls) {
-                id task = [[taskCls alloc] init];
-                [task performSelector:@selector(setLaunchPath:) withObject:bin];
-                [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
-                [task performSelector:@selector(launch)];
-                return;
-            }
-            // popen fallback (RC's second route)
-            FILE *fp = popen([[NSString stringWithFormat:@"%@ -r \"%@\"", bin, name] UTF8String], "r");
-            if (fp) pclose(fp);
-            return;
-        } @catch (NSException *e) {
-        }
+    static id observer;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        observer = [TGShortcutRunObserver new];
+        dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+        dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+    });
+    Class dbCls = NSClassFromString(@"WFDatabase");
+    if (!dbCls) { TGDiagLog(@"shortcut: no WFDatabase"); return; }
+    id db = ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase));
+    SEL refSel = @selector(uniqueVisibleReferenceForWorkflowName:);
+    if (!db || ![db respondsToSelector:refSel]) { TGDiagLog(@"shortcut: no db/ref query"); return; }
+    id ref = ((id (*)(id, SEL, id))objc_msgSend)(db, refSel, name);
+    if (!ref) { TGDiagLog([NSString stringWithFormat:@"shortcut: not found: %@", name]); return; }
+    NSString *ident = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
+    if (!ident.length) { TGDiagLog(@"shortcut: empty identifier"); return; }
+
+    Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
+                   ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
+    if (!clientCls) { TGDiagLog(@"shortcut: no runner client class"); return; }
+    SEL initSel = @selector(initWithWorkflowIdentifier:);
+    if (![clientCls instancesRespondToSelector:initSel]) { TGDiagLog(@"shortcut: no init"); return; }
+    @try {
+        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, ident);
+        if (!client) { TGDiagLog(@"shortcut: init returned nil"); return; }
+        if ([client respondsToSelector:@selector(setDelegate:)])
+            ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), observer);
+        SEL startSel = @selector(start);
+        if (![client respondsToSelector:startSel]) { TGDiagLog(@"shortcut: no start"); return; }
+        ((void (*)(id, SEL))objc_msgSend)(client, startSel);
+        TGDiagLog([NSString stringWithFormat:@"shortcut started: %@ via %@", name, NSStringFromClass(clientCls)]);
+    } @catch (NSException *e) {
+        TGDiagLog([NSString stringWithFormat:@"shortcut exc: %@", e]);
     }
-    CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"),
-        CFSTR("未检测到 SpringCuts：请从 Havoc 源安装后即可后台执行快捷指令。"), CFSTR("好"));
 }
 
 static void TGUnlockDevice(NSString *password) {
