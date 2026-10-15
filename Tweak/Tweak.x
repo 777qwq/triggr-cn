@@ -1032,15 +1032,11 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             TGDiagLog([NSString stringWithFormat:@"back: senderID=%qX", sid]);
             if (sid) {
                 dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                    CGSize s = UIScreen.mainScreen.bounds.size;
-                    float x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
-                    int steps = 24;
-                    TGTouchSend(0, x0, y);
-                    for (int i = 1; i <= steps; i++) {
-                        float x = x0 + (x1 - x0) * i / steps;
-                        TGTouchSend(i == steps ? 2 : 1, x, y);
-                        usleep(14000);
-                    }
+                    // 判别测试：屏幕中央单击（down→80ms→up）
+                    float cx = 200, cy = 400;
+                    TGTouchSend(0, cx, cy);
+                    usleep(80000);
+                    TGTouchSend(2, cx, cy);
                 });
                 return YES;
             }
