@@ -945,7 +945,33 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return YES;
             },
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
-@"system.back": ^BOOL(BOOL dry) { if (dry) return YES; notify_post(TGRelayBack); return YES; },
+@"system.back": ^BOOL(BOOL dry) {
+            if (dry) return YES;
+            // 首选：复用 AutoTouch 的 Touch 类（同为 SB 进程，objc_getClass 直取；其引擎含已捕获的 senderID）
+            if (objc_getClass("Touch")) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    CGSize s = UIScreen.mainScreen.bounds.size;
+                    double x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
+                    int steps = 24;
+                    SEL down = sel_registerName("touchDown:x:y:");
+                    SEL move = sel_registerName("touchMove:x:y:");
+                    SEL up = sel_registerName("touchUp:x:y:");
+                    void (*msg)(id, SEL, long long, double, double) = (void (*)(id, SEL, long long, double, double))objc_msgSend;
+                    msg(objc_getClass("Touch"), down, 0, x0, y);
+                    for (int i = 1; i <= steps; i++) {
+                        double x = x0 + (x1 - x0) * i / steps;
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(i * 14 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+                            SEL sel = (i == steps) ? up : move;
+                            msg(objc_getClass("Touch"), sel, 0, x, y);
+                        });
+                    }
+                });
+                return YES;
+            }
+            // 次选：App 内 Relay（逃逸/递归 pop/全树扫描）
+            notify_post(TGRelayBack);
+            return YES;
+        },
             @"system.siri": ^BOOL(BOOL dry) {
                 // As if Siri's button was held.
                 if (![objc_getClass("SiriSimpleActivationSource") instancesRespondToSelector:@selector(activateFromSource:)]) return NO;
