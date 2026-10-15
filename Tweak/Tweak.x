@@ -788,8 +788,10 @@ static void TGRunShortcut(NSString *name) {
                 NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc]
                     initWithURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
                 desc.type = NSSQLiteStoreType;
-                NSError *dbErr = nil;
-                id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError **))objc_msgSend)([dbCls alloc],
+                // __autoreleasing to match the OC error: out-param convention —
+                // a __strong slot here gets double-released (cn2.13 crash).
+                __autoreleasing NSError *dbErr = nil;
+                id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError *__autoreleasing *))objc_msgSend)([dbCls alloc],
                     @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
                     desc, YES, YES, &dbErr);
                 if (db) {
