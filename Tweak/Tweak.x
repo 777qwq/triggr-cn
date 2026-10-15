@@ -794,7 +794,13 @@ static void TGRunShortcut(NSString *name) {
     SEL initSel = @selector(initWithWorkflowIdentifier:);
     if (![clientCls instancesRespondToSelector:initSel]) { TGDiagLog(@"shortcut: no init"); return; }
     @try {
-        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, name);
+        // cn2.12: pass NSUUID object for UUID identifiers — the init takes (id)
+        // and may expect NSUUID internally; a raw NSString may become a nil
+        // descriptor server-side (Code=3 "not found" symptom).
+        id idObj = name;
+        NSUUID *u = [[NSUUID alloc] initWithUUIDString:ident];
+        if (u) idObj = u;
+        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, idObj);
         if (!client) { TGDiagLog(@"shortcut: init returned nil"); return; }
         if ([client respondsToSelector:@selector(setDelegate:)])
             ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), observer);
