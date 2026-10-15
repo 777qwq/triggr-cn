@@ -952,7 +952,7 @@ static void TGDiagLog(NSString *msg) {
     if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
     [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
 }
-static void TGTouchSend(int type, float x, float y) {
+__attribute__((unused)) static void TGTouchSend(int type, float x, float y) {
     if (!TGHIDClient) {
         TGHIDClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
         if (!TGHIDClient) return;
@@ -1028,17 +1028,39 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            uint64_t sid = TGFetchSenderID();
-            TGDiagLog([NSString stringWithFormat:@"back: senderID=%qX", sid]);
-            if (sid) {
-                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                    // 判别测试：屏幕中央单击（down→80ms→up）
-                    float cx = 200, cy = 400;
-                    TGTouchSend(0, cx, cy);
-                    usleep(80000);
-                    TGTouchSend(2, cx, cy);
-                });
-                return YES;
+            // 首选：ATTweak 数据段里的 EventSimulate 真单例（touchDownProxy 的原接收者，引擎状态完整）
+            void *atthead = NULL;
+            for (uint32_t i = 0; i < _dyld_image_count(); i++) {
+                const char *nm = _dyld_get_image_name(i);
+                if (nm && strstr(nm, "ATTweak.dylib")) { atthead = _dyld_get_image_header(i); break; }
+            }
+            if (atthead) {
+                volatile void *slot = (volatile void *)((uint8_t *)atthead + 0x1615d48);
+                id singleton = (__bridge id)(*(volatile void **)slot);
+                TGDiagLog([NSString stringWithFormat:@"EventSimulate singleton=%@", singleton]);
+                if (singleton) {
+                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                        CGSize s = UIScreen.mainScreen.bounds.size;
+                        float x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
+                        int steps = 24;
+                        void (*msg)(id, SEL, long long, double, double) = (void (*)(id, SEL, long long, double, double))objc_msgSend;
+                        SEL down = sel_registerName("touchDown:atX:andY:");
+                        SEL move = sel_registerName("touchMove:atX:andY:");
+                        SEL up = sel_registerName("touchUp:atX:andY:");
+                        @try {
+                            msg(singleton, down, 0, x0, y);
+                            for (int i = 1; i <= steps; i++) {
+                                float x = x0 + (x1 - x0) * i / steps;
+                                msg(singleton, i == steps ? up : move, 0, x, y);
+                                usleep(14000);
+                            }
+                            TGDiagLog(@"touch seq done");
+                        } @catch (NSException *e) {
+                            TGDiagLog([NSString stringWithFormat:@"touch err: %@", e]);
+                        }
+                    });
+                    return YES;
+                }
             }
             notify_post(TGRelayBack);
             return YES;
