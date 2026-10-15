@@ -744,7 +744,10 @@ static void TGRunAutoTouch(NSString *name) {
 static void TGDiagLog(NSString *msg) {
     static NSString *path;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{ path = @"/var/mobile/Library/Triggr/diag.log"; });
+    dispatch_once(&once, ^{
+        path = @"/var/mobile/Library/Triggr/diag.log";
+        [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
+    });
     NSDateFormatter *df = [NSDateFormatter new];
     df.dateFormat = @"MM-dd HH:mm:ss";
     NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [df stringFromDate:[NSDate date]], msg];
