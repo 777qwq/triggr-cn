@@ -776,6 +776,31 @@ static void TGRunShortcut(NSString *name) {
         observer = [TGShortcutRunObserver new];
         dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
         dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+        // SB has no WFDatabase host: the runner's WFWorkflowDatabaseRunDescriptor
+        // resolves the identifier by querying the database IN-PROCESS (18.2 decomp)
+        // and dies with Code=3 when defaultDatabase is nil. Manually init one
+        // (Actra's Prefs-proven recipe) and inject it as the global default.
+        Class dbCls = NSClassFromString(@"WFDatabase");
+        id existing = dbCls ? ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase)) : nil;
+        if (!existing && dbCls) {
+            @try {
+                NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc]
+                    initWithURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
+                desc.type = NSSQLiteStoreType;
+                NSError *dbErr = nil;
+                id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError **))objc_msgSend)([dbCls alloc],
+                    @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
+                    desc, YES, YES, &dbErr);
+                if (db) {
+                    ((void (*)(id, SEL, id))objc_msgSend)(dbCls, @selector(setDefaultDatabase:), db);
+                    TGDiagLog(@"sb: WFDatabase injected");
+                } else {
+                    TGDiagLog([NSString stringWithFormat:@"sb: db init nil: %@", dbErr]);
+                }
+            } @catch (NSException *e) {
+                TGDiagLog([NSString stringWithFormat:@"sb: db exc: %@", e]);
+            }
+        }
     });
     NSString *ident = name;
     if (![[NSUUID alloc] initWithUUIDString:name]) {
@@ -797,10 +822,9 @@ static void TGRunShortcut(NSString *name) {
         // cn2.12: pass NSUUID object for UUID identifiers — the init takes (id)
         // and may expect NSUUID internally; a raw NSString may become a nil
         // descriptor server-side (Code=3 "not found" symptom).
-        id idObj = name;
-        NSUUID *u = [[NSUUID alloc] initWithUUIDString:ident];
-        if (u) idObj = u;
-        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, idObj);
+        // NSString, not NSUUID: 18.2 decomp shows the identifier goes straight
+        // into WFWorkflowDatabaseRunDescriptor (string-keyed DB lookup).
+        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, ident);
         if (!client) { TGDiagLog(@"shortcut: init returned nil"); return; }
         if ([client respondsToSelector:@selector(setDelegate:)])
             ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), observer);
