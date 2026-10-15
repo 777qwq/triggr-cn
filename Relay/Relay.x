@@ -48,13 +48,6 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 
 
 // ---- CN diagnostic (test builds only) ----
-static void TGRelayDiag(NSString *msg) {
-    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
-    NSString *line = [NSString stringWithFormat:@"[%@][Relay %@] %@\n", [NSDate date], NSBundle.mainBundle.bundleIdentifier ?: @"?", msg];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
-    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
-}
 
 static UINavigationController *TGPoppableNav(UIViewController *vc, int depth);
 // ---- 返回上级：系统原生返回（辅助功能逃逸）+ 递归 pop 兜底 ----
@@ -72,7 +65,6 @@ static BOOL TGEscapeSearch(UIViewController *vc, int depth) {
     SEL sel = @selector(accessibilityPerformEscape);
     if ([vc respondsToSelector:sel] && class_getMethodImplementation([vc class], sel) != TGVCBaseEscapeImp()) {
         BOOL r = ((BOOL (*)(id, SEL))objc_msgSend)(vc, sel);
-        TGRelayDiag([NSString stringWithFormat:@"escape on %@ -> %d", vc, r]);
         if (r) return YES;
     }
     for (UIViewController *child in vc.childViewControllers)
@@ -87,12 +79,10 @@ static BOOL TGBackSearch(UIViewController *vc, int depth) {
         if (TGBackSearch(child, depth+1)) return YES;
     UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
     if (nav && nav.viewControllers.count > 1 && nav.topViewController == vc) {
-        TGRelayDiag([NSString stringWithFormat:@"pop nav at %@ (depth %d, %lu levels)", vc, depth, (unsigned long)nav.viewControllers.count]);
         [nav popViewControllerAnimated:YES]; // 标准滑动动画（假 pan 驱动过渡被系统无视，cn1.48 实证）
         return YES;
     }
     if (vc.presentingViewController && vc == vc.presentedViewController) {
-        TGRelayDiag(@"dismiss presented sheet");
         [vc dismissViewControllerAnimated:YES completion:nil];
         return YES;
     }
@@ -119,7 +109,6 @@ static UINavigationController *TGPoppableNav(UIViewController *vc, int depth) {
 }
 
 static void TGRelayDoBack(void) {
-    TGRelayDiag(@"back received");
     // 第一优先：系统原生返回（逃逸元素搜索）
     BOOL done = NO;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
@@ -154,7 +143,6 @@ static void TGRelayDoBack(void) {
                 if (!w.rootViewController) continue;
                 UINavigationController *nav = TGPoppableNav(w.rootViewController, 0);
                 if (nav) {
-                    TGRelayDiag([NSString stringWithFormat:@"scan pop: %lu levels of %@", (unsigned long)nav.viewControllers.count, nav.topViewController]);
                     [nav popViewControllerAnimated:YES];
                     done = YES;
                     break;
@@ -164,7 +152,6 @@ static void TGRelayDoBack(void) {
         }
     }
     if (done) notify_post("cn.triggr.back.ack"); // 主流水线已处理，告知 Tweak 免 Lua 兜底
-    if (!done) TGRelayDiag(@"no back route found");
 }
 
 // ---- 左滑返回（leftPan 核心方案）：hook 系统交互过渡类，让淘宝类禁用边缘返回的 App 复活原生边缘手势（全系统动画） ----
@@ -175,18 +162,12 @@ static void TGRelayDoBack(void) {
     static int logged;
     if (logged < 8) {
         logged++;
-        TGRelayDiag([NSString stringWithFormat:@"shouldBegin: orig=%d g=%@ enabled=%d", r, NSStringFromClass(g.class), g.enabled]);
     }
     if (!r && [g isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) {
         g.enabled = YES;
-        TGRelayDiag(@"shouldBegin: forced YES");
         return YES; // 淘宝等禁用边缘返回的 App：强制放行，系统动画照常
     }
     return r;
-}
-- (void)handleNavigationTransition:(UIPanGestureRecognizer *)g {
-    TGRelayDiag([NSString stringWithFormat:@"handleNavTrans: state=%ld g=%@", (long)g.state, NSStringFromClass(g.class)]);
-    %orig;
 }
 %end
 %end

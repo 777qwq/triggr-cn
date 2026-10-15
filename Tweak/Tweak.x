@@ -901,13 +901,6 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
             #include <mach/mach_time.h>
 
 
-__attribute__((unused)) static void TGDiagLog(NSString *msg) {
-    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
-    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
-}
 
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
@@ -956,7 +949,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            notify_post(TGRelayBack); // Relay：App 内左滑手势已常驻；此动作为菜单触发的程序化返回
+            notify_post(TGRelayBack); // Relay：App 内左滑返回手势常驻；此动作=程序化返回
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {
