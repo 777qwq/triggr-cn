@@ -81,6 +81,7 @@ static void TGDrainQueue(void) {
     }
 }
 
+#import <objc/message.h>
 // ---- 触摸引擎（AutoTouch 同架构：arm64 守护进程内捕获 senderID + 派发，无 PAC 限制） ----
 #import <mach/mach_time.h>
 typedef struct CF_BRIDGED_TYPE(id) IOHIDEvent *IOHIDEventRef;
@@ -142,9 +143,15 @@ static void TGTouchSend(int type, float x, float y) {
     IOHIDEventSetFloatValue(parent, 0xb0000, x);
     IOHIDEventSetFloatValue(parent, 0xb0001, y);
     IOHIDEventSetIntegerValue(parent, 0xb0006, (type == 0) ? 4 : ((type == 2) ? 0x27 : 0x23));
-    IOHIDEventSetIntegerValue(parent, 0xb0007, 1);
-    IOHIDEventSetIntegerValue(parent, 0xb0008, 1);
+    IOHIDEventSetIntegerValue(parent, 0xb0007, touch ? 1 : 0); // touch 标志累积（up=0）
+    IOHIDEventSetIntegerValue(parent, 0xb0008, touch ? 1 : 0);
     if (TGTouchSender) IOHIDEventSetSenderID(parent, TGTouchSender);
+    // 通行证（逆向实锤）：派发前必须告知用户事件，否则 backboardd 丢弃合成事件
+    Class BKUET = NSClassFromString(@"BKUserEventTimer");
+    if (BKUET) {
+        id timer = ((id (*)(id, SEL))objc_msgSend)(BKUET, sel_registerName("sharedInstance"));
+        if (timer) ((void (*)(id, SEL, long long))objc_msgSend)(timer, sel_registerName("userEventOccurredOnDisplay:"), 0);
+    }
     IOHIDEventSystemClientDispatchEvent(TGTouchClient, parent);
     CFRelease(parent);
 }
