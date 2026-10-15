@@ -12,6 +12,7 @@
 // which just reports their status bar taps and shakes (see Shared/TGRelay.h).
 
 #import <UIKit/UIKit.h>
+#import <CoreData/CoreData.h>
 
 
 #import <UIKit/UIGestureRecognizerSubclass.h>
