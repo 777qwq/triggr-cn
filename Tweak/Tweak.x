@@ -956,48 +956,43 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // 首选：AutoTouch 完整会话路径（PlayingManager 播放预置左滑脚本；TA 实测录制回放在淘宝有效）
-            if (NSClassFromString(@"PlayingManager")) {
-                NSArray *dirs = TGAutoTouchScriptDirectories();
-                // AutoTouch touch 坐标=像素（点数×scale）；cn1.33 的点数坐标只滑了 20% 宽度=手势不足
-                NSString *lua = @"toast('TriggrBack run')\n"
-                                @"local w, h = 430, 932\n"
-                                @"local sc = 2\n"
-                                @"if type(getScreenSize) == 'function' then\n"
-                                @"    local a, b = getScreenSize()\n"
-                                @"    if a and b and a > 100 and b > 100 then w, h = a, b end\n"
-                                @"end\n"
-                                @"if type(getScreenScale) == 'function' then\n"
-                                @"    local v = getScreenScale()\n"
-                                @"    if v and v > 0 then sc = v end\n"
-                                @"end\n"
-                                @"local pw, ph = math.floor(w * sc), math.floor(h * sc)\n"
-                                @"local x0, y = 6, math.floor(ph / 2)\n"
-                                @"local x1 = math.floor(pw * 0.4)\n"
-                                @"touchDown(1, x0, y)\n"
-                                @"for i = 1, 24 do\n"
-                                @"    touchMove(1, x0 + math.floor((x1 - x0) * i / 24), y)\n"
-                                @"    usleep(14000)\n"
-                                @"end\n"
-                                @"touchUp(1, x1, y)\n"
-                                @"toast('TriggrBack done')\n";
-                BOOL deployed = NO;
-                for (NSString *dir in dirs) {
-                    NSString *path = [dir stringByAppendingPathComponent:@"TriggrBack.lua"];
-                    if ([NSFileManager.defaultManager fileExistsAtPath:path]) { deployed = YES; break; } // 用户自备脚本优先
-                    if ([lua writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]) { deployed = YES; break; }
-                }
-                TGDiagLog([NSString stringWithFormat:@"back: lua deployed=%d dirs=%lu", deployed, (unsigned long)dirs.count]);
-                if (deployed) {
-                    // PlayingManager 会创建指示器 UIWindow——必须主线程（后台线程=CA 断言崩，cn1.33 实测）
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        @try { TGRunAutoTouch(@"TriggrBack"); TGDiagLog(@"back: playing started"); }
-                        @catch (NSException *e) { TGDiagLog([NSString stringWithFormat:@"back: play err %@", e]); }
-                    });
-                    return YES;
-                }
-            }
+            // 主：Relay cn1 流水线（逃逸/pop/扫描）；400ms 无 ack → 内置 Lua 兜底（私有路径，脚本列表不可见）
+            static volatile BOOL acked;
+            static dispatch_once_t tokOnce;
+            dispatch_once(&tokOnce, ^{
+                int tok;
+                notify_register_dispatch("cn.triggr.back.ack", &tok, dispatch_get_global_queue(0, 0), ^(int t) { acked = YES; });
+            });
+            acked = NO;
             notify_post(TGRelayBack);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (acked) return;
+                if (!NSClassFromString(@"PlayingManager")) return; // 无 AutoTouch 用户到此为止
+                NSString *dir = @"/var/mobile/Library/triggr";
+                [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+                NSString *path = [dir stringByAppendingPathComponent:@"back.lua"];
+                NSString *lua = @"touchDown(2, 0, 1800);\n"
+                                @"usleep(45873.00);\n"
+                                @"touchMove(2, 150, 1800);\n"
+                                @"usleep(41660.00);\n"
+                                @"touchMove(2, 300, 1800);\n"
+                                @"usleep(41700.00);\n"
+                                @"touchMove(2, 450, 1800);\n"
+                                @"usleep(4168.00);\n"
+                                @"touchUp(2, 500, 1800);\n";
+                if (![NSFileManager.defaultManager fileExistsAtPath:path]) [lua writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil];
+                dispatch_async(dispatch_get_main_queue(), ^{ // PlayingManager 建 UIWindow 必须主线程
+                    @try {
+                        Class cls = NSClassFromString(@"PlayingManager");
+                        id shared = [cls performSelector:@selector(sharedInstance)];
+                        id playing = [shared performSelector:@selector(makePlayingFor:) withObject:path];
+                        [playing performSelector:@selector(start)];
+                        TGDiagLog(@"back: lua fallback played");
+                    } @catch (NSException *e) {
+                        TGDiagLog([NSString stringWithFormat:@"back: lua err %@", e]);
+                    }
+                });
+            });
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {
