@@ -271,10 +271,14 @@ static void TGPrefsDBProbe(void) {
             id desc = ((id (*)(id, SEL, id))objc_msgSend)([descCls alloc],
                 @selector(initWithSQLiteStoreURL:), [NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
             if (!desc) { TGDiagLogP(@"prefs: desc=nil"); return; }
-            [desc setShouldAddStoreAsynchronously:NO];
-            id db = ((id (*)(id, SEL, id, BOOL, BOOL, id *))objc_msgSend)([dbCls alloc],
+            NSError *dbErr = nil; // sync load is NSPersistentStoreDescription's default
+            id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError **))objc_msgSend)([dbCls alloc],
                 @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
-                desc, YES, YES, (id *)NULL);
+                desc, YES, YES, &dbErr);
+            if (!db) {
+                TGDiagLogP([NSString stringWithFormat:@"prefs: manual init nil: %@", dbErr]);
+                return;
+            }
             if (!db) { TGDiagLogP(@"prefs: manual init nil"); return; }
             TGDiagLogP([NSString stringWithFormat:@"prefs: manual db ok (%@)", NSStringFromClass([db class])]);
             SEL listSel = @selector(sortedVisibleWorkflowsByName);
