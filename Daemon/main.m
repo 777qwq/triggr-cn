@@ -152,10 +152,41 @@ static void TGBackSwipe(void) {
     NSDictionary *f = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist"];
     float w = [f[@"w"] floatValue], h = [f[@"h"] floatValue];
     if (!TGTouchSender) {
-        // 回调捕获不可用（mobile 守护进程收不到数字仪事件）→ 用 SB 端历史捕获值
+        // 1) SB 端历史捕获值
         NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist"];
         TGTouchSender = [d[@"senderID"] unsignedLongLongValue];
-        TGTouchLog([NSString stringWithFormat:@"fallback senderID: %qX", TGTouchSender]);
+        TGTouchLog([NSString stringWithFormat:@"fallback1 plist senderID: %qX", TGTouchSender]);
+    }
+    if (!TGTouchSender) {
+        // 2) AutoTouch 的 sender_id_meta 文件（8 字节裸值，App 容器内，AutoTouch 每次探测都会刷新=最新值）
+        static NSString *metaPath;
+        if (!metaPath) {
+            NSString *cont = @"/var/mobile/Containers/Data/Application";
+            for (NSString *uuid in [NSFileManager.defaultManager contentsOfDirectoryAtPath:cont error:nil]) {
+                NSString *doc = [NSString stringWithFormat:@"%@/%@/Documents", cont, uuid];
+                for (NSString *sub in @[ @"sender_id_meta", @"AutoTouch/sender_id_meta", @"Library/sender_id_meta" ]) {
+                    NSString *p = [doc stringByAppendingPathComponent:sub];
+                    if ([NSFileManager.defaultManager fileExistsAtPath:p]) { metaPath = p; break; }
+                }
+                if (metaPath) break;
+                // 兜底浅搜 Documents 一层子目录
+                for (NSString *sd in [NSFileManager.defaultManager contentsOfDirectoryAtPath:doc error:nil]) {
+                    NSString *p = [[doc stringByAppendingPathComponent:sd] stringByAppendingPathComponent:@"sender_id_meta"];
+                    if ([NSFileManager.defaultManager fileExistsAtPath:p]) { metaPath = p; break; }
+                }
+                if (metaPath) break;
+            }
+            TGTouchLog([NSString stringWithFormat:@"meta file: %@", metaPath ?: @"NOT FOUND"]);
+        }
+        if (metaPath) {
+            FILE *fp = fopen(metaPath.fileSystemRepresentation, "rb");
+            if (fp) {
+                uint64_t v = 0;
+                fread(&v, 8, 1, fp);
+                fclose(fp);
+                if (v && v != 0xFFFFFFFFFFFFFFFF) { TGTouchSender = v; TGTouchLog([NSString stringWithFormat:@"meta senderID: %qX", v]); }
+            }
+        }
     }
     TGTouchLog([NSString stringWithFormat:@"swipe fire: w=%.0f h=%.0f sender=%qX", w, h, TGTouchSender]);
     if (w < 100 || h < 100) return;
