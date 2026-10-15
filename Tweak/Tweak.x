@@ -1029,7 +1029,13 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            notify_post(TGRelayBack);
+            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                float cx = 200, cy = 400;
+                TGTouchSend(0, cx, cy);
+                usleep(80000);
+                TGTouchSend(2, cx, cy);
+                TGDiagLog(@"tap test dispatched");
+            });
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {
