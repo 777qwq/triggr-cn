@@ -901,6 +901,68 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
             #include <mach/mach_time.h>
 
 
+// ---- 纯 IOHID 触摸引擎（AutoTouch _send_touch_events 精确配方，10-15 逆向） ----
+typedef struct CF_BRIDGED_TYPE(id) IOHIDEvent *IOHIDEventRef;
+typedef struct CF_BRIDGED_TYPE(id) IOHIDEventSystemClient *IOHIDEventSystemClientRef;
+extern IOHIDEventRef IOHIDEventCreateDigitizerEvent(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, float, float, float, float, float, Boolean, Boolean, uint32_t);
+extern IOHIDEventRef IOHIDEventCreateDigitizerFingerEvent(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t, float, float, float, float, float, Boolean, Boolean, uint32_t);
+extern void IOHIDEventAppendEvent(IOHIDEventRef, IOHIDEventRef, uint32_t);
+extern void IOHIDEventSetFloatValue(IOHIDEventRef, uint32_t, float);
+extern void IOHIDEventSetIntegerValue(IOHIDEventRef, uint32_t, int64_t);
+extern void IOHIDEventSetSenderID(IOHIDEventRef, uint64_t);
+extern IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef);
+extern void IOHIDEventSystemClientDispatchEvent(IOHIDEventSystemClientRef, IOHIDEventRef);
+extern const char *_dyld_get_image_name(uint32_t);
+extern void *_dyld_get_image_header(uint32_t);
+extern int64_t _dyld_get_image_vmaddr_slide(uint32_t);
+extern uint32_t _dyld_image_count(void);
+
+static IOHIDEventSystemClientRef TGHIDClient;
+static uint64_t TGSenderID2;
+
+static uint64_t TGFetchSenderID(void) {
+    if (TGSenderID2) return TGSenderID2;
+    for (uint32_t i = 0; i < _dyld_image_count(); i++) {
+        const char *nm = _dyld_get_image_name(i);
+        if (nm && strstr(nm, "ATTweak.dylib")) {
+            uint64_t v = *(uint64_t *)((uint8_t *)_dyld_get_image_header(i) + 0x1654818);
+            if (v && v != 0xFFFFFFFFFFFFFFFF) { TGSenderID2 = v; return v; }
+        }
+    }
+    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist"];
+    if (d) {
+        double boot = [[NSDate date] timeIntervalSince1970] - [NSProcessInfo.processInfo systemUptime];
+        if ([d[@"boot"] doubleValue] == boot) { TGSenderID2 = [d[@"senderID"] unsignedLongLongValue]; return TGSenderID2; }
+    }
+    return 0;
+}
+static void TGTouchSend(int type, float x, float y) {
+    if (!TGHIDClient) {
+        TGHIDClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
+        if (!TGHIDClient) return;
+    }
+    uint64_t ts = mach_absolute_time();
+    IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(kCFAllocatorDefault, ts, 3, 0, 1, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0);
+    if (!parent) return;
+    Boolean t = (type != 2);
+    uint32_t fl = (type == 2) ? 4 : 3;
+    IOHIDEventRef finger = IOHIDEventCreateDigitizerFingerEvent(kCFAllocatorDefault, ts, 0, 2, fl, x, y, 0.0f, 0.0f, 0.0f, t, t, 0);
+    if (!finger) { CFRelease(parent); return; }
+    IOHIDEventSetFloatValue(finger, 0xb0014, 0.04f);
+    IOHIDEventSetFloatValue(finger, 0xb0015, 0.04f);
+    IOHIDEventAppendEvent(parent, finger, 0);
+    IOHIDEventSetFloatValue(parent, 0xb0000, x);
+    IOHIDEventSetFloatValue(parent, 0xb0001, y);
+    int64_t acc = (type == 0) ? 4 : ((type == 2) ? 0x27 : 0x23);
+    IOHIDEventSetIntegerValue(parent, 0xb0006, acc);
+    IOHIDEventSetIntegerValue(parent, 0xb0007, 1);
+    IOHIDEventSetIntegerValue(parent, 0xb0008, 1);
+    uint64_t sid = TGFetchSenderID();
+    if (sid) IOHIDEventSetSenderID(parent, sid);
+    IOHIDEventSystemClientDispatchEvent(TGHIDClient, parent);
+    CFRelease(parent);
+}
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -946,7 +1008,25 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return YES;
             },
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
-@"system.back": ^BOOL(BOOL dry) { if (dry) return YES; notify_post(TGRelayBack); return YES; },
+@"system.back": ^BOOL(BOOL dry) {
+            if (dry) return YES;
+            if (TGFetchSenderID()) {
+                dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    CGSize s = UIScreen.mainScreen.bounds.size;
+                    float x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
+                    int steps = 24;
+                    TGTouchSend(0, x0, y);
+                    for (int i = 1; i <= steps; i++) {
+                        float x = x0 + (x1 - x0) * i / steps;
+                        TGTouchSend(i == steps ? 2 : 1, x, y);
+                        usleep(14000);
+                    }
+                });
+                return YES;
+            }
+            notify_post(TGRelayBack);
+            return YES;
+        },
             @"system.siri": ^BOOL(BOOL dry) {
                 // As if Siri's button was held.
                 if (![objc_getClass("SiriSimpleActivationSource") instancesRespondToSelector:@selector(activateFromSource:)]) return NO;
