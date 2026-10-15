@@ -931,10 +931,17 @@ static uint64_t TGFetchSenderID(void) {
     }
     NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist"];
     if (d) {
-        double boot = [[NSDate date] timeIntervalSince1970] - [NSProcessInfo.processInfo systemUptime];
-        if ([d[@"boot"] doubleValue] == boot) { TGSenderID2 = [d[@"senderID"] unsignedLongLongValue]; return TGSenderID2; }
+        uint64_t v = [d[@"senderID"] unsignedLongLongValue];
+        if (v) { TGSenderID2 = v; return v; }
     }
     return 0;
+}
+static void TGDiagLog(NSString *msg) {
+    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
+    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
+    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
 }
 static void TGTouchSend(int type, float x, float y) {
     if (!TGHIDClient) {
@@ -1010,7 +1017,9 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            if (TGFetchSenderID()) {
+            uint64_t sid = TGFetchSenderID();
+            TGDiagLog([NSString stringWithFormat:@"back: senderID=%qX", sid]);
+            if (sid) {
                 dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
                     CGSize s = UIScreen.mainScreen.bounds.size;
                     float x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
