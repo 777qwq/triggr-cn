@@ -133,6 +133,7 @@ static void TGTouchSend(int type, float x, float y) {
     if (!parent) return;
     IOHIDEventSetIntegerValue(parent, 0xb0019, 1);
     IOHIDEventSetIntegerValue(parent, 0x4, 1);
+    IOHIDEventSetIntegerValue(parent, 0xb0006, 1); // 千里眼实证：被接受的事件 b0006=1（真手指/合成一致）
     Boolean touch = (type != 2);
     uint32_t flags = (type == 0) ? 4 : 3;
     IOHIDEventRef finger = IOHIDEventCreateDigitizerFingerEvent(kCFAllocatorDefault, ts, 0, 2, flags, x, y, 0.0f, 0.0f, 0.0f, touch, touch, 0);
@@ -142,12 +143,10 @@ static void TGTouchSend(int type, float x, float y) {
     IOHIDEventAppendEvent(parent, finger, 0);
     IOHIDEventSetFloatValue(parent, 0xb0000, x);
     IOHIDEventSetFloatValue(parent, 0xb0001, y);
-    IOHIDEventSetIntegerValue(parent, 0xb0006, (type == 0) ? 4 : ((type == 2) ? 0x27 : 0x23));
-    IOHIDEventSetIntegerValue(parent, 0xb0007, touch ? 1 : 0); // touch 标志累积（up=0）
+    IOHIDEventSetIntegerValue(parent, 0xb0007, touch ? 1 : 0);
     IOHIDEventSetIntegerValue(parent, 0xb0008, touch ? 1 : 0);
-    // AutoTouch slot=-1 时实际执行 SetSenderID(parent, -1)——通配/清除语义；0 反而被拒
-    IOHIDEventSetSenderID(parent, TGTouchSender ? TGTouchSender : 0xFFFFFFFFFFFFFFFF);
-    TGTouchLog([NSString stringWithFormat:@"dispatch: type=%d x=%.1f y=%.1f stamped=%qX", type, x, y, TGTouchSender ? TGTouchSender : 0xFFFFFFFFFFFFFFFF]);
+    IOHIDEventSetSenderID(parent, 0); // 千里眼实证：被接受的合成事件 sender=0（显式清零，默认值≠0 会被拒）
+    TGTouchLog([NSString stringWithFormat:@"dispatch: type=%d x=%.1f y=%.1f sender=0", type, x, y]);
     // 通行证（逆向实锤）：派发前必须告知用户事件，否则 backboardd 丢弃合成事件
     Class BKUET = NSClassFromString(@"BKUserEventTimer");
     if (BKUET) {

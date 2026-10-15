@@ -931,8 +931,12 @@ static void TGCaptureCB(void *target, void *refcon, void *service, void *event) 
     if (TGSeenCount < 20) {
         TGSeenCount++;
         int64_t f6 = IOHIDEventGetIntegerValue((IOHIDEventRef2)event, 0xb0006);
+        int64_t f7 = IOHIDEventGetIntegerValue((IOHIDEventRef2)event, 0xb0007);
+        int64_t f8 = IOHIDEventGetIntegerValue((IOHIDEventRef2)event, 0xb0008);
+        int64_t f19 = IOHIDEventGetIntegerValue((IOHIDEventRef2)event, 0xb0019);
+        int64_t f4 = IOHIDEventGetIntegerValue((IOHIDEventRef2)event, 0x4);
         dispatch_async(dispatch_get_global_queue(0, 0), ^{
-            TGDiagLog([NSString stringWithFormat:@"seen digitizer: sender=%qX b0006=%llX", IOHIDEventGetSenderID((IOHIDEventRef2)event), f6]);
+            TGDiagLog([NSString stringWithFormat:@"seen digitizer: sender=%qX b0006=%llX b0007=%llX b0008=%llX b0019=%llX f4=%llX", IOHIDEventGetSenderID((IOHIDEventRef2)event), f6, f7, f8, f19, f4]);
         });
     }
 }
