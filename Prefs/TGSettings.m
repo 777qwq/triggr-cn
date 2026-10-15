@@ -235,6 +235,51 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self reloadSpecifiers];
+    TGPrefsDBProbe();
+}
+
+// cn2.5 test-only: App-side DB probe + shortcut listing (name->UUID resolution
+// feasibility; SB's WFDatabase.defaultDatabase is nil there, App side is the
+// proper database host). Logs to /var/mobile/Library/Triggr/diag.log. Removed at release.
+static void TGDiagLogP(NSString *msg) {
+    static NSString *path;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        path = @"/var/mobile/Library/Triggr/diag.log";
+        [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
+    });
+    NSDateFormatter *df = [NSDateFormatter new];
+    df.dateFormat = @"MM-dd HH:mm:ss";
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [df stringFromDate:[NSDate date]], msg];
+    FILE *fp = fopen(path.fileSystemRepresentation, "a");
+    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
+}
+
+static void TGPrefsDBProbe(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+        dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+        Class dbCls = NSClassFromString(@"WFDatabase");
+        if (!dbCls) { TGDiagLogP(@"prefs: no WFDatabase"); return; }
+        @try {
+            id db = ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase));
+            if (!db) { TGDiagLogP(@"prefs: db=nil"); return; }
+            SEL listSel = @selector(sortedVisibleWorkflowsByName);
+            if (![db respondsToSelector:listSel]) { TGDiagLogP(@"prefs: db no list"); return; }
+            id list = ((id (*)(id, SEL))objc_msgSend)(db, listSel);
+            TGDiagLogP([NSString stringWithFormat:@"prefs: db=%@ count=%lu", NSStringFromClass([db class]), (unsigned long)[list count]]);
+            NSUInteger n = [list count] < 6 ? [list count] : 6;
+            for (NSUInteger i = 0; i < n; i++) {
+                id ref = [list objectAtIndex:i];
+                NSString *nm = [ref respondsToSelector:@selector(name)] ? [ref name] : nil;
+                NSString *idn = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
+                TGDiagLogP([NSString stringWithFormat:@"prefs: [%@] -> %@", nm, idn]);
+            }
+        } @catch (NSException *e) {
+            TGDiagLogP([NSString stringWithFormat:@"prefs exc: %@", e]);
+        }
+    });
 }
 
 // Shown on the right of a trigger row, like Activator. With nothing set in a

@@ -772,21 +772,30 @@ static void TGRunShortcut(NSString *name) {
         dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
         dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
     });
-    Class dbCls = NSClassFromString(@"WFDatabase");
-    if (!dbCls) { TGDiagLog(@"shortcut: no WFDatabase"); return; }
-    id db = ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase));
-    SEL refSel = @selector(uniqueVisibleReferenceForWorkflowName:);
-    if (!db || ![db respondsToSelector:refSel]) {
-        Dl_info di; const char *img = "";
-        if (db && dladdr((__bridge void *)[db class], &di) && di.dli_fname) img = di.dli_fname;
-        TGDiagLog([NSString stringWithFormat:@"db/ref fail: db=%@ img=%s resp=%d",
-            db ? NSStringFromClass([db class]) : @"nil", img, db ? (int)[db respondsToSelector:refSel] : -1]);
-        return;
+    // UUID fast path: config value holding a raw workflow UUID (resolved on the
+    // Prefs/App side, where WFDatabase actually initializes) skips all DB work —
+    // SB never touches the shortcuts database (system callers don't either).
+    NSString *ident = nil;
+    NSUUID *uuid = [[NSUUID alloc] initWithUUIDString:name];
+    if (uuid) {
+        ident = [uuid UUIDString];
+    } else {
+        Class dbCls = NSClassFromString(@"WFDatabase");
+        if (!dbCls) { TGDiagLog(@"shortcut: no WFDatabase"); return; }
+        id db = ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase));
+        SEL refSel = @selector(uniqueVisibleReferenceForWorkflowName:);
+        if (!db || ![db respondsToSelector:refSel]) {
+            Dl_info di; const char *img = "";
+            if (db && dladdr((__bridge void *)[db class], &di) && di.dli_fname) img = di.dli_fname;
+            TGDiagLog([NSString stringWithFormat:@"db/ref fail: db=%@ img=%s resp=%d",
+                db ? NSStringFromClass([db class]) : @"nil", img, db ? (int)[db respondsToSelector:refSel] : -1]);
+            return;
+        }
+        id ref = ((id (*)(id, SEL, id))objc_msgSend)(db, refSel, name);
+        if (!ref) { TGDiagLog([NSString stringWithFormat:@"shortcut: not found: %@", name]); return; }
+        ident = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
+        if (!ident.length) { TGDiagLog(@"shortcut: empty identifier"); return; }
     }
-    id ref = ((id (*)(id, SEL, id))objc_msgSend)(db, refSel, name);
-    if (!ref) { TGDiagLog([NSString stringWithFormat:@"shortcut: not found: %@", name]); return; }
-    NSString *ident = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
-    if (!ident.length) { TGDiagLog(@"shortcut: empty identifier"); return; }
 
     Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
                    ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
