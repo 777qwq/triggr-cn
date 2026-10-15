@@ -1039,40 +1039,32 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 id singleton = (__bridge id)(*(volatile void **)slot);
                 TGDiagLog([NSString stringWithFormat:@"EventSimulate singleton=%@", singleton]);
                 if (singleton) {
-                    // 先记录 EventSimulate 全部方法名（类+实例），再试探 x:y: 类方法
                     Class c = (Class)singleton;
-                    unsigned int mc = 0;
-                    for (int pass = 0; pass < 2; pass++) {
-                        Method *ml = class_copyMethodList(pass == 0 ? object_getClass(c) : c, &mc);
-                        NSMutableString *rep = [NSMutableString stringWithString:pass == 0 ? @"+methods: " : @"-methods: "];
-                        for (unsigned int i = 0; i < mc; i++) {
-                            [rep appendFormat:@"%@ ", [NSString stringWithUTF8String:sel_getName(method_getName(ml[i]))]];
-                        }
-                        free(ml);
-                        TGDiagLog(rep);
-                    }
-                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                        CGSize s = UIScreen.mainScreen.bounds.size;
-                        float x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
-                        int steps = 24;
-                        void (*msg)(id, SEL, long long, double, double) = (void (*)(id, SEL, long long, double, double))objc_msgSend;
-                        SEL down = sel_registerName("touchDown:x:y:");
-                        SEL move = sel_registerName("touchMove:x:y:");
-                        SEL up = sel_registerName("touchUp:x:y:");
-                        if (!class_getClassMethod(c, down)) { TGDiagLog(@"no class method touchDown:x:y:"); return; }
-                        @try {
-                            msg(c, down, 0, x0, y);
-                            for (int i = 1; i <= steps; i++) {
-                                float x = x0 + (x1 - x0) * i / steps;
-                                msg(c, i == steps ? up : move, 0, x, y);
-                                usleep(14000);
+                    id inst = ((id (*)(id, SEL))objc_msgSend)(c, sel_registerName("sharedInstance"));
+                    TGDiagLog([NSString stringWithFormat:@"sharedInstance=%@", inst]);
+                    if (inst) {
+                        dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                            CGSize s = UIScreen.mainScreen.bounds.size;
+                            float x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
+                            int steps = 24;
+                            void (*msg)(id, SEL, long long, double, double) = (void (*)(id, SEL, long long, double, double))objc_msgSend;
+                            SEL down = sel_registerName("touchDown:atX:andY:");
+                            SEL move = sel_registerName("touchMove:atX:andY:");
+                            SEL up = sel_registerName("touchUp:atX:andY:");
+                            @try {
+                                msg(inst, down, 0, x0, y);
+                                for (int i = 1; i <= steps; i++) {
+                                    float x = x0 + (x1 - x0) * i / steps;
+                                    msg(inst, i == steps ? up : move, 0, x, y);
+                                    usleep(14000);
+                                }
+                                TGDiagLog(@"touch seq done");
+                            } @catch (NSException *e) {
+                                TGDiagLog([NSString stringWithFormat:@"touch err: %@", e]);
                             }
-                            TGDiagLog(@"touch seq done");
-                        } @catch (NSException *e) {
-                            TGDiagLog([NSString stringWithFormat:@"touch err: %@", e]);
-                        }
-                    });
-                    return YES;
+                        });
+                        return YES;
+                    }
                 }
             }
             notify_post(TGRelayBack);
