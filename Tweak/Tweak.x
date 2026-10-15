@@ -956,17 +956,19 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // 主：Relay cn1 流水线（逃逸/pop/扫描）；400ms 无 ack → 内置 Lua 兜底（私有路径，脚本列表不可见）
+            // 按 App 记忆：Relay 成功过的 App 走即时 Relay；失败过的直接 Lua 零延迟；未知 App Relay+400ms 判定
+            static NSMutableDictionary<NSString *, NSNumber *> *memo;
             static volatile BOOL acked;
             static dispatch_once_t tokOnce;
             dispatch_once(&tokOnce, ^{
+                memo = [NSMutableDictionary new];
                 int tok;
                 notify_register_dispatch("cn.triggr.back.ack", &tok, dispatch_get_global_queue(0, 0), ^(int t) { acked = YES; });
             });
+            NSString *app = TGFrontAppIdentifier() ?: @"?";
+            BOOL knownBad = [memo[app] boolValue]; // YES=此 App Relay 处理不了
             acked = NO;
-            notify_post(TGRelayBack);
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                if (acked) return;
+            void (^LuaFallback)(void) = ^{
                 if (!NSClassFromString(@"PlayingManager")) return; // 无 AutoTouch 用户到此为止
                 NSString *dir = @"/var/mobile/Library/triggr";
                 [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
@@ -992,6 +994,13 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                         TGDiagLog([NSString stringWithFormat:@"back: lua err %@", e]);
                     }
                 });
+            };
+            if (knownBad) { LuaFallback(); return YES; } // 记忆在案：直接 Lua，零延迟
+            notify_post(TGRelayBack);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (acked) { memo[app] = @NO; return; } // Relay 处理成功，记好
+                memo[app] = @YES;                        // Relay 处理不了，记住
+                LuaFallback();
             });
             return YES;
         },
