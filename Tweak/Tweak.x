@@ -910,36 +910,30 @@ static void TGDiagLog(NSString *msg) {
 static id TGTouchReceiver;
 static SEL TGTouchSels[3];
 static BOOL TGTouchReady = NO;
-// 运行时自省：找 Touch 类上真实存在的 touchDown/Move/Up 方法（类方法或实例方法都试）
+// 全类扫描：找响应 touchDown:x:y: / touchMove:x:y: / touchUp:x:y: 的类（类方法优先，其次实例方法）
 static BOOL TGTouchProbe(void) {
-    Class c = objc_getClass("Touch");
-    if (!c) return NO;
-    const char *names[3] = {"touchDown:", "touchMove:", "touchUp:"};
-    NSString *report = @"";
-    for (int k = 0; k < 3; k++) {
-        SEL best = NULL;
-        unsigned int cnt = 0;
-        Method *ml = class_copyMethodList(object_getClass(c), &cnt); // 类方法
-        for (unsigned int i = 0; i < cnt; i++) {
-            const char *n = sel_getName(method_getName(ml[i]));
-            if (!strncmp(n, names[k], strlen(names[k]))) { best = method_getName(ml[i]); break; }
+    const SEL sels[3] = {sel_registerName("touchDown:x:y:"), sel_registerName("touchMove:x:y:"), sel_registerName("touchUp:x:y:")};
+    unsigned int cnt = 0;
+    Class *all = objc_copyClassList(&cnt);
+    Class hit = Nil;
+    BOOL isInst = NO;
+    for (unsigned int i = 0; i < cnt; i++) {
+        Class c = all[i];
+        if (class_getClassMethod(c, sels[0]) && class_getClassMethod(c, sels[1]) && class_getClassMethod(c, sels[2])) {
+            hit = c; isInst = NO; break;
         }
-        free(ml);
-        if (!best) {
-            ml = class_copyMethodList(c, &cnt); // 实例方法
-            for (unsigned int i = 0; i < cnt; i++) {
-                const char *n = sel_getName(method_getName(ml[i]));
-                if (!strncmp(n, names[k], strlen(names[k]))) { best = method_getName(ml[i]); break; }
-            }
-            free(ml);
-            if (best && !TGTouchReceiver) TGTouchReceiver = [[c alloc] init];
+        if (class_getInstanceMethod(c, sels[0]) && class_getInstanceMethod(c, sels[1]) && class_getInstanceMethod(c, sels[2])) {
+            hit = c; isInst = YES; break;
         }
-        TGTouchSels[k] = best;
-        report = [report stringByAppendingFormat:@"%s=%@ ", names[k], best ? [NSString stringWithUTF8String:sel_getName(best)] : @"MISS"];
     }
-    TGTouchReady = TGTouchSels[0] && TGTouchSels[1] && TGTouchSels[2];
-    TGDiagLog([NSString stringWithFormat:@"Touch probe: %@ ready=%d", report, TGTouchReady]);
-    return TGTouchReady;
+    free(all);
+    if (!hit) { TGDiagLog(@"probe: no class responds to touchDown:x:y:"); return NO; }
+    NSString *nm = NSStringFromClass(hit);
+    TGDiagLog([NSString stringWithFormat:@"probe: found %@ (inst=%d)", nm, isInst]);
+    TGTouchSels[0] = sels[0]; TGTouchSels[1] = sels[1]; TGTouchSels[2] = sels[2];
+    if (isInst) TGTouchReceiver = [[hit alloc] init];
+    TGTouchReady = YES;
+    return YES;
 }
 
 
