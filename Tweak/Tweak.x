@@ -900,6 +900,49 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 
             #include <mach/mach_time.h>
 
+static void TGDiagLog(NSString *msg) {
+    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
+    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
+    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
+}
+static id TGTouchReceiver;
+static SEL TGTouchSels[3];
+static BOOL TGTouchReady = NO;
+// 运行时自省：找 Touch 类上真实存在的 touchDown/Move/Up 方法（类方法或实例方法都试）
+static BOOL TGTouchProbe(void) {
+    Class c = objc_getClass("Touch");
+    if (!c) return NO;
+    const char *names[3] = {"touchDown:", "touchMove:", "touchUp:"};
+    NSString *report = @"";
+    for (int k = 0; k < 3; k++) {
+        SEL best = NULL;
+        unsigned int cnt = 0;
+        Method *ml = class_copyMethodList(object_getClass(c), &cnt); // 类方法
+        for (unsigned int i = 0; i < cnt; i++) {
+            const char *n = sel_getName(method_getName(ml[i]));
+            if (!strncmp(n, names[k], strlen(names[k]))) { best = method_getName(ml[i]); break; }
+        }
+        free(ml);
+        if (!best) {
+            ml = class_copyMethodList(c, &cnt); // 实例方法
+            for (unsigned int i = 0; i < cnt; i++) {
+                const char *n = sel_getName(method_getName(ml[i]));
+                if (!strncmp(n, names[k], strlen(names[k]))) { best = method_getName(ml[i]); break; }
+            }
+            free(ml);
+            if (best && !TGTouchReceiver) TGTouchReceiver = [[c alloc] init];
+        }
+        TGTouchSels[k] = best;
+        report = [report stringByAppendingFormat:@"%s=%@ ", names[k], best ? [NSString stringWithUTF8String:sel_getName(best)] : @"MISS"];
+    }
+    TGTouchReady = TGTouchSels[0] && TGTouchSels[1] && TGTouchSels[2];
+    TGDiagLog([NSString stringWithFormat:@"Touch probe: %@ ready=%d", report, TGTouchReady]);
+    return TGTouchReady;
+}
+
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -947,24 +990,26 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // 首选：复用 AutoTouch 的 Touch 类（同为 SB 进程，objc_getClass 直取；其引擎含已捕获的 senderID）
-            if (objc_getClass("Touch")) {
+            // 首选：复用 AutoTouch 的 Touch 类（运行时自省选择器，规避转发崩溃）
+            if (!TGTouchReady) TGTouchProbe();
+            if (TGTouchReady) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     CGSize s = UIScreen.mainScreen.bounds.size;
                     double x0 = 6, y = s.height / 2, x1 = s.width * 0.4;
                     int steps = 24;
-                    SEL down = sel_registerName("touchDown:x:y:");
-                    SEL move = sel_registerName("touchMove:x:y:");
-                    SEL up = sel_registerName("touchUp:x:y:");
                     void (*msg)(id, SEL, long long, double, double) = (void (*)(id, SEL, long long, double, double))objc_msgSend;
-                    msg(objc_getClass("Touch"), down, 0, x0, y);
-                    for (int i = 1; i <= steps; i++) {
-                        double x = x0 + (x1 - x0) * i / steps;
-                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(i * 14 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-                            SEL sel = (i == steps) ? up : move;
-                            msg(objc_getClass("Touch"), sel, 0, x, y);
-                        });
-                    }
+                    id rcv = TGTouchReceiver ? TGTouchReceiver : (id)objc_getClass("Touch");
+                    @try {
+                        msg(rcv, TGTouchSels[0], 0, x0, y);
+                        for (int i = 1; i <= steps; i++) {
+                            double x = x0 + (x1 - x0) * i / steps;
+                            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(i * 14 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+                                @try {
+                                    msg(TGTouchReceiver ? TGTouchReceiver : (id)objc_getClass("Touch"), TGTouchSels[i == steps ? 2 : 1], 0, x, y);
+                                } @catch (NSException *e) { TGDiagLog([NSString stringWithFormat:@"touch step err: %@", e]); }
+                            });
+                        }
+                    } @catch (NSException *e) { TGDiagLog([NSString stringWithFormat:@"touch down err: %@", e]); }
                 });
                 return YES;
             }
