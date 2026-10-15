@@ -8,6 +8,7 @@
 #import <AltList/ATLApplicationListSelectionController.h>
 #import <AltList/ATLApplicationListMultiSelectionController.h>
 #import <LocalAuthentication/LocalAuthentication.h>
+#import <CoreData/CoreData.h>
 #import <dlfcn.h>
 #import <notify.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -266,10 +267,10 @@ static void TGPrefsDBProbe(void) {
             // Manual init (Actra-proven): +defaultDatabase is nil outside its host
             // process; a plain SQLite store description on the shortcuts database
             // works. migrations+lockfile follow official defaults.
-            Class descCls = NSClassFromString(@"NSPersistentStoreDescription");
-            if (!descCls) { TGDiagLogP(@"prefs: no NSPersistentStoreDescription"); return; }
-            id desc = ((id (*)(id, SEL, id))objc_msgSend)([descCls alloc],
-                @selector(initWithSQLiteStoreURL:), [NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
+            // Compiled-time CoreData class reference: NSClassFromString here
+            // hit a same-name private class (cn2.8 lesson: unrecognized selector).
+            NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc]
+                initWithSQLiteStoreURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
             if (!desc) { TGDiagLogP(@"prefs: desc=nil"); return; }
             NSError *dbErr = nil; // sync load is NSPersistentStoreDescription's default
             id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError **))objc_msgSend)([dbCls alloc],
