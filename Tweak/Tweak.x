@@ -901,87 +901,6 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
             #include <mach/mach_time.h>
 
 
-// ---- 纯 IOHID 触摸引擎（AutoTouch _send_touch_events 精确配方，10-15 逆向） ----
-typedef struct CF_BRIDGED_TYPE(id) IOHIDEvent *IOHIDEventRef;
-typedef struct CF_BRIDGED_TYPE(id) IOHIDEventSystemClient *IOHIDEventSystemClientRef;
-extern IOHIDEventRef IOHIDEventCreateDigitizerEvent(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, float, float, float, float, float, Boolean, Boolean, uint32_t);
-extern IOHIDEventRef IOHIDEventCreateDigitizerFingerEvent(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t, float, float, float, float, float, Boolean, Boolean, uint32_t);
-extern void IOHIDEventAppendEvent(IOHIDEventRef, IOHIDEventRef, uint32_t);
-extern void IOHIDEventSetFloatValue(IOHIDEventRef, uint32_t, float);
-extern void IOHIDEventSetIntegerValue(IOHIDEventRef, uint32_t, int64_t);
-extern void IOHIDEventSetSenderID(IOHIDEventRef, uint64_t);
-extern IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef);
-extern void IOHIDEventSystemClientDispatchEvent(IOHIDEventSystemClientRef, IOHIDEventRef);
-extern const char *_dyld_get_image_name(uint32_t);
-extern void *_dyld_get_image_header(uint32_t);
-extern int64_t _dyld_get_image_vmaddr_slide(uint32_t);
-extern uint32_t _dyld_image_count(void);
-
-static IOHIDEventSystemClientRef TGHIDClient;
-static uint64_t TGSenderID2;
-
-static uint64_t v_log(uint64_t v, NSString *src);
-static void TGDiagLog(NSString *msg);
-__attribute__((unused)) static uint64_t TGFetchSenderID(void) {
-    if (TGSenderID2) return TGSenderID2;
-    uint64_t slot = 0;
-    for (uint32_t i = 0; i < _dyld_image_count(); i++) {
-        const char *nm = _dyld_get_image_name(i);
-        if (nm && strstr(nm, "ATTweak.dylib")) {
-            slot = *(uint64_t *)((uint8_t *)_dyld_get_image_header(i) + 0x1654818);
-            if (slot && slot != 0xFFFFFFFFFFFFFFFF) { TGSenderID2 = slot; return v_log(slot, @"ATTweak-slot"); }
-        }
-    }
-    TGDiagLog([NSString stringWithFormat:@"ATTweak slot=%qX (ffffffff=未探测)", slot]);
-    NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist"];
-    if (d) {
-        uint64_t v = [d[@"senderID"] unsignedLongLongValue];
-        if (v) return v_log(v, @"plist");
-    }
-    return 0;
-}
-static void TGDiagLog(NSString *msg);
-static uint64_t v_log(uint64_t v, NSString *src) {
-    TGDiagLog([NSString stringWithFormat:@"senderID from %@: %qX", src, v]);
-    return v;
-}
-static void TGDiagLog(NSString *msg) {
-    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
-    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
-    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
-}
-__attribute__((unused)) static void TGTouchSend(int type, float x, float y) {
-    if (!TGHIDClient) {
-        TGHIDClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
-        if (!TGHIDClient) return;
-    }
-    uint64_t ts = mach_absolute_time();
-    IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(kCFAllocatorDefault, ts, 3, 0, 1, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0);
-    if (!parent) return;
-    IOHIDEventSetIntegerValue(parent, 0xb0019, 1); // 合成标记（漏抄的两行，SimulateTouch 同款）
-    IOHIDEventSetIntegerValue(parent, 0x4, 1);
-    Boolean t = (type != 2);
-    uint32_t fl = (type == 0) ? 4 : 3; // 逆向实锤：down=4, move/up=3（cinc w4,w8,eq）
-    IOHIDEventRef finger = IOHIDEventCreateDigitizerFingerEvent(kCFAllocatorDefault, ts, 0, 2, fl, x, y, 0.0f, 0.0f, 0.0f, t, t, 0);
-    if (!finger) { CFRelease(parent); return; }
-    IOHIDEventSetFloatValue(finger, 0xb0014, 0.04f);
-    IOHIDEventSetFloatValue(finger, 0xb0015, 0.04f);
-    IOHIDEventAppendEvent(parent, finger, 0);
-    IOHIDEventSetFloatValue(parent, 0xb0000, x);
-    IOHIDEventSetFloatValue(parent, 0xb0001, y);
-    int64_t acc = (type == 0) ? 4 : ((type == 2) ? 0x27 : 0x23);
-    IOHIDEventSetIntegerValue(parent, 0xb0006, acc);
-    IOHIDEventSetIntegerValue(parent, 0xb0007, 1);
-    IOHIDEventSetIntegerValue(parent, 0xb0008, 1);
-    // cn1.21：不盖章（AutoTouch slot=-1 时也从不盖章照样生效；过期章反而主动被拒）
-    // uint64_t sid = TGFetchSenderID();
-    // if (sid) IOHIDEventSetSenderID(parent, sid);
-    IOHIDEventSystemClientDispatchEvent(TGHIDClient, parent);
-    CFRelease(parent);
-}
-
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -1029,13 +948,11 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-                float cx = 200, cy = 400;
-                TGTouchSend(0, cx, cy);
-                usleep(80000);
-                TGTouchSend(2, cx, cy);
-                TGDiagLog(@"tap test dispatched");
-            });
+            // 触摸引擎在 triggrd（arm64 守护进程，无 PAC 限制，自有 senderID 捕获）
+            CGSize s = UIScreen.mainScreen.bounds.size;
+            [[NSDictionary dictionaryWithObjectsAndKeys:@(s.width), @"w", @(s.height), @"h", nil]
+                writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist" atomically:YES];
+            notify_post("cn.triggr.backswipe");
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

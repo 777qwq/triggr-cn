@@ -81,6 +81,75 @@ static void TGDrainQueue(void) {
     }
 }
 
+// ---- 触摸引擎（AutoTouch 同架构：arm64 守护进程内捕获 senderID + 派发，无 PAC 限制） ----
+#import <mach/mach_time.h>
+typedef struct CF_BRIDGED_TYPE(id) IOHIDEvent *IOHIDEventRef;
+typedef struct CF_BRIDGED_TYPE(id) IOHIDEventSystemClient *IOHIDEventSystemClientRef;
+extern IOHIDEventRef IOHIDEventCreateDigitizerEvent(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, float, float, float, float, float, Boolean, Boolean, uint32_t);
+extern IOHIDEventRef IOHIDEventCreateDigitizerFingerEvent(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t, float, float, float, float, float, Boolean, Boolean, uint32_t);
+extern void IOHIDEventAppendEvent(IOHIDEventRef, IOHIDEventRef, uint32_t);
+extern void IOHIDEventSetFloatValue(IOHIDEventRef, uint32_t, float);
+extern void IOHIDEventSetIntegerValue(IOHIDEventRef, uint32_t, int64_t);
+extern void IOHIDEventSetSenderID(IOHIDEventRef, uint64_t);
+extern uint64_t IOHIDEventGetSenderID(IOHIDEventRef);
+extern int32_t IOHIDEventGetType(IOHIDEventRef);
+extern IOHIDEventSystemClientRef IOHIDEventSystemClientCreate(CFAllocatorRef);
+extern void IOHIDEventSystemClientDispatchEvent(IOHIDEventSystemClientRef, IOHIDEventRef);
+extern void IOHIDEventSystemClientScheduleWithRunLoop(IOHIDEventSystemClientRef, CFRunLoopRef, CFStringRef);
+extern void IOHIDEventSystemClientRegisterEventCallback(IOHIDEventSystemClientRef, void *, void *, void *);
+extern void IOHIDEventSystemClientUnregisterEventCallback(IOHIDEventSystemClientRef);
+
+static IOHIDEventSystemClientRef TGTouchClient;
+static uint64_t TGTouchSender;
+#define kIOHIDDigitizer 11
+
+static void TGTouchCaptureCB(void *target, void *refcon, void *service, IOHIDEventRef event) {
+    if (!event || TGTouchSender || IOHIDEventGetType(event) != kIOHIDDigitizer) return;
+    TGTouchSender = IOHIDEventGetSenderID(event);
+    [[NSDictionary dictionaryWithObjectsAndKeys:@(TGTouchSender), @"senderID", nil]
+        writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.daemon.senderid.plist" atomically:YES];
+    if (TGTouchClient) IOHIDEventSystemClientUnregisterEventCallback(TGTouchClient);
+}
+static void TGTouchSend(int type, float x, float y) {
+    if (!TGTouchClient) {
+        TGTouchClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
+        if (!TGTouchClient) return;
+        IOHIDEventSystemClientScheduleWithRunLoop(TGTouchClient, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
+        IOHIDEventSystemClientRegisterEventCallback(TGTouchClient, (void *)TGTouchCaptureCB, NULL, NULL);
+    }
+    uint64_t ts = mach_absolute_time();
+    IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(kCFAllocatorDefault, ts, 3, 0, 1, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0);
+    if (!parent) return;
+    IOHIDEventSetIntegerValue(parent, 0xb0019, 1);
+    IOHIDEventSetIntegerValue(parent, 0x4, 1);
+    Boolean touch = (type != 2);
+    uint32_t flags = (type == 0) ? 4 : 3;
+    IOHIDEventRef finger = IOHIDEventCreateDigitizerFingerEvent(kCFAllocatorDefault, ts, 0, 2, flags, x, y, 0.0f, 0.0f, 0.0f, touch, touch, 0);
+    if (!finger) { CFRelease(parent); return; }
+    IOHIDEventSetFloatValue(finger, 0xb0014, 0.04f);
+    IOHIDEventSetFloatValue(finger, 0xb0015, 0.04f);
+    IOHIDEventAppendEvent(parent, finger, 0);
+    IOHIDEventSetFloatValue(parent, 0xb0000, x);
+    IOHIDEventSetFloatValue(parent, 0xb0001, y);
+    IOHIDEventSetIntegerValue(parent, 0xb0006, (type == 0) ? 4 : ((type == 2) ? 0x27 : 0x23));
+    IOHIDEventSetIntegerValue(parent, 0xb0007, 1);
+    IOHIDEventSetIntegerValue(parent, 0xb0008, 1);
+    if (TGTouchSender) IOHIDEventSetSenderID(parent, TGTouchSender);
+    IOHIDEventSystemClientDispatchEvent(TGTouchClient, parent);
+    CFRelease(parent);
+}
+static void TGBackSwipe(void) {
+    NSDictionary *f = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist"];
+    float w = [f[@"w"] floatValue], h = [f[@"h"] floatValue];
+    if (w < 100 || h < 100) return;
+    float x0 = 6, y = h / 2, x1 = w * 0.4;
+    TGTouchSend(0, x0, y);
+    for (int i = 1; i <= 24; i++) {
+        TGTouchSend(i == 24 ? 2 : 1, x0 + (x1 - x0) * i / 24, y);
+        usleep(14000);
+    }
+}
+
 int main(void) {
     @autoreleasepool {
         // Only the mobile user (SpringBoard) may drop requests here.
@@ -88,6 +157,8 @@ int main(void) {
         chmod(TGRunQueue.fileSystemRepresentation, 0700);
         int token;
         notify_register_dispatch(TGRunRequestNotification, &token, dispatch_get_main_queue(), ^(int t) { TGDrainQueue(); });
+        int ttoken;
+        notify_register_dispatch("cn.triggr.backswipe", &ttoken, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(int t) { TGBackSwipe(); });
         TGDrainQueue();
         dispatch_main();
     }
