@@ -145,7 +145,9 @@ static void TGTouchSend(int type, float x, float y) {
     IOHIDEventSetIntegerValue(parent, 0xb0006, (type == 0) ? 4 : ((type == 2) ? 0x27 : 0x23));
     IOHIDEventSetIntegerValue(parent, 0xb0007, touch ? 1 : 0); // touch 标志累积（up=0）
     IOHIDEventSetIntegerValue(parent, 0xb0008, touch ? 1 : 0);
-    if (TGTouchSender) IOHIDEventSetSenderID(parent, TGTouchSender);
+    // AutoTouch slot=-1 时实际执行 SetSenderID(parent, -1)——通配/清除语义；0 反而被拒
+    IOHIDEventSetSenderID(parent, TGTouchSender ? TGTouchSender : 0xFFFFFFFFFFFFFFFF);
+    TGTouchLog([NSString stringWithFormat:@"dispatch: type=%d x=%.1f y=%.1f stamped=%qX", type, x, y, TGTouchSender ? TGTouchSender : 0xFFFFFFFFFFFFFFFF]);
     // 通行证（逆向实锤）：派发前必须告知用户事件，否则 backboardd 丢弃合成事件
     Class BKUET = NSClassFromString(@"BKUserEventTimer");
     if (BKUET) {

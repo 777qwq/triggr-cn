@@ -912,6 +912,7 @@ static void TGDiagLog(NSString *msg) {
 typedef struct CF_BRIDGED_TYPE(id) IOHIDEvent *IOHIDEventRef2;
 typedef struct CF_BRIDGED_TYPE(id) IOHIDEventSystemClient *IOHIDEventSystemClientRef2;
 extern uint64_t IOHIDEventGetSenderID(IOHIDEventRef2);
+extern int64_t IOHIDEventGetIntegerValue(IOHIDEventRef2, uint32_t);
 extern int32_t IOHIDEventGetType(IOHIDEventRef2);
 extern IOHIDEventSystemClientRef2 IOHIDEventSystemClientCreate(CFAllocatorRef);
 extern void IOHIDEventSystemClientScheduleWithRunLoop(IOHIDEventSystemClientRef2, CFRunLoopRef, CFStringRef);
@@ -921,10 +922,19 @@ extern void *_dyld_get_image_header(uint32_t);
 extern uint32_t _dyld_image_count(void);
 static void TGDiagLog(NSString *msg);
 static volatile uint64_t TGCapturedSender;
+static volatile int TGSeenCount;
 static void TGCaptureCB(void *target, void *refcon, void *service, void *event) {
-    if (TGCapturedSender || !event) return;
-    if (IOHIDEventGetType((IOHIDEventRef2)event) != 11) return;
-    TGCapturedSender = IOHIDEventGetSenderID((IOHIDEventRef2)event);
+    if (!event) return;
+    int32_t ty = IOHIDEventGetType((IOHIDEventRef2)event);
+    if (ty != 11) return;
+    if (!TGCapturedSender) TGCapturedSender = IOHIDEventGetSenderID((IOHIDEventRef2)event);
+    if (TGSeenCount < 20) {
+        TGSeenCount++;
+        int64_t f6 = IOHIDEventGetIntegerValue((IOHIDEventRef2)event, 0xb0006);
+        dispatch_async(dispatch_get_global_queue(0, 0), ^{
+            TGDiagLog([NSString stringWithFormat:@"seen digitizer: sender=%qX b0006=%llX", IOHIDEventGetSenderID((IOHIDEventRef2)event), f6]);
+        });
+    }
 }
 static void TGStartCapture(void) {
     void *head = NULL;
