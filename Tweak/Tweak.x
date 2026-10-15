@@ -922,7 +922,7 @@ static uint64_t TGSenderID2;
 
 static uint64_t v_log(uint64_t v, NSString *src);
 static void TGDiagLog(NSString *msg);
-static uint64_t TGFetchSenderID(void) {
+__attribute__((unused)) static uint64_t TGFetchSenderID(void) {
     if (TGSenderID2) return TGSenderID2;
     uint64_t slot = 0;
     for (uint32_t i = 0; i < _dyld_image_count(); i++) {
@@ -975,8 +975,9 @@ __attribute__((unused)) static void TGTouchSend(int type, float x, float y) {
     IOHIDEventSetIntegerValue(parent, 0xb0006, acc);
     IOHIDEventSetIntegerValue(parent, 0xb0007, 1);
     IOHIDEventSetIntegerValue(parent, 0xb0008, 1);
-    uint64_t sid = TGFetchSenderID();
-    if (sid) IOHIDEventSetSenderID(parent, sid);
+    // cn1.21：不盖章（AutoTouch slot=-1 时也从不盖章照样生效；过期章反而主动被拒）
+    // uint64_t sid = TGFetchSenderID();
+    // if (sid) IOHIDEventSetSenderID(parent, sid);
     IOHIDEventSystemClientDispatchEvent(TGHIDClient, parent);
     CFRelease(parent);
 }
