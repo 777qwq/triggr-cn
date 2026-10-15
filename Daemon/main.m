@@ -143,7 +143,7 @@ static void TGTouchSend(int type, float x, float y) {
     IOHIDEventAppendEvent(parent, finger, 0);
     IOHIDEventSetFloatValue(parent, 0xb0000, x);
     IOHIDEventSetFloatValue(parent, 0xb0001, y);
-    IOHIDEventSetIntegerValue(parent, 0xb0007, touch ? 1 : 0);
+    IOHIDEventSetIntegerValue(parent, 0xb0007, 0x23); // 千里眼实证：AutoTouch 被接受事件 b0007=0x23
     IOHIDEventSetIntegerValue(parent, 0xb0008, touch ? 1 : 0);
     IOHIDEventSetSenderID(parent, 0); // 千里眼实证：被接受的合成事件 sender=0（显式清零，默认值≠0 会被拒）
     TGTouchLog([NSString stringWithFormat:@"dispatch: type=%d x=%.1f y=%.1f sender=0", type, x, y]);
