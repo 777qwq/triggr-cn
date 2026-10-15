@@ -910,30 +910,45 @@ static void TGDiagLog(NSString *msg) {
 static id TGTouchReceiver;
 static SEL TGTouchSels[3];
 static BOOL TGTouchReady = NO;
-// 全类扫描：找响应 touchDown:x:y: / touchMove:x:y: / touchUp:x:y: 的类（类方法优先，其次实例方法）
+// 只认 AutoTouch 的 EventSimulate 类（逆向实锤的接收者）；选择器两种拼写都试；绝不盲调其他类
 static BOOL TGTouchProbe(void) {
-    const SEL sels[3] = {sel_registerName("touchDown:x:y:"), sel_registerName("touchMove:x:y:"), sel_registerName("touchUp:x:y:")};
-    unsigned int cnt = 0;
-    Class *all = objc_copyClassList(&cnt);
-    Class hit = Nil;
-    BOOL isInst = NO;
-    for (unsigned int i = 0; i < cnt; i++) {
-        Class c = all[i];
-        if (class_getClassMethod(c, sels[0]) && class_getClassMethod(c, sels[1]) && class_getClassMethod(c, sels[2])) {
-            hit = c; isInst = NO; break;
+    Class c = objc_getClass("EventSimulate");
+    if (!c) { TGDiagLog(@"probe: no EventSimulate"); return NO; }
+    const char *variants[2] = {"x:y:", "atX:andY:"};
+    for (int v = 0; v < 2; v++) {
+        char n1[32], n2[32], n3[32];
+        snprintf(n1, 32, "touchDown:%s", variants[v]);
+        snprintf(n2, 32, "touchMove:%s", variants[v]);
+        snprintf(n3, 32, "touchUp:%s", variants[v]);
+        SEL a = sel_registerName(n1), b = sel_registerName(n2), d = sel_registerName(n3);
+        if (class_getClassMethod(c, a) && class_getClassMethod(c, b) && class_getClassMethod(c, d)) {
+            TGTouchSels[0] = a; TGTouchSels[1] = b; TGTouchSels[2] = d;
+            TGTouchReceiver = Nil; // 类方法
+            TGTouchReady = YES;
+            TGDiagLog([NSString stringWithFormat:@"probe: EventSimulate class methods %s", variants[v]]);
+            return YES;
         }
-        if (class_getInstanceMethod(c, sels[0]) && class_getInstanceMethod(c, sels[1]) && class_getInstanceMethod(c, sels[2])) {
-            hit = c; isInst = YES; break;
+        if (class_getInstanceMethod(c, a) && class_getInstanceMethod(c, b) && class_getInstanceMethod(c, d)) {
+            TGTouchSels[0] = a; TGTouchSels[1] = b; TGTouchSels[2] = d;
+            TGTouchReceiver = [[c alloc] init];
+            TGTouchReady = YES;
+            TGDiagLog([NSString stringWithFormat:@"probe: EventSimulate instance methods %s", variants[v]]);
+            return YES;
         }
     }
-    free(all);
-    if (!hit) { TGDiagLog(@"probe: no class responds to touchDown:x:y:"); return NO; }
-    NSString *nm = NSStringFromClass(hit);
-    TGDiagLog([NSString stringWithFormat:@"probe: found %@ (inst=%d)", nm, isInst]);
-    TGTouchSels[0] = sels[0]; TGTouchSels[1] = sels[1]; TGTouchSels[2] = sels[2];
-    if (isInst) TGTouchReceiver = [[hit alloc] init];
-    TGTouchReady = YES;
-    return YES;
+    // 记录 EventSimulate 实际拥有的 touch 相关方法名，供下一步修复
+    unsigned int mc = 0;
+    NSString *report = @"";
+    for (int pass = 0; pass < 2; pass++) {
+        Method *ml = class_copyMethodList(pass == 0 ? object_getClass(c) : c, &mc);
+        for (unsigned int i = 0; i < mc; i++) {
+            NSString *n = [NSString stringWithUTF8String:sel_getName(method_getName(ml[i]))];
+            if ([n.lowercaseString containsString:@"touch"]) report = [report stringByAppendingFormat:@"%@(%@) ", n, pass == 0 ? @"+" : @"-"];
+        }
+        free(ml);
+    }
+    TGDiagLog([NSString stringWithFormat:@"probe: EventSimulate touch methods: %@", report]);
+    return NO;
 }
 
 
