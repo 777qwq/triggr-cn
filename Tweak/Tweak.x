@@ -908,6 +908,38 @@ static void TGDiagLog(NSString *msg) {
     if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
     [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
 }
+// SB 内 senderID 捕获（02:06 实证可捕获；崩溃疑在注销竞态，本版回调零副作用）
+typedef struct CF_BRIDGED_TYPE(id) IOHIDEvent *IOHIDEventRef2;
+typedef struct CF_BRIDGED_TYPE(id) IOHIDEventSystemClient *IOHIDEventSystemClientRef2;
+extern uint64_t IOHIDEventGetSenderID(IOHIDEventRef2);
+extern int32_t IOHIDEventGetType(IOHIDEventRef2);
+extern IOHIDEventSystemClientRef2 IOHIDEventSystemClientCreate(CFAllocatorRef);
+extern void IOHIDEventSystemClientScheduleWithRunLoop(IOHIDEventSystemClientRef2, CFRunLoopRef, CFStringRef);
+extern void IOHIDEventSystemClientRegisterEventCallback(IOHIDEventSystemClientRef2, void *, void *, void *);
+extern const char *_dyld_get_image_name(uint32_t);
+extern void *_dyld_get_image_header(uint32_t);
+extern uint32_t _dyld_image_count(void);
+static void TGDiagLog(NSString *msg);
+static volatile uint64_t TGCapturedSender;
+static void TGCaptureCB(void *target, void *refcon, void *service, void *event) {
+    if (TGCapturedSender || !event) return;
+    if (IOHIDEventGetType((IOHIDEventRef2)event) != 11) return;
+    TGCapturedSender = IOHIDEventGetSenderID((IOHIDEventRef2)event);
+}
+static void TGStartCapture(void) {
+    void *head = NULL;
+    for (uint32_t i = 0; i < _dyld_image_count(); i++) {
+        const char *nm = _dyld_get_image_name(i);
+        if (nm && strstr(nm, "BackBoardServices")) { head = _dyld_get_image_header(i); break; }
+    }
+    if (!head) return;
+    IOHIDEventSystemClientRef2 cl = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
+    if (!cl) return;
+    IOHIDEventSystemClientScheduleWithRunLoop(cl, CFRunLoopGetMain(), kCFRunLoopCommonModes);
+    IOHIDEventSystemClientRegisterEventCallback(cl, (void *)TGCaptureCB, NULL, NULL);
+    TGDiagLog(@"capture: registered");
+}
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -959,8 +991,12 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             CGSize s = UIScreen.mainScreen.bounds.size;
             [[NSDictionary dictionaryWithObjectsAndKeys:@(s.width), @"w", @(s.height), @"h", nil]
                 writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist" atomically:YES];
+            if (TGCapturedSender) {
+                [[NSDictionary dictionaryWithObjectsAndKeys:@(TGCapturedSender), @"senderID", nil]
+                    writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist" atomically:YES];
+            }
             notify_post("cn.triggr.backswipe");
-            TGDiagLog([NSString stringWithFormat:@"back: frame (%.0fx%.0f) + notify posted", s.width, s.height]);
+            TGDiagLog([NSString stringWithFormat:@"back: frame (%.0fx%.0f) captured=%qX notify posted", s.width, s.height, TGCapturedSender]);
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {
@@ -3037,6 +3073,7 @@ static void TGUpdateOtherEvents(void) {
 
 %ctor {
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) return;
+    TGStartCapture();
     TGReadAssignments();
     int token;
     notify_register_dispatch(TGPrefsChangedNotification, &token, dispatch_get_main_queue(), ^(int t) { TGReadAssignments(); });
