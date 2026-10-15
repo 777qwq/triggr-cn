@@ -57,71 +57,6 @@ static void TGRelayDiag(NSString *msg) {
 }
 
 static UINavigationController *TGPoppableNav(UIViewController *vc, int depth);
-// ---- 左滑返回（leftPan 同款）：App 内边缘手势驱动导航返回 ----
-@interface TGEdgeBackDelegate : NSObject <UIGestureRecognizerDelegate>
-- (void)tgEdgePan:(UIPanGestureRecognizer *)g;
-@end
-@implementation TGEdgeBackDelegate
-- (void)tgEdgePan:(UIPanGestureRecognizer *)g {
-    UINavigationController *nav = objc_getAssociatedObject(g, (void *)0x114514);
-    if (g.state == UIGestureRecognizerStateBegan) {
-        UIResponder *r = g.view;
-        while (r && !nav) {
-            if ([r isKindOfClass:UIViewController.class]) {
-                UIViewController *vc = (UIViewController *)r;
-                if (vc.navigationController && vc.navigationController.viewControllers.count > 1) { nav = vc.navigationController; break; }
-            }
-            r = r.nextResponder;
-        }
-        if (!nav) nav = TGPoppableNav(g.view.window.rootViewController, 0);
-        if (!nav || nav.viewControllers.count <= 1) return;
-        objc_setAssociatedObject(g, (void *)0x114514, nav, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    if (!nav) return;
-    // 真实手指 pan 喂给系统交互过渡（leftPan 同款获取方式：interactivePop 的 delegate=UINavigationInteractiveTransition，导航初始化即存在）
-    id controller = nav.interactivePopGestureRecognizer.delegate;
-    if (controller && [controller respondsToSelector:@selector(handleNavigationTransition:)]) {
-        ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), g);
-        return;
-    }
-    if (g.state == UIGestureRecognizerStateEnded) { // 兜底阈值 pop
-        CGPoint t = [g translationInView:g.view];
-        CGPoint v = [g velocityInView:g.view];
-        if (t.x > 50 || v.x > 300) [nav popViewControllerAnimated:YES];
-    }
-}
-- (BOOL)gestureRecognizerShouldBegin:(UIPanGestureRecognizer *)g {
-    return [g velocityInView:g.view].x > 60; // 只认右滑
-}
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)o {
-    return NO; // 独占（leftPan 同款）
-}
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)o {
-    return YES; // 内容手势须等边缘手势失败——边缘优先（leftPan 同款 hook 语义）
-}
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldReceiveTouch:(UITouch *)t {
-    return YES;
-}
-@end
-static TGEdgeBackDelegate *TGEdgeDel;
-
-%group EdgeBack
-%hook UIWindow
-- (void)didMoveToWindow {
-    %orig;
-    if (!self || !self.window) return;
-    static char kTGEdgeKey;
-    if (objc_getAssociatedObject(self, &kTGEdgeKey)) return;
-    if (!TGEdgeDel) TGEdgeDel = [TGEdgeBackDelegate new];
-    UIScreenEdgePanGestureRecognizer *g = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:TGEdgeDel action:@selector(tgEdgePan:)];
-    g.edges = UIRectEdgeLeft;
-    g.delegate = TGEdgeDel;
-    objc_setAssociatedObject(self, &kTGEdgeKey, g, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    [self addGestureRecognizer:g];
-}
-%end
-%end
-
 // ---- 返回上级：系统原生返回（辅助功能逃逸）+ 递归 pop 兜底 ----
 static IMP TGVCBaseEscapeImp(void) {
     static IMP imp;
@@ -283,6 +218,20 @@ static void TGRelayDoBack(void) {
     if (done) notify_post("cn.triggr.back.ack"); // 主流水线已处理，告知 Tweak 免 Lua 兜底
     if (!done) TGRelayDiag(@"no back route found");
 }
+
+// ---- 左滑返回（leftPan 核心方案）：hook 系统交互过渡类，让淘宝类禁用边缘返回的 App 复活原生边缘手势（全系统动画） ----
+%group EdgeBack
+%hook _UINavigationInteractiveTransition
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    BOOL r = %orig;
+    if (!r && [g isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) {
+        g.enabled = YES;
+        return YES; // 淘宝等禁用边缘返回的 App：强制放行，系统动画照常
+    }
+    return r;
+}
+%end
+%end
 
 %ctor {
     // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
