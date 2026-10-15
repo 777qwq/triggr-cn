@@ -901,6 +901,13 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
             #include <mach/mach_time.h>
 
 
+static void TGDiagLog(NSString *msg) {
+    NSString *path = @"/var/mobile/Documents/triggr_diag.log";
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
+    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
+    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
+}
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -953,6 +960,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             [[NSDictionary dictionaryWithObjectsAndKeys:@(s.width), @"w", @(s.height), @"h", nil]
                 writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist" atomically:YES];
             notify_post("cn.triggr.backswipe");
+            TGDiagLog([NSString stringWithFormat:@"back: frame (%.0fx%.0f) + notify posted", s.width, s.height]);
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

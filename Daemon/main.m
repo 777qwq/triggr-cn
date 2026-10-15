@@ -103,9 +103,18 @@ static IOHIDEventSystemClientRef TGTouchClient;
 static uint64_t TGTouchSender;
 #define kIOHIDDigitizer 11
 
+static void TGTouchLog(NSString *msg) {
+    NSString *path = @"/var/mobile/Documents/triggrd_touch.log";
+    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [NSDate date], msg];
+    NSFileHandle *h = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!h) { [line writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]; return; }
+    [h seekToEndOfFile]; [h writeData:[line dataUsingEncoding:NSUTF8StringEncoding]]; [h closeFile];
+}
+
 static void TGTouchCaptureCB(void *target, void *refcon, void *service, IOHIDEventRef event) {
     if (!event || TGTouchSender || IOHIDEventGetType(event) != kIOHIDDigitizer) return;
     TGTouchSender = IOHIDEventGetSenderID(event);
+    TGTouchLog([NSString stringWithFormat:@"senderID captured: %qX", TGTouchSender]);
     [[NSDictionary dictionaryWithObjectsAndKeys:@(TGTouchSender), @"senderID", nil]
         writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.daemon.senderid.plist" atomically:YES];
     if (TGTouchClient) IOHIDEventSystemClientUnregisterEventCallback(TGTouchClient);
@@ -113,6 +122,7 @@ static void TGTouchCaptureCB(void *target, void *refcon, void *service, IOHIDEve
 static void TGTouchSend(int type, float x, float y) {
     if (!TGTouchClient) {
         TGTouchClient = IOHIDEventSystemClientCreate(kCFAllocatorDefault);
+        TGTouchLog([NSString stringWithFormat:@"client=%@", TGTouchClient ? @"created" : @"FAILED"]);
         if (!TGTouchClient) return;
         IOHIDEventSystemClientScheduleWithRunLoop(TGTouchClient, CFRunLoopGetMain(), kCFRunLoopDefaultMode);
         IOHIDEventSystemClientRegisterEventCallback(TGTouchClient, (void *)TGTouchCaptureCB, NULL, NULL);
@@ -141,6 +151,7 @@ static void TGTouchSend(int type, float x, float y) {
 static void TGBackSwipe(void) {
     NSDictionary *f = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist"];
     float w = [f[@"w"] floatValue], h = [f[@"h"] floatValue];
+    TGTouchLog([NSString stringWithFormat:@"swipe fire: w=%.0f h=%.0f sender=%qX", w, h, TGTouchSender]);
     if (w < 100 || h < 100) return;
     float x0 = 6, y = h / 2, x1 = w * 0.4;
     TGTouchSend(0, x0, y);
@@ -159,6 +170,7 @@ int main(void) {
         notify_register_dispatch(TGRunRequestNotification, &token, dispatch_get_main_queue(), ^(int t) { TGDrainQueue(); });
         int ttoken;
         notify_register_dispatch("cn.triggr.backswipe", &ttoken, dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^(int t) { TGBackSwipe(); });
+        TGTouchLog(@"triggrd touch engine started");
         TGDrainQueue();
         dispatch_main();
     }
