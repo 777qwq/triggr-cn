@@ -270,7 +270,8 @@ static void TGPrefsDBProbe(void) {
             // Compiled-time CoreData class reference: NSClassFromString here
             // hit a same-name private class (cn2.8 lesson: unrecognized selector).
             NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc]
-                initWithSQLiteStoreURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
+                initWithURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
+            desc.type = NSSQLiteStoreType;
             if (!desc) { TGDiagLogP(@"prefs: desc=nil"); return; }
             NSError *dbErr = nil; // sync load is NSPersistentStoreDescription's default
             id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError **))objc_msgSend)([dbCls alloc],
