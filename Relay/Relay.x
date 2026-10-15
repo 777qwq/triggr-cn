@@ -65,28 +65,6 @@ static IMP TGVCBaseEscapeImp(void) {
     return imp;
 }
 
-// ---- 合成左滑：驱动系统交互过渡（PanCake 机制 + 速度伪造） ----
-@interface _UINavigationInteractiveTransitionBase : NSObject
--(void)handleNavigationTransition:(UIPanGestureRecognizer*)arg1;
-@end
-
-@interface TGFakeSwipePan : UIPanGestureRecognizer
-@property (nonatomic, assign) CGFloat progress;
-@end
-@implementation TGFakeSwipePan
-- (CGPoint)translationInView:(UIView *)view {
-    CGFloat w = view.bounds.size.width ?: 390;
-    return CGPointMake(self.progress * w * 0.62, 0);
-}
-- (CGPoint)locationInView:(UIView *)view {
-    CGFloat h = view.bounds.size.height ?: 800;
-    return CGPointMake(self.progress * 60 + 2, h / 2);
-}
-- (CGPoint)velocityInView:(UIView *)view {
-    return CGPointMake(3000, 0);
-}
-@end
-
 // 深度优先找第一个“真实现了”逃逸的元素（跳过 UIViewController 基类默认实现）
 static BOOL TGEscapeSearch(UIViewController *vc, int depth) {
     if (!vc || depth > 12) return NO;
@@ -110,37 +88,7 @@ static BOOL TGBackSearch(UIViewController *vc, int depth) {
     UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
     if (nav && nav.viewControllers.count > 1 && nav.topViewController == vc) {
         TGRelayDiag([NSString stringWithFormat:@"pop nav at %@ (depth %d, %lu levels)", vc, depth, (unsigned long)nav.viewControllers.count]);
-        id controller = [nav valueForKey:@"_cachedInteractionController"];
-        if (controller && [controller respondsToSelector:@selector(handleNavigationTransition:)]) {
-            UIViewController *fromVC = nav.topViewController;
-            TGFakeSwipePan *pan = [[TGFakeSwipePan alloc] init];
-            [pan setValue:@(UIGestureRecognizerStateBegan) forKey:@"state"];
-            ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), pan);
-            __block CGFloat p = 0;
-            dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-            dispatch_source_set_timer(timer, DISPATCH_TIME_NOW, 16 * NSEC_PER_MSEC, 0);
-            dispatch_source_set_event_handler(timer, ^{
-                p += 0.07;
-                pan.progress = MIN(p, 1.0);
-                if (p < 1.0) {
-                    [pan setValue:@(UIGestureRecognizerStateChanged) forKey:@"state"];
-                    ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), pan);
-                } else {
-                    [pan setValue:@(UIGestureRecognizerStateEnded) forKey:@"state"];
-                    ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), pan);
-                    dispatch_source_cancel(timer);
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-                        if (nav.topViewController == fromVC && nav.viewControllers.count > 1) {
-                            TGRelayDiag(@"bounced -> standard pop");
-                            [nav popViewControllerAnimated:YES];
-                        }
-                    });
-                }
-            });
-            dispatch_resume(timer);
-            return YES;
-        }
-        [nav popViewControllerAnimated:YES];
+        [nav popViewControllerAnimated:YES]; // 标准滑动动画（假 pan 驱动过渡被系统无视，cn1.48 实证）
         return YES;
     }
     if (vc.presentingViewController && vc == vc.presentedViewController) {
