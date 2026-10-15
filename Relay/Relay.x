@@ -224,11 +224,21 @@ static void TGRelayDoBack(void) {
 %hook _UINavigationInteractiveTransition
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
     BOOL r = %orig;
+    static int logged;
+    if (logged < 8) {
+        logged++;
+        TGRelayDiag([NSString stringWithFormat:@"shouldBegin: orig=%d g=%@ enabled=%d", r, NSStringFromClass(g.class), g.enabled]);
+    }
     if (!r && [g isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) {
         g.enabled = YES;
+        TGRelayDiag(@"shouldBegin: forced YES");
         return YES; // 淘宝等禁用边缘返回的 App：强制放行，系统动画照常
     }
     return r;
+}
+- (void)handleNavigationTransition:(UIPanGestureRecognizer *)g {
+    TGRelayDiag([NSString stringWithFormat:@"handleNavTrans: state=%ld g=%@", (long)g.state, NSStringFromClass(g.class)]);
+    %orig;
 }
 %end
 %end
