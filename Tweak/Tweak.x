@@ -1001,16 +1001,34 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // 触摸引擎在 triggrd（arm64 守护进程，无 PAC 限制，自有 senderID 捕获）
-            CGSize s = UIScreen.mainScreen.bounds.size;
-            [[NSDictionary dictionaryWithObjectsAndKeys:@(s.width), @"w", @(s.height), @"h", nil]
-                writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.frame.plist" atomically:YES];
-            if (TGCapturedSender) {
-                [[NSDictionary dictionaryWithObjectsAndKeys:@(TGCapturedSender), @"senderID", nil]
-                    writeToFile:@"/var/mobile/Library/Preferences/com.triggr.cn.senderid.plist" atomically:YES];
+            // 首选：AutoTouch 完整会话路径（PlayingManager 播放预置左滑脚本；TA 实测录制回放在淘宝有效）
+            if (NSClassFromString(@"PlayingManager")) {
+                NSArray *dirs = TGAutoTouchScriptDirectories();
+                NSString *lua = @"local w, h = 430, 932\n"
+                                @"if type(getScreenResolution) == 'function' then w, h = getScreenResolution() end\n"
+                                @"local x0, y = 6, math.floor(h / 2)\n"
+                                @"local x1 = math.floor(w * 0.4)\n"
+                                @"touchDown(1, x0, y)\n"
+                                @"for i = 1, 24 do\n"
+                                @"    touchMove(1, x0 + math.floor((x1 - x0) * i / 24), y)\n"
+                                @"    usleep(14000)\n"
+                                @"end\n"
+                                @"touchUp(1, x1, y)\n";
+                BOOL deployed = NO;
+                for (NSString *dir in dirs) {
+                    NSString *path = [dir stringByAppendingPathComponent:@"TriggrBack.lua"];
+                    if ([lua writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]) { deployed = YES; break; }
+                }
+                TGDiagLog([NSString stringWithFormat:@"back: lua deployed=%d dirs=%lu", deployed, (unsigned long)dirs.count]);
+                if (deployed) {
+                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                        @try { TGRunAutoTouch(@"TriggrBack"); TGDiagLog(@"back: playing started"); }
+                        @catch (NSException *e) { TGDiagLog([NSString stringWithFormat:@"back: play err %@", e]); }
+                    });
+                    return YES;
+                }
             }
-            notify_post("cn.triggr.backswipe");
-            TGDiagLog([NSString stringWithFormat:@"back: frame (%.0fx%.0f) captured=%qX notify posted", s.width, s.height, TGCapturedSender]);
+            notify_post(TGRelayBack);
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {
