@@ -965,7 +965,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             });
             acked = NO;
             notify_post(TGRelayBack);
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                 if (acked) return;
                 if (!NSClassFromString(@"PlayingManager")) return; // 无 AutoTouch 用户到此为止
                 NSString *dir = @"/var/mobile/Library/triggr";
