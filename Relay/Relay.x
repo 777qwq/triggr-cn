@@ -78,13 +78,13 @@ static UINavigationController *TGPoppableNav(UIViewController *vc, int depth);
         objc_setAssociatedObject(g, (void *)0x114514, nav, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
     if (!nav) return;
-    // 真实手指 pan 喂给系统交互过渡：指纹跟随+系统动画+可取消（leftPan 同款体验）
-    id controller = [nav valueForKey:@"_cachedInteractionController"];
+    // 真实手指 pan 喂给系统交互过渡（leftPan 同款获取方式：interactivePop 的 delegate=UINavigationInteractiveTransition，导航初始化即存在）
+    id controller = nav.interactivePopGestureRecognizer.delegate;
     if (controller && [controller respondsToSelector:@selector(handleNavigationTransition:)]) {
         ((void (*)(id, SEL, id))objc_msgSend)(controller, @selector(handleNavigationTransition:), g);
         return;
     }
-    if (g.state == UIGestureRecognizerStateEnded) { // 无交互过渡时兜底阈值 pop
+    if (g.state == UIGestureRecognizerStateEnded) { // 兜底阈值 pop
         CGPoint t = [g translationInView:g.view];
         CGPoint v = [g velocityInView:g.view];
         if (t.x > 50 || v.x > 300) [nav popViewControllerAnimated:YES];
