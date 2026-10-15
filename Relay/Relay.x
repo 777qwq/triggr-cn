@@ -76,10 +76,6 @@ static UINavigationController *TGPoppableNav(UIViewController *vc, int depth);
         if (!nav) nav = TGPoppableNav(g.view.window.rootViewController, 0);
         if (!nav || nav.viewControllers.count <= 1) return;
         objc_setAssociatedObject(g, (void *)0x114514, nav, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        if (NSClassFromString(@"UIImpactFeedbackGenerator")) {
-            id h = [[NSClassFromString(@"UIImpactFeedbackGenerator") alloc] initWithStyle:(NSInteger)1];
-            [h performSelector:@selector(impactOccurred)];
-        }
     }
     if (!nav) return;
     // 真实手指 pan 喂给系统交互过渡：指纹跟随+系统动画+可取消（leftPan 同款体验）
