@@ -951,6 +951,8 @@ static void TGTouchSend(int type, float x, float y) {
     uint64_t ts = mach_absolute_time();
     IOHIDEventRef parent = IOHIDEventCreateDigitizerEvent(kCFAllocatorDefault, ts, 3, 0, 1, 0, 0, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0);
     if (!parent) return;
+    IOHIDEventSetIntegerValue(parent, 0xb0019, 1); // 合成标记（漏抄的两行，SimulateTouch 同款）
+    IOHIDEventSetIntegerValue(parent, 0x4, 1);
     Boolean t = (type != 2);
     uint32_t fl = (type == 0) ? 4 : 3; // 逆向实锤：down=4, move/up=3（cinc w4,w8,eq）
     IOHIDEventRef finger = IOHIDEventCreateDigitizerFingerEvent(kCFAllocatorDefault, ts, 0, 2, fl, x, y, 0.0f, 0.0f, 0.0f, t, t, 0);
