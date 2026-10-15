@@ -984,6 +984,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 BOOL deployed = NO;
                 for (NSString *dir in dirs) {
                     NSString *path = [dir stringByAppendingPathComponent:@"TriggrBack.lua"];
+                    if ([NSFileManager.defaultManager fileExistsAtPath:path]) { deployed = YES; break; } // 用户自备脚本优先
                     if ([lua writeToFile:path atomically:YES encoding:NSUTF8StringEncoding error:nil]) { deployed = YES; break; }
                 }
                 TGDiagLog([NSString stringWithFormat:@"back: lua deployed=%d dirs=%lu", deployed, (unsigned long)dirs.count]);
