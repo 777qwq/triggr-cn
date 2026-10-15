@@ -286,12 +286,16 @@ static void TGPrefsDBProbe(void) {
             SEL listSel = @selector(sortedVisibleWorkflowsByName);
             if (![db respondsToSelector:listSel]) { TGDiagLogP(@"prefs: db no list"); return; }
             id list = ((id (*)(id, SEL))objc_msgSend)(db, listSel);
-            NSUInteger n = [list count];
+            // sortedVisibleWorkflowsByName returns a lazy WFDatabaseResult;
+            // .descriptors is the backing NSArray (cn2.9 lesson).
+            if (![list respondsToSelector:@selector(descriptors)]) { TGDiagLogP(@"prefs: no descriptors"); return; }
+            NSArray *listArr = [list descriptors];
+            NSUInteger n = [listArr count];
             TGDiagLogP([NSString stringWithFormat:@"prefs: workflows=%lu", (unsigned long)n]);
             // Persist name->UUID map for the SB side (zero DB work there).
             NSMutableDictionary<NSString *, NSString *> *map = [NSMutableDictionary dictionary];
             for (NSUInteger i = 0; i < n; i++) {
-                id ref = [list objectAtIndex:i];
+                id ref = [listArr objectAtIndex:i];
                 NSString *nm = [ref respondsToSelector:@selector(name)] ? [ref name] : nil;
                 NSString *idn = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
                 if (nm.length && idn.length) map[nm] = idn;
