@@ -785,8 +785,11 @@ static void TGRunShortcut(NSString *name) {
         else TGDiagLog([NSString stringWithFormat:@"shortcut: no mapping for %@ (map=%@)", name, map ? [NSString stringWithFormat:@"ok %lu", (unsigned long)map.count] : @"nil"]);
     }
 
-    Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
-                   ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
+    // Actra uses ONLY WFWidgetWorkflowRunnerClient on the SB side (verified:
+    // zero occurrences of the SpringBoard variant in its binary). The SB variant
+    // builds an incomplete run request on 16.3 -> server Code=3 "not found".
+    Class clientCls = NSClassFromString(@"WFWidgetWorkflowRunnerClient")
+                   ?: NSClassFromString(@"WFSpringBoardWorkflowRunnerClient");
     if (!clientCls) { TGDiagLog(@"shortcut: no runner client class"); return; }
     SEL initSel = @selector(initWithWorkflowIdentifier:);
     if (![clientCls instancesRespondToSelector:initSel]) { TGDiagLog(@"shortcut: no init"); return; }
