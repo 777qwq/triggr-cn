@@ -1024,7 +1024,8 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 }
                 TGDiagLog([NSString stringWithFormat:@"back: lua deployed=%d dirs=%lu", deployed, (unsigned long)dirs.count]);
                 if (deployed) {
-                    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+                    // PlayingManager 会创建指示器 UIWindow——必须主线程（后台线程=CA 断言崩，cn1.33 实测）
+                    dispatch_async(dispatch_get_main_queue(), ^{
                         @try { TGRunAutoTouch(@"TriggrBack"); TGDiagLog(@"back: playing started"); }
                         @catch (NSException *e) { TGDiagLog([NSString stringWithFormat:@"back: play err %@", e]); }
                     });
