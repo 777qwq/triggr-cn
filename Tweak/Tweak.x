@@ -781,14 +781,7 @@ static void TGRunShortcut(NSString *name) {
         if (db && dladdr((__bridge void *)[db class], &di) && di.dli_fname) img = di.dli_fname;
         TGDiagLog([NSString stringWithFormat:@"db/ref fail: db=%@ img=%s resp=%d",
             db ? NSStringFromClass([db class]) : @"nil", img, db ? (int)[db respondsToSelector:refSel] : -1]);
-        Class proxyCls = NSClassFromString(@"WFDatabaseProxy");
-        id pdb = proxyCls ? ((id (*)(id, SEL))objc_msgSend)(proxyCls, @selector(defaultDatabase)) : nil;
-        TGDiagLog([NSString stringWithFormat:@"proxy: cls=%@ db=%@ resp=%d",
-            proxyCls ? NSStringFromClass(proxyCls) : @"nil",
-            pdb ? NSStringFromClass([pdb class]) : @"nil",
-            pdb ? (int)[pdb respondsToSelector:refSel] : -1]);
-        if (pdb && [pdb respondsToSelector:refSel]) db = pdb;
-        if (!db || ![db respondsToSelector:refSel]) return;
+        return;
     }
     id ref = ((id (*)(id, SEL, id))objc_msgSend)(db, refSel, name);
     if (!ref) { TGDiagLog([NSString stringWithFormat:@"shortcut: not found: %@", name]); return; }
