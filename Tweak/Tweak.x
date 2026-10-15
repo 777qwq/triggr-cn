@@ -1004,19 +1004,28 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             // 首选：AutoTouch 完整会话路径（PlayingManager 播放预置左滑脚本；TA 实测录制回放在淘宝有效）
             if (NSClassFromString(@"PlayingManager")) {
                 NSArray *dirs = TGAutoTouchScriptDirectories();
-                NSString *lua = @"local w, h = 430, 932\n"
+                // AutoTouch touch 坐标=像素（点数×scale）；cn1.33 的点数坐标只滑了 20% 宽度=手势不足
+                NSString *lua = @"toast('TriggrBack run')\n"
+                                @"local w, h = 430, 932\n"
+                                @"local sc = 2\n"
                                 @"if type(getScreenSize) == 'function' then\n"
                                 @"    local s = getScreenSize()\n"
                                 @"    if s and s.width and s.height then w, h = s.width, s.height end\n"
                                 @"end\n"
-                                @"local x0, y = 6, math.floor(h / 2)\n"
-                                @"local x1 = math.floor(w * 0.4)\n"
+                                @"if type(getScreenScale) == 'function' then\n"
+                                @"    local v = getScreenScale()\n"
+                                @"    if v and v > 0 then sc = v end\n"
+                                @"end\n"
+                                @"local pw, ph = math.floor(w * sc), math.floor(h * sc)\n"
+                                @"local x0, y = 6, math.floor(ph / 2)\n"
+                                @"local x1 = math.floor(pw * 0.4)\n"
                                 @"touchDown(1, x0, y)\n"
                                 @"for i = 1, 24 do\n"
                                 @"    touchMove(1, x0 + math.floor((x1 - x0) * i / 24), y)\n"
                                 @"    usleep(14000)\n"
                                 @"end\n"
-                                @"touchUp(1, x1, y)\n";
+                                @"touchUp(1, x1, y)\n"
+                                @"toast('TriggrBack done')\n";
                 BOOL deployed = NO;
                 for (NSString *dir in dirs) {
                     NSString *path = [dir stringByAppendingPathComponent:@"TriggrBack.lua"];
