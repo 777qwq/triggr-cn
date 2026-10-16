@@ -3058,6 +3058,7 @@ static void TGUpdateOtherEvents(void) {
 
 
 // ---- v4 runtime recon: dump Actra/WorkflowKit method tables (diagnostic build) ----
+#include <mach-o/dyld.h>
 static void TGDumpActraRuntime(void) {
     @autoreleasepool {
         FILE *f = fopen("/var/tmp/com.johndie.triggr-dump.txt", "w");
