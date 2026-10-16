@@ -4,6 +4,7 @@
 // double-release crashed SB twice). Every object is +1 from alloc/init and
 // explicitly released. NSSQLiteStoreType == @"SQLite" (CF toll-free).
 #import <CoreFoundation/CoreFoundation.h>
+#import <CoreData/CoreData.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
@@ -26,8 +27,12 @@ void TGInjectShortcutDB(void) {
     if (!dbCls) { TGDiagLog((const void *)CFSTR("sb: no WFDatabase")); return; }
     if (S0(dbCls, "defaultDatabase")) { TGDiagLog((const void *)CFSTR("sb: db already present")); return; }
 
-    id url  = S1((id)objc_getClass("NSURL"), "fileURLWithPath:", Str("/var/mobile/Library/Shortcuts/Shortcuts.sqlite"));
+    // Read-only copy under /var/mobile/Library/Triggr (SB sandbox EPERMs the
+    // real Shortcuts.sqlite; the Triggr dir is proven writable/readable).
+    id url  = S1((id)objc_getClass("NSURL"), "fileURLWithPath:", Str("/var/mobile/Library/Triggr/Shortcuts.sqlite"));
     id desc = S1(S0((id)objc_getClass("NSPersistentStoreDescription"), "alloc"), "initWithURL:", url);
+    // NSReadOnlyPersistentStoreOption = YES
+    S4(desc, "setOption:forKey:", (id)kCFBooleanTrue, (id)NSReadOnlyPersistentStoreOption);
     S0(url, "release");
     if (!desc) { TGDiagLog((const void *)CFSTR("sb: desc nil")); return; }
     V1(desc, "setType:", (id)CFSTR("SQLite"));

@@ -308,6 +308,19 @@ static void TGPrefsDBProbe(void) {
             [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
             BOOL okMap = [map writeToFile:@"/var/mobile/Library/Triggr/shortcut_map.plist" atomically:YES];
             TGDiagLogP([NSString stringWithFormat:@"prefs: map written %@ (%lu entries)", okMap ? @"ok" : @"FAILED", (unsigned long)map.count]);
+            // Ship a read-only DB copy into the Triggr dir: SB's sandbox EPERMs
+            // /var/mobile/Library/Shortcuts (cn2.15 POSIX Code=1), but it CAN
+            // read/write /var/mobile/Library/Triggr (diag.log proves it).
+            NSFileManager *fm = [NSFileManager defaultManager];
+            for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
+                NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
+                NSString *dst = [@"/var/mobile/Library/Triggr/Shortcuts.sqlite" stringByAppendingString:suffix];
+                if ([fm fileExistsAtPath:src]) {
+                    [fm removeItemAtPath:dst error:nil];
+                    BOOL ok = [fm copyItemAtPath:src toPath:dst error:nil];
+                    TGDiagLogP([NSString stringWithFormat:@"prefs: db copy%@ %@", suffix, ok ? @"ok" : @"FAILED"]);
+                }
+            }
         } @catch (NSException *e) {
             TGDiagLogP([NSString stringWithFormat:@"prefs exc: %@", e]);
         }
