@@ -1,556 +1,2589 @@
-
-// Triggr settings, laid out like Activator but with less scrolling:
 // Triggr settings, laid out like Activator but with less scrolling:
 //   Root (places) -> Place (what's assigned, one row per kind of trigger)
-//   Root (places) -> Place (what's assigned, one row per kind of trigger)
-//     -> Trigger group (each trigger shows its action) -> Action picker (folded categories).
 //     -> Trigger group (each trigger shows its action) -> Action picker (folded categories).
 
-
-#import <Preferences/PSListController.h>
 #import <Preferences/PSListController.h>
 #import <Preferences/PSSpecifier.h>
-#import <Preferences/PSSpecifier.h>
-#import <Preferences/PSTableCell.h>
 #import <Preferences/PSTableCell.h>
 #import <AltList/ATLApplicationListSelectionController.h>
-#import <AltList/ATLApplicationListSelectionController.h>
-#import <AltList/ATLApplicationListMultiSelectionController.h>
 #import <AltList/ATLApplicationListMultiSelectionController.h>
 #import <LocalAuthentication/LocalAuthentication.h>
-#import <LocalAuthentication/LocalAuthentication.h>
-#import <dlfcn.h>
 #import <dlfcn.h>
 #import <CoreData/CoreData.h>
-#import <CoreData/CoreData.h>
-#import <notify.h>
 #import <notify.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
-#import <objc/runtime.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
-#import <objc/message.h>
-#import "../Shared/TGCatalog.h"
 #import "../Shared/TGCatalog.h"
 #import "../Shared/TGHardware.h"
-#import "../Shared/TGHardware.h"
-
 
 // Private (MobileCoreServices), used only for the app's display name; AltList
-// Private (MobileCoreServices), used only for the app's display name; AltList
-// itself relies on it.
 // itself relies on it.
 @interface LSApplicationProxy : NSObject
-@interface LSApplicationProxy : NSObject
-+ (instancetype)applicationProxyForIdentifier:(NSString *)identifier;
 + (instancetype)applicationProxyForIdentifier:(NSString *)identifier;
 - (NSString *)localizedName;
-- (NSString *)localizedName;
 @end
-@end
-
 
 // [{id, name}] as stored under TGMenusKey.
-// [{id, name}] as stored under TGMenusKey.
-static NSArray<NSDictionary *> *TGReadMenus(void) {
 static NSArray<NSDictionary *> *TGReadMenus(void) {
     CFPreferencesAppSynchronize((__bridge CFStringRef)TGDomain);
-    CFPreferencesAppSynchronize((__bridge CFStringRef)TGDomain);
-    id menus = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)TGMenusKey, (__bridge CFStringRef)TGDomain));
     id menus = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)TGMenusKey, (__bridge CFStringRef)TGDomain));
     NSMutableArray *result = [NSMutableArray array];
-    NSMutableArray *result = [NSMutableArray array];
-    for (id menu in [menus isKindOfClass:NSArray.class] ? menus : @[])
     for (id menu in [menus isKindOfClass:NSArray.class] ? menus : @[])
         if ([menu isKindOfClass:NSDictionary.class] && [menu[@"id"] isKindOfClass:NSString.class]) [result addObject:menu];
-        if ([menu isKindOfClass:NSDictionary.class] && [menu[@"id"] isKindOfClass:NSString.class]) [result addObject:menu];
-    return result;
     return result;
 }
-}
-
 
 static NSString *TGDisplayTitle(NSString *action) {
-static NSString *TGDisplayTitle(NSString *action) {
-    if ([action hasPrefix:TGMenuPrefix]) {
     if ([action hasPrefix:TGMenuPrefix]) {
         NSString *menuID = [action substringFromIndex:TGMenuPrefix.length];
-        NSString *menuID = [action substringFromIndex:TGMenuPrefix.length];
-        for (NSDictionary *menu in TGReadMenus()) if ([menu[@"id"] isEqualToString:menuID]) return [@"菜单：" stringByAppendingString:[menu[@"name"] description]];
         for (NSDictionary *menu in TGReadMenus()) if ([menu[@"id"] isEqualToString:menuID]) return [@"菜单：" stringByAppendingString:[menu[@"name"] description]];
         return @"菜单（已删除）";
-        return @"菜单（已删除）";
-    }
     }
     if ([action hasPrefix:TGAppPrefix]) {
-    if ([action hasPrefix:TGAppPrefix]) {
-        NSString *identifier = [action substringFromIndex:TGAppPrefix.length];
         NSString *identifier = [action substringFromIndex:TGAppPrefix.length];
         // Looked up at runtime: nothing to link against, and a missing class just shows the id.
-        // Looked up at runtime: nothing to link against, and a missing class just shows the id.
-        Class proxyClass = NSClassFromString(@"LSApplicationProxy");
         Class proxyClass = NSClassFromString(@"LSApplicationProxy");
         LSApplicationProxy *proxy = [proxyClass respondsToSelector:@selector(applicationProxyForIdentifier:)] ? [proxyClass applicationProxyForIdentifier:identifier] : nil;
-        LSApplicationProxy *proxy = [proxyClass respondsToSelector:@selector(applicationProxyForIdentifier:)] ? [proxyClass applicationProxyForIdentifier:identifier] : nil;
-        NSString *name = [proxy respondsToSelector:@selector(localizedName)] ? [proxy localizedName] : nil;
         NSString *name = [proxy respondsToSelector:@selector(localizedName)] ? [proxy localizedName] : nil;
         return [@"打开 " stringByAppendingString:name.length ? name : identifier];
-        return [@"打开 " stringByAppendingString:name.length ? name : identifier];
-    }
     }
     return TGActionTitle(action);
-    return TGActionTitle(action);
 }
-}
-
 
 #pragma mark - Hardware
-#pragma mark - Hardware
-
 
 // Without a Home button (Face ID) there are no Home button or Touch ID triggers.
-// Without a Home button (Face ID) there are no Home button or Touch ID triggers.
-static BOOL TGShowsTriggerGroup(const TGGroup *group) {
 static BOOL TGShowsTriggerGroup(const TGGroup *group) {
     if (group->items == TGHomeButton || group->items == TGTouchID) return TGHasHomeButton();
-    if (group->items == TGHomeButton || group->items == TGTouchID) return TGHasHomeButton();
-    return YES;
     return YES;
 }
-}
-
 
 // Lock button texts in Apple's words where there's no Home button: it's the side
-// Lock button texts in Apple's words where there's no Home button: it's the side
-// (or top) button, and holding it opens Siri instead of the power-off slider.
 // (or top) button, and holding it opens Siri instead of the power-off slider.
 static NSString *TGButtonText(NSString *text) {
-static NSString *TGButtonText(NSString *text) {
-    if (!text || TGHasHomeButton()) return text;
     if (!text || TGHasHomeButton()) return text;
     NSString *name = TGLockButtonName();
-    NSString *name = TGLockButtonName();
-    text = [text stringByReplacingOccurrencesOfString:@"锁键" withString:name];
     text = [text stringByReplacingOccurrencesOfString:@"锁键" withString:name];
     text = [text stringByReplacingOccurrencesOfString:@"显示关机滑条" withString:@"唤出 Siri"];
-    text = [text stringByReplacingOccurrencesOfString:@"显示关机滑条" withString:@"唤出 Siri"];
-    return [text stringByReplacingOccurrencesOfString:@"关机滑条" withString:@"Siri"];
     return [text stringByReplacingOccurrencesOfString:@"关机滑条" withString:@"Siri"];
 }
-}
-
 
 #pragma mark - Storage
-#pragma mark - Storage
-
 
 // Each assignment is its own key ("<mode>/<trigger>" = action id, "" = none),
-// Each assignment is its own key ("<mode>/<trigger>" = action id, "" = none),
-// saved through PSListController's own preference API (setPreferenceValue: with
 // saved through PSListController's own preference API (setPreferenceValue: with
 // the specifier's defaults/key/PostNotification), which is what persists
-// the specifier's defaults/key/PostNotification), which is what persists
-// reliably from Settings. A raw CFPreferencesSetAppValue from Settings did not.
 // reliably from Settings. A raw CFPreferencesSetAppValue from Settings did not.
 static void TGConfigureStorage(PSSpecifier *spec, NSString *mode, NSString *trigger) {
-static void TGConfigureStorage(PSSpecifier *spec, NSString *mode, NSString *trigger) {
-    [spec setProperty:TGDomain forKey:@"defaults"];
     [spec setProperty:TGDomain forKey:@"defaults"];
     [spec setProperty:TGAssignmentKey(mode, trigger) forKey:@"key"];
-    [spec setProperty:TGAssignmentKey(mode, trigger) forKey:@"key"];
-    [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
     [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
 }
-}
-
 
 // A stored assignment is one action (string) or several run in order (array).
-// A stored assignment is one action (string) or several run in order (array).
-static NSArray<NSString *> *TGActionList(id value) {
 static NSArray<NSString *> *TGActionList(id value) {
     NSMutableArray *actions = [NSMutableArray array];
-    NSMutableArray *actions = [NSMutableArray array];
-    for (id item in [value isKindOfClass:NSArray.class] ? value : (value ? @[value] : @[]))
     for (id item in [value isKindOfClass:NSArray.class] ? value : (value ? @[value] : @[]))
         if ([item isKindOfClass:NSString.class] && [item length]) [actions addObject:item];
-        if ([item isKindOfClass:NSString.class] && [item length]) [actions addObject:item];
-    return actions;
     return actions;
 }
-}
-
 
 static id TGStoredValue(NSArray<NSString *> *actions) {
-static id TGStoredValue(NSArray<NSString *> *actions) {
-    if (actions.count == 0) return @"";
     if (actions.count == 0) return @"";
     return actions.count == 1 ? actions.firstObject : actions.copy;
-    return actions.count == 1 ? actions.firstObject : actions.copy;
 }
-}
-
 
 static NSString *TGListTitle(NSArray<NSString *> *actions) {
-static NSString *TGListTitle(NSArray<NSString *> *actions) {
-    if (actions.count == 0) return TGDisplayTitle(nil);
     if (actions.count == 0) return TGDisplayTitle(nil);
     NSMutableArray *titles = [NSMutableArray array];
-    NSMutableArray *titles = [NSMutableArray array];
-    for (NSString *action in actions) [titles addObject:TGDisplayTitle(action)];
     for (NSString *action in actions) [titles addObject:TGDisplayTitle(action)];
     return [titles componentsJoinedByString:@" + "];
-    return [titles componentsJoinedByString:@" + "];
 }
-}
-
 
 static NSArray<NSString *> *TGReadAssignment(PSListController *list, NSString *mode, NSString *trigger) {
-static NSArray<NSString *> *TGReadAssignment(PSListController *list, NSString *mode, NSString *trigger) {
-    PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
     PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
     TGConfigureStorage(spec, mode, trigger);
-    TGConfigureStorage(spec, mode, trigger);
-    return TGActionList([list readPreferenceValue:spec]);
     return TGActionList([list readPreferenceValue:spec]);
 }
-}
-
 
 // A trigger row that opens the action picker for one mode/trigger.
-// A trigger row that opens the action picker for one mode/trigger.
-static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString *mode, NSString *trigger);
 static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString *mode, NSString *trigger);
 static PSSpecifier *TGSubtitled(PSSpecifier *spec);
-static PSSpecifier *TGSubtitled(PSSpecifier *spec);
-
 
 // An app's name, looked up from its bundle id ("Open Music" -> "音乐").
-// An app's name, looked up from its bundle id ("Open Music" -> "音乐").
-static NSString *TGAppName(NSString *identifier) {
 static NSString *TGAppName(NSString *identifier) {
     return [TGDisplayTitle([TGAppPrefix stringByAppendingString:identifier]) substringFromIndex:@"打开 ".length];
-    return [TGDisplayTitle([TGAppPrefix stringByAppendingString:identifier]) substringFromIndex:@"打开 ".length];
 }
-}
-
 
 static NSString *TGSettingsTriggerTitle(NSString *trigger) {
-static NSString *TGSettingsTriggerTitle(NSString *trigger) {
-    if ([trigger hasPrefix:TGAppLaunchedPrefix]) return [@"打开了 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGAppLaunchedPrefix.length])];
     if ([trigger hasPrefix:TGAppLaunchedPrefix]) return [@"打开了 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGAppLaunchedPrefix.length])];
     if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@"来自 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGNotificationAppPrefix.length])];
-    if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@"来自 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGNotificationAppPrefix.length])];
-    if ([trigger hasPrefix:@"icon.flick"] && TGIsCustomTrigger(trigger)) {
     if ([trigger hasPrefix:@"icon.flick"] && TGIsCustomTrigger(trigger)) {
         NSRange colon = [trigger rangeOfString:@":"];
-        NSRange colon = [trigger rangeOfString:@":"];
-        return [NSString stringWithFormat:@"在 %@ 上%@", TGFlickDirectionTitle(trigger), TGAppName([trigger substringFromIndex:colon.location + 1])];
         return [NSString stringWithFormat:@"在 %@ 上%@", TGFlickDirectionTitle(trigger), TGAppName([trigger substringFromIndex:colon.location + 1])];
     }
-    }
-    return TGButtonText(TGTriggerTitle(trigger));
     return TGButtonText(TGTriggerTitle(trigger));
 }
-}
-
 
 #pragma mark - Shared by every page
-#pragma mark - Shared by every page
-
 
 static NSArray<NSString *> *TGModeIdentifiers(void) {
-static NSArray<NSString *> *TGModeIdentifiers(void) {
-    NSMutableArray *modes = [NSMutableArray array];
     NSMutableArray *modes = [NSMutableArray array];
     for (int m = 0; m < TG_COUNT(TGModes); m++) [modes addObject:@(TGModes[m].identifier)];
-    for (int m = 0; m < TG_COUNT(TGModes); m++) [modes addObject:@(TGModes[m].identifier)];
-    return modes;
     return modes;
 }
-}
-
 
 // Every assignment that runs something on this device: "<mode>/<trigger>" -> actions.
-// Every assignment that runs something on this device: "<mode>/<trigger>" -> actions.
-static NSDictionary<NSString *, NSArray<NSString *> *> *TGAllAssignments(void) {
 static NSDictionary<NSString *, NSArray<NSString *> *> *TGAllAssignments(void) {
     CFStringRef domain = (__bridge CFStringRef)TGDomain;
-    CFStringRef domain = (__bridge CFStringRef)TGDomain;
-    CFPreferencesAppSynchronize(domain);
     CFPreferencesAppSynchronize(domain);
     NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
-    NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
-    NSDictionary *values = keys.count ? CFBridgingRelease(CFPreferencesCopyMultiple((__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) : @{};
     NSDictionary *values = keys.count ? CFBridgingRelease(CFPreferencesCopyMultiple((__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) : @{};
     NSArray *modes = TGModeIdentifiers();
-    NSArray *modes = TGModeIdentifiers();
-    NSMutableDictionary *result = [NSMutableDictionary dictionary];
     NSMutableDictionary *result = [NSMutableDictionary dictionary];
     [values enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop) {
-    [values enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop) {
-        NSRange slash = [key rangeOfString:@"/"];
         NSRange slash = [key rangeOfString:@"/"];
         if (slash.location == NSNotFound) return;
-        if (slash.location == NSNotFound) return;
-        NSString *mode = [key substringToIndex:slash.location];
         NSString *mode = [key substringToIndex:slash.location];
         if (![modes containsObject:mode] && !([mode hasPrefix:TGAppModePrefix] && mode.length > TGAppModePrefix.length)) return;
-        if (![modes containsObject:mode] && !([mode hasPrefix:TGAppModePrefix] && mode.length > TGAppModePrefix.length)) return;
-        NSString *trigger = [key substringFromIndex:slash.location + 1];
         NSString *trigger = [key substringFromIndex:slash.location + 1];
         if (!TGIsKnownTrigger(trigger) || !TGTriggerFitsHardware(trigger, TGHasHomeButton())) return;
-        if (!TGIsKnownTrigger(trigger) || !TGTriggerFitsHardware(trigger, TGHasHomeButton())) return;
-        NSArray *actions = TGActionList(value);
         NSArray *actions = TGActionList(value);
         if (actions.count) result[key] = actions;
-        if (actions.count) result[key] = actions;
-    }];
     }];
     return result;
-    return result;
 }
-}
-
 
 // "…only work at the Home Screen", "…replace it inside apps".
-// "…only work at the Home Screen", "…replace it inside apps".
-static NSString *TGAppName(NSString *identifier);
 static NSString *TGAppName(NSString *identifier);
 
-
-// A place's name: "任意位置", …, or the app's name for In Specific Apps.
 // A place's name: "任意位置", …, or the app's name for In Specific Apps.
 static NSString *TGPlaceTitle(NSString *mode) {
-static NSString *TGPlaceTitle(NSString *mode) {
-    if ([mode hasPrefix:TGAppModePrefix]) return TGAppName([mode substringFromIndex:TGAppModePrefix.length]);
     if ([mode hasPrefix:TGAppModePrefix]) return TGAppName([mode substringFromIndex:TGAppModePrefix.length]);
     return TGModeTitle(mode);
-    return TGModeTitle(mode);
 }
-}
-
 
 static NSString *TGModePhrase(NSString *mode) {
-static NSString *TGModePhrase(NSString *mode) {
-    if ([mode hasPrefix:TGAppModePrefix]) return [NSString stringWithFormat:@"应用内“%@”", TGPlaceTitle(mode)];
     if ([mode hasPrefix:TGAppModePrefix]) return [NSString stringWithFormat:@"应用内“%@”", TGPlaceTitle(mode)];
     return @{ @"anywhere": @"所有位置", @"home": @"主屏幕", @"app": @"应用内", @"lock": @"锁屏界面" }[mode] ?: @"该位置";
-    return @{ @"anywhere": @"所有位置", @"home": @"主屏幕", @"app": @"应用内", @"lock": @"锁屏界面" }[mode] ?: @"该位置";
 }
-}
-
 
 static NSString *TGCountTitle(NSUInteger count) {
-static NSString *TGCountTitle(NSUInteger count) {
-    return count ? [NSString stringWithFormat:@"%lu", (unsigned long)count] : @"";
     return count ? [NSString stringWithFormat:@"%lu", (unsigned long)count] : @"";
 }
-}
-
 
 // A Settings-style icon: a white SF Symbol on a rounded colour square.
-// A Settings-style icon: a white SF Symbol on a rounded colour square.
-static void TGSetIcon(PSSpecifier *spec, NSString *symbol, UIColor *color) {
 static void TGSetIcon(PSSpecifier *spec, NSString *symbol, UIColor *color) {
     UIImage *glyph = [UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightMedium]];
-    UIImage *glyph = [UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightMedium]];
-    if (!glyph) return;
     if (!glyph) return;
     glyph = [glyph imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
-    glyph = [glyph imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
-    CGSize size = CGSizeMake(29, 29);
     CGSize size = CGSizeMake(29, 29);
     UIImage *icon = [[[UIGraphicsImageRenderer alloc] initWithSize:size] imageWithActions:^(UIGraphicsImageRendererContext *context) {
-    UIImage *icon = [[[UIGraphicsImageRenderer alloc] initWithSize:size] imageWithActions:^(UIGraphicsImageRendererContext *context) {
-        [color setFill];
         [color setFill];
         [[UIBezierPath bezierPathWithRoundedRect:(CGRect){CGPointZero, size} cornerRadius:6.5] fill];
-        [[UIBezierPath bezierPathWithRoundedRect:(CGRect){CGPointZero, size} cornerRadius:6.5] fill];
-        CGFloat scale = MIN(1, MIN(21 / glyph.size.width, 21 / glyph.size.height));
         CGFloat scale = MIN(1, MIN(21 / glyph.size.width, 21 / glyph.size.height));
         CGSize fitted = CGSizeMake(glyph.size.width * scale, glyph.size.height * scale);
-        CGSize fitted = CGSizeMake(glyph.size.width * scale, glyph.size.height * scale);
-        [glyph drawInRect:CGRectMake((size.width - fitted.width) / 2, (size.height - fitted.height) / 2, fitted.width, fitted.height)];
         [glyph drawInRect:CGRectMake((size.width - fitted.width) / 2, (size.height - fitted.height) / 2, fitted.width, fitted.height)];
     }];
-    }];
-    [spec setProperty:icon forKey:@"iconImage"];
     [spec setProperty:icon forKey:@"iconImage"];
 }
-}
-
 
 static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue, id target) {
-static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue, id target) {
-    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:name target:target set:@selector(setPreferenceValue:specifier:)
     PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:name target:target set:@selector(setPreferenceValue:specifier:)
         get:@selector(readPreferenceValue:) detail:nil cell:PSSwitchCell edit:nil];
-        get:@selector(readPreferenceValue:) detail:nil cell:PSSwitchCell edit:nil];
-    [spec setProperty:TGDomain forKey:@"defaults"];
     [spec setProperty:TGDomain forKey:@"defaults"];
     [spec setProperty:key forKey:@"key"];
-    [spec setProperty:key forKey:@"key"];
-    [spec setProperty:@(defaultValue) forKey:@"default"];
     [spec setProperty:@(defaultValue) forKey:@"default"];
     [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
-    [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
-    return spec;
     return spec;
 }
-}
-
 
 // Every Triggr page: reloads when you come back to it (so rows show what was
-// Every Triggr page: reloads when you come back to it (so rows show what was
-// picked deeper down) and lets subclasses offer a swipe action on a row.
 // picked deeper down) and lets subclasses offer a swipe action on a row.
 @interface TGListController : PSListController
-@interface TGListController : PSListController
-- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec; // nil: this row can't be swiped
 - (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec; // nil: this row can't be swiped
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec;              // do it; YES when the row goes away
-- (BOOL)swipedSpecifier:(PSSpecifier *)spec;              // do it; YES when the row goes away
-- (BOOL)replacesButtons;
 - (BOOL)replacesButtons;
 - (BOOL)statusBarTapsOn;
-- (BOOL)statusBarTapsOn;
-@end
 @end
 
-
-@implementation TGListController
 @implementation TGListController
 
-
-- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
 - (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
     return nil;
-    return nil;
 }
-}
-
 
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
-- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
-    return NO;
     return NO;
 }
-}
-
 
 - (BOOL)statusBarTapsOn {
-- (BOOL)statusBarTapsOn {
     PSSpecifier *setting = [PSSpecifier emptyGroupSpecifier];
-    PSSpecifier *setting = [PSSpecifier emptyGroupSpecifier];
-    [setting setProperty:TGDomain forKey:@"defaults"];
     [setting setProperty:TGDomain forKey:@"defaults"];
     [setting setProperty:TGStatusBarTapKey forKey:@"key"];
-    [setting setProperty:TGStatusBarTapKey forKey:@"key"];
-    return TGStatusBarTapsOn([self readPreferenceValue:setting]);
     return TGStatusBarTapsOn([self readPreferenceValue:setting]);
 }
-}
-
 
 - (BOOL)replacesButtons {
-- (BOOL)replacesButtons {
-    PSSpecifier *setting = [PSSpecifier emptyGroupSpecifier];
     PSSpecifier *setting = [PSSpecifier emptyGroupSpecifier];
     [setting setProperty:TGDomain forKey:@"defaults"];
-    [setting setProperty:TGDomain forKey:@"defaults"];
-    [setting setProperty:TGLockReplacesKey forKey:@"key"];
     [setting setProperty:TGLockReplacesKey forKey:@"key"];
     id value = [self readPreferenceValue:setting];
-    id value = [self readPreferenceValue:setting];
-    return ![value respondsToSelector:@selector(boolValue)] || [value boolValue]; // on unless turned off
     return ![value respondsToSelector:@selector(boolValue)] || [value boolValue]; // on unless turned off
 }
-}
-
 
 - (void)viewWillAppear:(BOOL)animated {
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
     [super viewWillAppear:animated];
     [self reloadSpecifiers];
-    [self reloadSpecifiers];
-    // Actra-style app-side config: Settings has no sandbox, so opening this
     // Actra-style app-side config: Settings has no sandbox, so opening this
     // panel is the moment to read the live shortcuts DB and write a
-    // panel is the moment to read the live shortcuts DB and write a
-    // name->UUID map. SpringBoard reads the map and builds descriptors by
     // name->UUID map. SpringBoard reads the map and builds descriptors by
     // hand — no copy DB, no daemon, no passthrough.
-    // hand — no copy DB, no daemon, no passthrough.
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
     @try {
-    @try {
-        FILE *dfp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
         FILE *dfp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
         #define PSDiag(fmt, ...) do { if (dfp) { fprintf(dfp, "[ps %f] " fmt "\n", [NSDate timeIntervalSinceReferenceDate], ##__VA_ARGS__); fflush(dfp); } } while(0)
-        #define PSDiag(fmt, ...) do { if (dfp) { fprintf(dfp, "[ps %f] " fmt "\n", [NSDate timeIntervalSinceReferenceDate], ##__VA_ARGS__); fflush(dfp); } } while(0)
-        PSDiag("panel sync start");
         PSDiag("panel sync start");
         dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
-        dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
-        dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
         dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
         Class dbCls = NSClassFromString(@"WFDatabase");
-        Class dbCls = NSClassFromString(@"WFDatabase");
-        if (!dbCls) { PSDiag("panel: no dbCls"); if(dfp) fclose(dfp); return; }
         if (!dbCls) { PSDiag("panel: no dbCls"); if(dfp) fclose(dfp); return; }
         id url = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
-        id url = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
-        id store = ((id(*)(id,SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
-        id store = ((id(*)(id,SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
-        store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
+        id store = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
         store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
         if (!store) { PSDiag("panel: store nil"); if(dfp) fclose(dfp); return; }
-        if (!store) { PSDiag("panel: store nil"); if(dfp) fclose(dfp); return; }
-        ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
         ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
         ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
-        ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
-        void *errp = NULL;
         void *errp = NULL;
         id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, YES, YES, &errp);
-        id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, YES, YES, &errp);
-        if (!db) { PSDiag("panel: db nil"); if(dfp) fclose(dfp); return; }
         if (!db) { PSDiag("panel: db nil"); if(dfp) fclose(dfp); return; }
         id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
-        id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
-        PSDiag("panel: refs count=%lu", (unsigned long)[refs count]);
-        PSDiag("panel: refs count=%lu", (unsigned long)[refs count]);
-        NSMutableDictionary *map = [NSMutableDictionary dictionary];
+        PSDiag("panel: refs count=%lu", (unsigned long)((NSArray *)refs).count);
         NSMutableDictionary *map = [NSMutableDictionary dictionary];
         for (id ref in refs) {
-        for (id ref in refs) {
-            NSString *name = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("name"));
             NSString *name = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("name"));
             id ident = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("identifier"));
-            id ident = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("identifier"));
-            if (![name isKindOfClass:NSString.class] || !ident) continue;
             if (![name isKindOfClass:NSString.class] || !ident) continue;
             id uuid = [ident isKindOfClass:NSUUID.class] ? ((id(*)(id,SEL))objc_msgSend)(ident, sel_registerName("UUIDString")) : ident;
-            id uuid = [ident isKindOfClass:NSUUID.class] ? ((id(*)(id,SEL))objc_msgSend)(ident, sel_registerName("UUIDString")) : ident;
-            if ([uuid isKindOfClass:NSString.class]) map[name] = uuid;
             if ([uuid isKindOfClass:NSString.class]) map[name] = uuid;
         }
-        }
-        BOOL ok = [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
         BOOL ok = [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
         PSDiag("panel: map=%lu write=%d", (unsigned long)map.count, ok);
-        PSDiag("panel: map=%lu write=%d", (unsigned long)map.count, ok);
-        if (dfp) fclose(dfp);
         if (dfp) fclose(dfp);
     } @catch (NSException *e) {
-    } @catch (NSException *e) {
-        FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
         FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
         if (fp) { NSString *l = [NSString stringWithFormat:@"[ps] panel exc %@\n", e]; fwrite(l.UTF8String,1,l.length,fp); fclose(fp); }
-        if (fp) { NSString *l = [NSString stringWithFormat:@"[ps] panel exc %@\n", e]; fwrite(l.UTF8String,1,l.length,fp); fclose(fp); }
-    }
     }
     });
+}
+
+// Shown on the right of a trigger row, like Activator. With nothing set in a
+// specific place, Anywhere's assignment still applies, so show that one.
+- (NSString *)assignedActionTitle:(PSSpecifier *)spec {
+    NSArray *actions = TGActionList([self readPreferenceValue:spec]);
+    if (actions.count) return TGListTitle(actions);
+    NSString *mode = [spec propertyForKey:@"tgMode"];
+    if (![mode isEqualToString:@"anywhere"]) {
+        NSArray *anywhere = TGReadAssignment(self, @"anywhere", [spec propertyForKey:@"tgTrigger"]);
+        if (anywhere.count) return [@"任意位置：" stringByAppendingString:TGListTitle(anywhere)];
+    }
+    // Nothing assigned: the button keeps doing its own thing; say what that is.
+    NSString *stock = TGDefaultActionTitle([spec propertyForKey:@"tgTrigger"]);
+    return stock ? [@"默认：" stringByAppendingString:stock] : @"";
+}
+
+- (BOOL)tableView:(UITableView *)tableView canEditRowAtIndexPath:(NSIndexPath *)indexPath {
+    return [self swipeTitleForSpecifier:[self specifierAtIndex:[self indexForIndexPath:indexPath]]] != nil;
+}
+
+- (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
+    return [self tableView:tableView canEditRowAtIndexPath:indexPath] ? UITableViewCellEditingStyleDelete : UITableViewCellEditingStyleNone;
+}
+
+- (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    NSString *title = [self swipeTitleForSpecifier:spec];
+    if (!title) return [UISwipeActionsConfiguration configurationWithActions:@[]];
+    __weak typeof(self) weakSelf = self;
+    UIContextualAction *action = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:title handler:^(UIContextualAction *a, UIView *view, void (^done)(BOOL)) {
+        __strong typeof(self) strongSelf = weakSelf;
+        BOOL removed = [strongSelf swipedSpecifier:spec];
+        if (removed) [strongSelf removeSpecifier:spec animated:YES];
+        done(removed);
+        // Counts, headers and the rows left behind catch up once the row has gone.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf reloadSpecifiers]; });
+    }];
+    return [UISwipeActionsConfiguration configurationWithActions:@[action]];
+}
+
+@end
+
+#pragma mark - Saved networks and devices (for Custom Events)
+
+// Saved Wi-Fi networks: MobileWiFi's C API (private; verified in Settings on iOS
+// 16.7, where WiFiKit's WFKnownNetworksManager returned nothing). Read on demand only.
+static NSArray<NSString *> *TGSavedWiFiNetworks(void) {
+    void *handle = dlopen("/System/Library/PrivateFrameworks/MobileWiFi.framework/MobileWiFi", RTLD_LAZY);
+    CFTypeRef (*create)(CFAllocatorRef, int) = handle ? dlsym(handle, "WiFiManagerClientCreate") : NULL;
+    CFArrayRef (*copyNetworks)(CFTypeRef) = handle ? dlsym(handle, "WiFiManagerClientCopyNetworks") : NULL;
+    CFStringRef (*getSSID)(CFTypeRef) = handle ? dlsym(handle, "WiFiNetworkGetSSID") : NULL;
+    if (!create || !copyNetworks || !getSSID) return @[];
+    NSMutableSet *names = [NSMutableSet set];
+    CFTypeRef client = create(kCFAllocatorDefault, 0);
+    CFArrayRef networks = client ? copyNetworks(client) : NULL;
+    for (CFIndex i = 0; networks && i < CFArrayGetCount(networks); i++) {
+        NSString *ssid = (__bridge NSString *)getSSID(CFArrayGetValueAtIndex(networks, i));
+        if (ssid.length) [names addObject:ssid];
+    }
+    if (networks) CFRelease(networks);
+    if (client) CFRelease(client);
+    return [names.allObjects sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
+// Paired Bluetooth devices: BluetoothManager (private, verified), guarded.
+static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
+    dlopen("/System/Library/PrivateFrameworks/BluetoothManager.framework/BluetoothManager", RTLD_LAZY);
+    Class managerClass = objc_getClass("BluetoothManager");
+    id manager = [managerClass respondsToSelector:@selector(sharedInstance)] ? [managerClass performSelector:@selector(sharedInstance)] : nil;
+    // In a process that hasn't used Bluetooth yet (the Triggr app), the manager
+    // needs a moment to connect and lists nothing until then: wait up to 2 s.
+    SEL available = @selector(available);
+    for (int i = 0; i < 40 && [manager respondsToSelector:available] && !((BOOL (*)(id, SEL))objc_msgSend)(manager, available); i++)
+        [NSRunLoop.currentRunLoop runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.05]];
+    NSArray *devices = [manager respondsToSelector:@selector(pairedDevices)] ? [manager performSelector:@selector(pairedDevices)] : nil;
+    NSMutableSet *names = [NSMutableSet set];
+    for (id device in devices) {
+        id name = [device respondsToSelector:@selector(name)] ? [device performSelector:@selector(name)] : nil;
+        if ([name isKindOfClass:NSString.class] && [name length]) [names addObject:name];
+    }
+    return [names.allObjects sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
+#pragma mark - Time picker (Scheduled events)
+
+@interface TGTimePickerController : UIViewController
+@property (nonatomic, copy) void (^onSave)(NSString *trigger);
+@end
+
+@implementation TGTimePickerController {
+    UIDatePicker *_picker;
+    UISegmentedControl *_days;
+    NSArray<UIButton *> *_dayButtons; // tag = weekday, 1 = Sunday
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"定时";
+    self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSave target:self action:@selector(save)];
+    _picker = [UIDatePicker new];
+    _picker.datePickerMode = UIDatePickerModeTime;
+    _picker.preferredDatePickerStyle = UIDatePickerStyleWheels;
+    _days = [[UISegmentedControl alloc] initWithItems:@[@"每天", @"工作日", @"周末", @"自定义"]];
+    _days.selectedSegmentIndex = 0;
+    [_days addTarget:self action:@selector(presetChanged) forControlEvents:UIControlEventValueChanged];
+    NSCalendar *calendar = NSCalendar.currentCalendar;
+    NSMutableArray *buttons = [NSMutableArray array];
+    for (NSInteger i = 0; i < 7; i++) {
+        NSInteger weekday = (calendar.firstWeekday - 1 + i) % 7 + 1;
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
+        button.tag = weekday;
+        [button setTitle:@[@"日",@"一",@"二",@"三",@"四",@"五",@"六"][weekday - 1] forState:UIControlStateNormal];
+        button.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
+        button.layer.cornerRadius = 18;
+        button.accessibilityLabel = @[@"周日",@"周一",@"周二",@"周三",@"周四",@"周五",@"周六"][weekday - 1];
+        [button.heightAnchor constraintEqualToConstant:36].active = YES;
+        [button addTarget:self action:@selector(dayTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [buttons addObject:button];
+    }
+    _dayButtons = buttons;
+    UIStackView *dayRow = [[UIStackView alloc] initWithArrangedSubviews:buttons];
+    dayRow.distribution = UIStackViewDistributionFillEqually;
+    dayRow.spacing = 6;
+    [self presetChanged];
+    UILabel *note = [UILabel new];
+    note.text = @"在所选星期的该时间运行。iOS 可能在睡眠时推迟定时；若延误超过 5 分钟则跳过。";
+    note.numberOfLines = 0;
+    note.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
+    note.textColor = UIColor.secondaryLabelColor;
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_picker, _days, dayRow, note]];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 16;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:stack];
+    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.topAnchor constraintEqualToAnchor:guide.topAnchor constant:16],
+        [stack.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
+        [stack.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
+    ]];
+}
+
+- (void)setDay:(UIButton *)button on:(BOOL)on {
+    button.selected = on;
+    button.backgroundColor = on ? self.view.tintColor : UIColor.tertiarySystemFillColor;
+    [button setTitleColor:on ? UIColor.whiteColor : UIColor.labelColor forState:UIControlStateNormal];
+    [button setTitleColor:on ? UIColor.whiteColor : UIColor.labelColor forState:UIControlStateSelected];
+}
+
+- (void)presetChanged {
+    NSInteger preset = _days.selectedSegmentIndex;
+    if (preset == 3) return; // Custom keeps the current picks
+    for (UIButton *button in _dayButtons) {
+        BOOL weekend = button.tag == 1 || button.tag == 7;
+        [self setDay:button on:preset == 0 || (preset == 1 && !weekend) || (preset == 2 && weekend)];
+    }
+    self.navigationItem.rightBarButtonItem.enabled = YES;
+}
+
+// Weekday digits of the picked days, Sunday first: "12" = Sunday + Monday.
+- (NSString *)pickedDays {
+    NSMutableString *digits = [NSMutableString string];
+    for (NSInteger weekday = 1; weekday <= 7; weekday++)
+        for (UIButton *button in _dayButtons) if (button.tag == weekday && button.selected) [digits appendFormat:@"%ld", (long)weekday];
+    return digits;
+}
+
+- (void)dayTapped:(UIButton *)button {
+    [self setDay:button on:!button.selected];
+    NSString *days = [self pickedDays];
+    _days.selectedSegmentIndex = [days isEqualToString:@"1234567"] ? 0 : [days isEqualToString:@"23456"] ? 1 : [days isEqualToString:@"17"] ? 2 : 3;
+    self.navigationItem.rightBarButtonItem.enabled = days.length > 0;
+}
+
+- (void)save {
+    NSDateComponents *time = [NSCalendar.currentCalendar components:NSCalendarUnitHour | NSCalendarUnitMinute fromDate:_picker.date];
+    NSString *days = [self pickedDays];
+    if (!days.length) return;
+    if (_days.selectedSegmentIndex < 3) days = @[@"daily", @"weekdays", @"weekends"][_days.selectedSegmentIndex];
+    if (self.onSave) self.onSave([NSString stringWithFormat:@"%@%02ld%02ld:%@", TGTimePrefix, (long)time.hour, (long)time.minute, days]);
+}
+
+@end
+
+#pragma mark - Conflict warnings
+
+// Why adding `adding` to `list` probably won't do what the user expects, or nil.
+static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
+    if ([list containsObject:@"system.respring"] || [list containsObject:@"system.safemode"])
+        return @"注销与安全模式会重启 SpringBoard，其后的动作不会执行。请把它们放在最后。";
+    if ([adding isEqualToString:@"system.safemode"])
+        return @"安全模式会以无插件方式重启 SpringBoard（包括 Triggr），直到你在安全模式界面点「Dismiss」。";
+    NSArray *shutdown = @[@"system.restart", @"system.poweroff"];
+    if ([list firstObjectCommonWithArray:shutdown]) return @"重启或关机之后的动作不会执行。请放在最后。";
+    if ([shutdown containsObject:adding])
+        return @"触发器一触发就会立即重启或关机，不询问。在再次运行 Dopamine 前越狱保持关闭。";
+    // Toggle / On / Off of the same switch.
+    NSArray *verbs = @[@"toggle", @"on", @"off"];
+    NSRange dot = [adding rangeOfString:@"."];
+    if (dot.location != NSNotFound && [verbs containsObject:[adding substringToIndex:dot.location]]) {
+        NSString *name = [adding substringFromIndex:dot.location];
+        for (NSString *item in list) {
+            NSRange itemDot = [item rangeOfString:@"."];
+            if (itemDot.location != NSNotFound && [verbs containsObject:[item substringToIndex:itemDot.location]] && [[item substringFromIndex:itemDot.location] isEqualToString:name])
+                return [NSString stringWithFormat:@"%@ 与 %@ 操作的是同一个开关，只有最后一个生效。", TGDisplayTitle(item), TGDisplayTitle(adding)];
+        }
+    }
+    // Full-screen UI: only one can open at a time unless a pause separates them.
+    NSSet *modal = [NSSet setWithArray:@[@"system.cc", @"system.nc", @"system.spotlight", @"system.switcher", @"system.reachability", @"system.siri", @"system.powerdown"]];
+    BOOL (^isModal)(NSString *) = ^BOOL(NSString *action) { return [modal containsObject:action] || [action hasPrefix:TGAppPrefix] || [action hasPrefix:TGSettingsPrefix]; };
+    if (isModal(adding)) {
+        for (NSString *item in list.reverseObjectEnumerator) {
+            if ([item hasPrefix:TGPausePrefix]) break;
+            if (isModal(item))
+                return [NSString stringWithFormat:@"%@ 与 %@ 无法同时打开。请在「顺序与停顿」中在它们之间加一个停顿。", TGDisplayTitle(item), TGDisplayTitle(adding)];
+        }
+    }
+    return nil;
+}
+
+#pragma mark - Order & Pauses
+
+@interface TGSequenceController : UITableViewController
+@property (nonatomic, strong) NSMutableArray<NSString *> *items;
+@property (nonatomic, copy) void (^onChange)(NSArray<NSString *> *items);
+@end
+
+@implementation TGSequenceController
+
+- (instancetype)init {
+    return [super initWithStyle:UITableViewStyleInsetGrouped];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"顺序与停顿";
+    self.tableView.editing = YES;
+    self.tableView.allowsSelectionDuringEditing = YES;
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"添加停顿" style:UIBarButtonItemStylePlain target:self action:@selector(addPause)];
+}
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    return self.items.count;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"item"] ?: [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleDefault reuseIdentifier:@"item"];
+    NSString *item = self.items[indexPath.row];
+    cell.textLabel.text = TGDisplayTitle(item);
+    cell.textLabel.textColor = [item hasPrefix:TGPausePrefix] ? UIColor.secondaryLabelColor : UIColor.labelColor;
+    return cell;
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    return self.items.count ? @"动作自上而下执行。拖动可调整顺序。点按动作可在其后添加停顿，点按停顿可修改。" : @"还没有动作：请先挑选动作。";
+}
+
+- (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
+    return YES;
+}
+
+- (BOOL)tableView:(UITableView *)tableView shouldIndentWhileEditingRowAtIndexPath:(NSIndexPath *)indexPath {
+    return NO;
+}
+
+- (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)from toIndexPath:(NSIndexPath *)to {
+    NSString *item = self.items[from.row];
+    [self.items removeObjectAtIndex:from.row];
+    [self.items insertObject:item atIndex:to.row];
+    [self changed];
+}
+
+- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)style forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (style != UITableViewCellEditingStyleDelete) return;
+    BOOL wasPause = [self.items[indexPath.row] hasPrefix:TGPausePrefix];
+    [self.items removeObjectAtIndex:indexPath.row];
+    if (wasPause) {
+        [tableView deleteRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationAutomatic];
+    } else {
+        self.items = TGTidyPauses(self.items); // pauses around a removed action go too
+        [tableView reloadData];
+    }
+    [self changed];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    NSInteger row = indexPath.row;
+    if ([self.items[row] hasPrefix:TGPausePrefix]) {
+        [self promptPauseAtIndex:row insert:NO];
+        return;
+    }
+    // An action with another action after it: offer a pause between them.
+    if (row + 1 < (NSInteger)self.items.count && ![self.items[row + 1] hasPrefix:TGPausePrefix]) {
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:TGDisplayTitle(self.items[row]) message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"在其后添加停顿" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self promptPauseAtIndex:row + 1 insert:YES];
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+        sheet.popoverPresentationController.sourceView = cell;
+        sheet.popoverPresentationController.sourceRect = cell.bounds;
+        [self presentViewController:sheet animated:YES completion:nil];
+    }
+}
+
+// Add Pause: between the last two actions that don't already have one, so no dragging is needed.
+- (void)addPause {
+    for (NSInteger i = (NSInteger)self.items.count - 1; i > 0; i--) {
+        if (![self.items[i] hasPrefix:TGPausePrefix] && ![self.items[i - 1] hasPrefix:TGPausePrefix]) {
+            [self promptPauseAtIndex:i insert:YES];
+            return;
+        }
+    }
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"添加停顿" message:@"停顿位于两个动作之间。请先选择至少两个动作，或点按某个动作在其后添加停顿。" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+// insert: a new pause at `index`; otherwise edit the pause at `index`.
+- (void)promptPauseAtIndex:(NSInteger)index insert:(BOOL)insert {
+    NSString *current = insert ? @"" : [self.items[index] substringFromIndex:TGPausePrefix.length];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"停顿" message:[NSString stringWithFormat:@"执行下一动作前的等待秒数（0.1–%g）。", TGPauseMax] preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.text = current;
+        field.keyboardType = UIKeyboardTypeDecimalPad;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByReplacingOccurrencesOfString:@"," withString:@"."];
+        if (text.length == 0) return; // 留空=放弃
+        double seconds = MIN(MAX(text.doubleValue, 0.1), TGPauseMax);
+        NSString *pause = [NSString stringWithFormat:@"%@%g", TGPausePrefix, seconds];
+        if (insert) [self.items insertObject:pause atIndex:index];
+        else self.items[index] = pause;
+        [self.tableView reloadData];
+        [self changed];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)changed {
+    if (self.onChange) self.onChange(self.items.copy);
+}
+
+@end
+
+#pragma mark - Action picker
+
+// The picker keeps its long list folded into categories: tap one to open it
+// (one at a time). Each shows what's picked inside it, and the search field
+// finds any action.
+static NSArray<NSArray<NSString *> *> *TGCategories(void) {
+    NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
+    // Installed action extensions, each its own category ("ext:<name>").
+    for (NSString *name in TGExtensionNames()) {
+        NSDictionary *extension = TGExtension(name);
+        if (extension) [categories addObject:@[[TGExtensionPrefix stringByAppendingString:name], extension[@"Title"]]];
+    }
+    return categories;
+}
+
+static UIColor *TGNamedColor(id name) {
+    NSDictionary *colors = @{ @"blue": UIColor.systemBlueColor, @"green": UIColor.systemGreenColor, @"indigo": UIColor.systemIndigoColor,
+        @"orange": UIColor.systemOrangeColor, @"pink": UIColor.systemPinkColor, @"purple": UIColor.systemPurpleColor,
+        @"red": UIColor.systemRedColor, @"teal": UIColor.systemTealColor, @"yellow": UIColor.systemYellowColor, @"gray": UIColor.systemGrayColor };
+    return [name isKindOfClass:NSString.class] && colors[name] ? colors[name] : UIColor.systemGrayColor;
+}
+
+static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
+    NSDictionary<NSString *, NSArray *> *icons = @{
+        @"system": @[@"house.fill", UIColor.systemBlueColor],
+        @"power": @[@"power", UIColor.systemRedColor],
+        @"switches": @[@"switch.2", UIColor.systemGreenColor],
+        @"media": @[@"play.fill", UIColor.systemPinkColor],
+        @"levels": @[@"slider.horizontal.3", UIColor.systemOrangeColor],
+        @"open": @[@"arrow.up.right.square.fill", UIColor.systemIndigoColor],
+        @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
+        @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor], @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
+    };
+    if (icons[category]) TGSetIcon(spec, icons[category][0], icons[category][1]);
+    else if ([category hasPrefix:TGExtensionPrefix]) {
+        NSDictionary *extension = TGExtension([category substringFromIndex:TGExtensionPrefix.length]);
+        id symbol = extension[@"Symbol"];
+        TGSetIcon(spec, [symbol isKindOfClass:NSString.class] ? symbol : @"puzzlepiece.extension.fill", TGNamedColor(extension[@"Color"]));
+    }
+}
+
+static NSString *TGCategoryOf(NSString *action) {
+    if ([action hasPrefix:TGMenuPrefix]) return @"menus";
+    NSArray *extension = TGExtensionAction(action);
+    if (extension) return [TGExtensionPrefix stringByAppendingString:extension[0]];
+    for (NSString *prefix in @[TGBrightnessPrefix, TGBrightnessUpPrefix, TGBrightnessDownPrefix, TGMediaVolumePrefix, TGRingerVolumePrefix]) if ([action hasPrefix:prefix]) return @"levels";
+    for (NSString *prefix in @[TGAppPrefix, TGSettingsPrefix, TGShortcutPrefix, TGURLPrefix]) if ([action hasPrefix:prefix]) return @"open";
+    for (NSString *prefix in @[TGMessagePrefix, TGSpeakPrefix, TGShellPrefix]) if ([action hasPrefix:prefix]) return @"text";
+    if ([action hasPrefix:TGAutotouchPrefix]) return @"autotouch";
+    for (NSString *prefix in @[@"toggle.", @"on.", @"off."]) if ([action hasPrefix:prefix]) return @"switches";
+    if ([action hasPrefix:@"media."] || [action hasPrefix:TGAirPlayPrefix]) return @"media";
+    for (int i = 0; i < TG_COUNT(TGPowerActions); i++) if ([action isEqualToString:@(TGPowerActions[i].identifier)]) return @"power";
+    if ([action hasPrefix:@"system."]) return @"system";
+    return nil;
+}
+
+@interface TGActionPickerController : TGListController <UISearchResultsUpdating>
+@end
+
+@implementation TGActionPickerController {
+    NSString *_mode;
+    NSString *_trigger;
+    BOOL _menuEditor;
+    NSMutableArray<NSString *> *_selection; // in run order
+    NSString *_expanded;                    // the open category, or nil
+    NSString *_query;                       // search text, or nil
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
+    search.searchResultsUpdater = self;
+    search.obscuresBackgroundDuringPresentation = NO;
+    search.searchBar.placeholder = @"搜索动作";
+    search.searchBar.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    self.navigationItem.searchController = search;
+    self.navigationItem.hidesSearchBarWhenScrolling = NO;
+    self.definesPresentationContext = YES;
+    if (![self.specifier propertyForKey:@"tgMenuEditor"])
+        self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"测试" style:UIBarButtonItemStylePlain target:self action:@selector(test)];
+}
+
+// Runs what's picked, right now, the way the trigger would.
+- (void)test {
+    if (!_selection.count) return;
+    PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
+    [storage setProperty:TGDomain forKey:@"defaults"];
+    [storage setProperty:TGTestKey forKey:@"key"];
+    [self setPreferenceValue:TGAssignmentKey(_mode, _trigger) specifier:storage];
+    CFPreferencesAppSynchronize((__bridge CFStringRef)TGDomain);
+    [[UIImpactFeedbackGenerator new] impactOccurred];
+    // A moment for the setting to land, and for the tap to finish.
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ notify_post(TGTestNotification); });
+}
+
+- (void)updateTestButton {
+    self.navigationItem.rightBarButtonItem.enabled = _selection.count > 0;
+}
+
+#pragma mark Recently used
+
+- (NSArray<NSString *> *)recentActions {
+    PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
+    [storage setProperty:TGDomain forKey:@"defaults"];
+    [storage setProperty:TGRecentActionsKey forKey:@"key"];
+    NSMutableArray *recent = [NSMutableArray array];
+    id value = [self readPreferenceValue:storage];
+    for (id item in [value isKindOfClass:NSArray.class] ? value : @[])
+        if ([item isKindOfClass:NSString.class] && [item length] && ![item hasPrefix:TGPausePrefix]) [recent addObject:item];
+    return recent;
+}
+
+- (void)noteRecent:(NSString *)action {
+    if (!action.length || [action hasPrefix:TGPausePrefix] || [action hasPrefix:TGMenuPrefix]) return;
+    NSMutableArray *recent = [[self recentActions] mutableCopy];
+    [recent removeObject:action];
+    [recent insertObject:action atIndex:0];
+    while (recent.count > 6) [recent removeLastObject];
+    PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
+    [storage setProperty:TGDomain forKey:@"defaults"];
+    [storage setProperty:TGRecentActionsKey forKey:@"key"];
+    [self setPreferenceValue:recent specifier:storage];
+}
+
+- (void)updateSearchResultsForSearchController:(UISearchController *)searchController {
+    NSString *query = [searchController.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!query.length) query = nil;
+    if (query == _query || [query isEqualToString:_query]) return;
+    _query = query;
+    [self reloadSpecifiers];
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        _mode = [self.specifier propertyForKey:@"tgMode"];
+        _trigger = [self.specifier propertyForKey:@"tgTrigger"];
+        _menuEditor = [self.specifier propertyForKey:@"tgMenuEditor"] != nil;
+        _selection = [TGActionList([self readPreferenceValue:self.specifier]) mutableCopy];
+        self.title = self.specifier.name;
+        _specifiers = _query ? [self searchSpecifiers] : [self categorySpecifiers];
+        [self updateTestButton];
+    }
+    return _specifiers;
+}
+
+- (NSMutableArray *)categorySpecifiers {
+    NSMutableArray *specs = [NSMutableArray array];
+    NSMutableArray *notes = [NSMutableArray array];
+    // Assignments outside Anywhere only work in their place; say so where it's picked.
+    if (_mode && ![_mode isEqualToString:@"anywhere"]) [notes addObject:[NSString stringWithFormat:@"此指派仅在%@生效。", TGModePhrase(_mode)]];
+    NSArray *anywhere = (!_mode || [_mode isEqualToString:@"anywhere"]) ? nil : TGReadAssignment(self, @"anywhere", _trigger);
+    if (anywhere.count) [notes addObject:[NSString stringWithFormat:@"任意位置会为该触发器运行%@。此处选择的动作将在%@取代它；留空则沿用任意位置的指派。", TGListTitle(anywhere), TGModePhrase(_mode)]];
+    NSString *warning = TGTriggerWarning(_trigger, [self replacesButtons]);
+    if (!_selection.count && TGDefaultActionTitle(_trigger)) warning = nil; // the empty-state note covers it
+    if (warning) [notes addObject:TGButtonText(warning)];
+
+    // What's picked, in run order, so it's visible without opening each category.
+    PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
+    if (_selection.count) [notes insertObject:@"左滑可移除。" atIndex:0];
+    else if (!_menuEditor && TGDefaultActionTitle(_trigger))
+        [notes insertObject:[NSString stringWithFormat:[self replacesButtons]
+            ? @"未选择动作，因此保持默认行为（%@）。在下方选择一个动作来替代，或选「无操作」（系统类）来关闭它。"
+            : @"未选择动作，因此保持默认行为（%@）。在下方选择一个动作即可与它并行执行。", TGDefaultActionTitle(_trigger)] atIndex:0];
+    else [notes insertObject:_menuEditor ? @"本菜单还没有内容。打开下方分类，点按要收录的动作。"
+        : @"还没有选择。打开下方分类点按动作；选择多个可按顺序执行。" atIndex:0];
+    [picked setProperty:[notes componentsJoinedByString:@"\n\n"] forKey:@"footerText"];
+    [specs addObject:picked];
+    NSUInteger number = 0;
+    for (NSString *item in _selection) {
+        BOOL pause = [item hasPrefix:TGPausePrefix];
+        NSString *title = TGDisplayTitle(item);
+        if (!pause && _selection.count > 1) title = [NSString stringWithFormat:@"%lu.  %@", (unsigned long)++number, title];
+        PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [row setProperty:item forKey:@"tgPicked"];
+        [specs addObject:row];
+    }
+    if (_selection.count > 1) {
+        PSSpecifier *order = [PSSpecifier preferenceSpecifierNamed:@"顺序与停顿" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [order setProperty:@YES forKey:@"tgOrder"];
+        [specs addObject:order];
+        PSSpecifier *clear = [PSSpecifier preferenceSpecifierNamed:@"全部移除" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [clear setProperty:@YES forKey:@"tgClear"];
+        [specs addObject:clear];
+    }
+    [specs addObject:[PSSpecifier groupSpecifierWithName:@"动作"]];
+    if ([self rowsForCategory:@"recent"].count) {
+        PSSpecifier *header = [PSSpecifier preferenceSpecifierNamed:@"最近使用" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [header setProperty:@"recent" forKey:@"tgCategory"];
+        TGSetIcon(header, @"clock.arrow.circlepath", UIColor.systemGrayColor);
+        [specs addObject:header];
+        if ([_expanded isEqualToString:@"recent"]) [specs addObjectsFromArray:[self rowsForCategory:@"recent"]];
+    }
+    for (NSArray<NSString *> *category in TGCategories()) {
+        NSArray *rows = [self rowsForCategory:category[0]];
+        if (!rows.count) continue;
+        PSSpecifier *header = [PSSpecifier preferenceSpecifierNamed:category[1] target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [header setProperty:category[0] forKey:@"tgCategory"];
+        TGSetCategoryIcon(header, category[0]);
+        [specs addObject:header];
+        if ([_expanded isEqualToString:category[0]]) [specs addObjectsFromArray:rows];
+    }
+    return specs;
+}
+
+- (NSArray<PSSpecifier *> *)rowsForCategory:(NSString *)category {
+    NSMutableArray *rows = [NSMutableArray array];
+    const TGItem *items = NULL;
+    int count = 0;
+    if ([category isEqualToString:@"recent"]) {
+        for (NSString *item in [self recentActions]) if (!_menuEditor || ![item hasPrefix:TGMenuPrefix]) [rows addObject:[self rowForAction:item title:TGDisplayTitle(item)]];
+        return rows;
+    }
+    if ([category hasPrefix:TGExtensionPrefix]) {
+        NSString *name = [category substringFromIndex:TGExtensionPrefix.length];
+        for (NSString *item in TGExtensionItems(TGExtension(name)))
+            [rows addObject:[self rowForAction:[NSString stringWithFormat:@"%@%@:%@", TGExtensionPrefix, name, item] title:item]];
+        return rows;
+    }
+    if ([category isEqualToString:@"autotouch"]) {
+        for (NSString *script in TGAutoTouchScripts())
+            [rows addObject:[self rowForAction:[TGAutotouchPrefix stringByAppendingString:script] title:script]];
+        return rows;
+    }
+    if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
+    else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
+    else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
+    for (int i = 0; i < count; i++) [rows addObject:[self rowForAction:@(items[i].identifier) title:@(items[i].title)]];
+    if ([category isEqualToString:@"system"])
+        [rows insertObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁…" prompt:@"设备的锁屏密码，存储在本机，用于锁屏状态下自动解锁"] atIndex:0];
+    if ([category isEqualToString:@"media"])
+        [rows addObject:[self rowForCommand:TGAirPlayPrefix title:@"AirPlay 到…" prompt:@"扬声器或电视名称，与 AirPlay 菜单中显示的一致（部分匹配即可）"]];
+    if ([category isEqualToString:@"switches"]) {
+        for (int i = 0; i < TG_COUNT(TGSwitches); i++) {
+            PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:@(TGSwitches[i].title) target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+            [spec setProperty:@(TGSwitches[i].identifier) forKey:@"tgSwitch"];
+            [rows addObject:spec];
+        }
+    } else if ([category isEqualToString:@"levels"]) {
+        [rows addObject:[self rowForCommand:TGBrightnessPrefix title:@"设置亮度…" prompt:@"亮度，0–100 %"]];
+        [rows addObject:[self rowForCommand:TGBrightnessUpPrefix title:@"提高亮度…" prompt:@"每次提高的亮度幅度，1–50 %（建议 10）"]];
+        [rows addObject:[self rowForCommand:TGBrightnessDownPrefix title:@"降低亮度…" prompt:@"每次降低的亮度幅度，1–50 %（建议 10）"]];
+        [rows addObject:[self rowForCommand:TGMediaVolumePrefix title:@"设置媒体音量…" prompt:@"媒体音量，0–100 %"]];
+        [rows addObject:[self rowForCommand:TGRingerVolumePrefix title:@"设置铃声音量…" prompt:@"铃声音量，0–100 %"]];
+    } else if ([category isEqualToString:@"open"]) {
+        // AltList's single-app list saves and loads through this row's own setter
+        // and getter, so Triggr receives the picked bundle id directly.
+        PSSpecifier *openApp = [PSSpecifier preferenceSpecifierNamed:@"打开应用…" target:self set:@selector(setPickedApp:specifier:)
+            get:@selector(pickedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+        [openApp setProperty:@YES forKey:@"useSearchBar"];
+        [openApp setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+        [openApp setProperty:TGAppPrefix forKey:@"tgCommandPrefix"];
+        [rows addObject:openApp];
+        [rows addObject:[self rowForCommand:TGSettingsPrefix title:@"打开设置页…" prompt:nil]];
+        [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
+        [rows addObject:[self rowForCommand:TGURLPrefix title:@"打开 URL…" prompt:@"任意 URL 或 URL scheme，如 https://…、tel:…、music://"]];
+            } else if ([category isEqualToString:@"text"]) {
+        [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
+        [rows addObject:[self rowForCommand:TGSpeakPrefix title:@"朗读文字…" prompt:@"设备朗读的文字"]];
+        [rows addObject:[self rowForCommand:TGShellPrefix title:@"运行命令…" prompt:@"Shell 命令。以 mobile 用户经越狱环境的 sh -c 执行。"]];
+    } else if ([category isEqualToString:@"menus"] && !_menuEditor) {
+        for (NSDictionary *menu in TGReadMenus())
+            [rows addObject:[self rowForAction:[TGMenuPrefix stringByAppendingString:menu[@"id"]] title:[menu[@"name"] description]]];
+    }
+    return rows;
+}
+
+// Search: every action as one flat list, with each switch's Toggle / On / Off as its own row.
+- (NSMutableArray *)searchSpecifiers {
+    NSMutableArray *rows = [NSMutableArray array];
+    for (int g = 0; g < TG_COUNT(TGActionGroups); g++)
+        for (int i = 0; i < TGActionGroups[g].count; i++)
+            [rows addObject:[self rowForAction:@(TGActionGroups[g].items[i].identifier) title:@(TGActionGroups[g].items[i].title)]];
+    for (NSString *category in @[@"levels", @"open", @"text", @"menus"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
+    for (NSArray<NSString *> *category in TGCategories())
+        if ([category[0] hasPrefix:TGExtensionPrefix]) [rows addObjectsFromArray:[self rowsForCategory:category[0]]];
+    NSMutableArray *specs = [NSMutableArray array];
+    PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
+    [specs addObject:group];
+    for (PSSpecifier *row in rows)
+        if ([row.name rangeOfString:_query options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch].location != NSNotFound) [specs addObject:row];
+    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"没有匹配“%@”的动作。", _query] forKey:@"footerText"];
+    return specs;
+}
+
+- (PSSpecifier *)rowForAction:(NSString *)action title:(NSString *)title {
+    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+    [spec setProperty:action forKey:@"tgAction"];
+    return spec;
+}
+
+// A command row: tapping asks for its text; the saved action is prefix + text.
+- (PSSpecifier *)rowForCommand:(NSString *)prefix title:(NSString *)title prompt:(NSString *)prompt {
+    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+    [spec setProperty:prefix forKey:@"tgCommandPrefix"];
+    [spec setProperty:prompt forKey:@"tgPrompt"];
+    return spec;
+}
+
+// The selected command/app item with this prefix (one of each kind).
+- (NSString *)itemWithPrefix:(NSString *)prefix {
+    for (NSString *item in _selection) if ([item hasPrefix:prefix]) return item;
+    return nil;
+}
+
+// "切换", "开启", "关闭": what's picked for this switch, in that order.
+- (NSArray<NSString *> *)verbsForSwitch:(NSString *)name {
+    NSMutableArray *verbs = [NSMutableArray array];
+    for (NSArray<NSString *> *verb in @[@[@"toggle", @"切换"], @[@"on", @"开启"], @[@"off", @"关闭"]])
+        if ([_selection containsObject:[NSString stringWithFormat:@"%@.%@", verb[0], name]]) [verbs addObject:verb[1]];
+    return verbs;
+}
+
+// Replace the item with this prefix in place, or append it; nil removes it.
+- (void)setItem:(NSString *)item forPrefix:(NSString *)prefix {
+    NSString *existing = [self itemWithPrefix:prefix];
+    NSUInteger index = existing ? [_selection indexOfObject:existing] : NSNotFound;
+    if (index != NSNotFound) {
+        if (item) _selection[index] = item;
+        else {
+            [_selection removeObjectAtIndex:index];
+            _selection = TGTidyPauses(_selection);
+        }
+        [self save];
+    } else if (item) {
+        [self confirmAdding:item then:^{
+            [self->_selection addObject:item];
+            [self save];
+        }];
+    }
+}
+
+// Warn about likely conflicts before adding, like Activator's "Ignore / Cancel".
+- (void)confirmAdding:(NSString *)action then:(void (^)(void))add {
+    // Menu items never run together (one is picked), so conflicts don't apply.
+    NSString *warning = _menuEditor ? nil : TGListWarning(_selection, action);
+    void (^original)(void) = add;
+    add = ^{ [self noteRecent:action]; original(); };
+    if (!warning) {
+        add();
+        return;
+    }
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"注意" message:warning preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"仍然添加" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { add(); }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)save {
+    [self setPreferenceValue:TGStoredValue(_selection) specifier:self.specifier];
+    [self reloadSpecifiers];
+}
+
+// None clears; any other action toggles, appended to the run order.
+- (void)toggle:(NSString *)action {
+    if (action.length == 0) [_selection removeAllObjects];
+    else if ([_selection containsObject:action]) {
+        [_selection removeObject:action];
+        _selection = TGTidyPauses(_selection);
+    }
+    else {
+        [self confirmAdding:action then:^{
+            [self->_selection addObject:action];
+            [self save];
+        }];
+        return;
+    }
+    [self save];
+}
+
+#pragma mark Selected rows
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgPicked"] ? @"移除" : nil;
+}
+
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    NSString *item = [spec propertyForKey:@"tgPicked"];
+    NSUInteger index = [_selection indexOfObject:item];
+    if (index == NSNotFound) return NO;
+    [_selection removeObjectAtIndex:index];
+    _selection = TGTidyPauses(_selection);
+    [self setPreferenceValue:TGStoredValue(_selection) specifier:self.specifier];
+    return YES;
+}
+
+// Tapping a picked row opens its category with that row in view.
+- (void)revealItem:(NSString *)item {
+    NSString *category = TGCategoryOf(item);
+    if (!category) return;
+    _expanded = category;
+    [self reloadSpecifiers];
+    for (PSSpecifier *row in self.specifiers) {
+        NSString *action = [row propertyForKey:@"tgAction"], *prefix = [row propertyForKey:@"tgCommandPrefix"], *name = [row propertyForKey:@"tgSwitch"];
+        BOOL match = (action.length && [action isEqualToString:item]) || (prefix && [item hasPrefix:prefix])
+            || (name && [@[@"toggle.", @"on.", @"off."] indexOfObjectPassingTest:^BOOL(NSString *verb, NSUInteger i, BOOL *stop) { return [item isEqualToString:[verb stringByAppendingString:name]]; }] != NSNotFound);
+        if (!match) continue;
+        NSIndexPath *path = [self indexPathForSpecifier:row];
+        [self.table scrollToRowAtIndexPath:path atScrollPosition:UITableViewScrollPositionMiddle animated:YES];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            [self.table selectRowAtIndexPath:path animated:NO scrollPosition:UITableViewScrollPositionNone];
+            [self.table deselectRowAtIndexPath:path animated:YES];
+        });
+        return;
+    }
+}
+
+#pragma mark Cells
+
+- (NSString *)titleForCategory:(NSString *)category {
+    for (NSArray<NSString *> *entry in TGCategories()) if ([entry[0] isEqualToString:category]) return entry[1];
+    return nil;
+}
+
+// 1-based run position among the picked actions (pauses not counted).
+- (NSUInteger)positionOfItem:(NSString *)item {
+    NSUInteger number = 0;
+    for (NSString *picked in _selection) {
+        if ([picked hasPrefix:TGPausePrefix]) continue;
+        number++;
+        if ([picked isEqualToString:item]) return number;
+    }
+    return 0;
+}
+
+// What's picked inside a category, shown on its row while it's closed or open.
+- (NSString *)summaryForCategory:(NSString *)category {
+    NSMutableArray *titles = [NSMutableArray array];
+    for (NSString *action in _selection) if ([TGCategoryOf(action) isEqualToString:category]) [titles addObject:TGDisplayTitle(action)];
+    return [titles componentsJoinedByString:@", "];
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [super tableView:tableView cellForRowAtIndexPath:indexPath];
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    NSString *category = [spec propertyForKey:@"tgCategory"], *action = [spec propertyForKey:@"tgAction"];
+    NSString *prefix = [spec propertyForKey:@"tgCommandPrefix"], *name = [spec propertyForKey:@"tgSwitch"];
+    UIFont *body = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
+    NSString *picked = [spec propertyForKey:@"tgPicked"];
+    cell.textLabel.font = body;
+    cell.textLabel.textColor = [spec propertyForKey:@"tgClear"] ? UIColor.systemRedColor
+        : [picked hasPrefix:TGPausePrefix] ? UIColor.secondaryLabelColor : UIColor.labelColor;
+    cell.accessoryView = nil;
+    cell.accessoryType = UITableViewCellAccessoryNone;
+    // An open category's rows line up under its title, past the icon.
+    BOOL child = !_query && !picked && !category && ![spec propertyForKey:@"tgOrder"] && ![spec propertyForKey:@"tgClear"];
+    static UIImage *spacer;
+    if (!spacer) spacer = [[[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(29, 29)] imageWithActions:^(UIGraphicsImageRendererContext *context) {}];
+    if (child) cell.imageView.image = spacer;
+    else if (!category) cell.imageView.image = nil;
+    cell.separatorInset = UIEdgeInsetsMake(0, child ? 60 : (category ? 60 : 16), 0, 0);
+    NSString *detail = nil;
+    if (picked) {
+        if (TGCategoryOf(picked)) detail = [self titleForCategory:TGCategoryOf(picked)];
+    } else if (category) {
+        BOOL open = [_expanded isEqualToString:category];
+        UIImage *chevron = [UIImage systemImageNamed:open ? @"chevron.down" : @"chevron.right"
+            withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold]];
+        UIImageView *view = [[UIImageView alloc] initWithImage:chevron];
+        view.tintColor = UIColor.tertiaryLabelColor;
+        cell.accessoryView = view;
+        detail = [self summaryForCategory:category];
+    } else if ([spec propertyForKey:@"tgOrder"]) {
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    } else if (action) {
+        BOOL selected = action.length ? [_selection containsObject:action] : _selection.count == 0;
+        if (selected) cell.accessoryType = UITableViewCellAccessoryCheckmark;
+        // With several picked, show where this one runs in the list.
+        if (selected && action.length && _selection.count > 1) detail = [NSString stringWithFormat:@"%lu", (unsigned long)[self positionOfItem:action]];
+    } else if (name) {
+        NSArray *verbs = [self verbsForSwitch:name];
+        if (verbs.count) cell.accessoryType = UITableViewCellAccessoryCheckmark;
+        detail = [verbs componentsJoinedByString:@", "];
+    } else if (prefix) {
+        NSString *item = [self itemWithPrefix:prefix];
+        if (item) cell.accessoryType = UITableViewCellAccessoryCheckmark;
+        BOOL titled = [prefix isEqualToString:TGAppPrefix] || [prefix isEqualToString:TGSettingsPrefix];
+        if (item) detail = titled ? [TGDisplayTitle(item) substringFromIndex:[TGDisplayTitle(item) rangeOfString:@" "].location + 1] : [item substringFromIndex:prefix.length];
+    }
+    // Search mixes every category; say where each result lives.
+    if (_query && !detail.length && !picked) {
+        NSString *item = action.length ? action : prefix ?: (name ? [@"toggle." stringByAppendingString:name] : nil);
+        if (item) detail = [self titleForCategory:TGCategoryOf(item)];
+    }
+    cell.detailTextLabel.text = detail;
+    return cell;
+}
+
+#pragma mark Taps
+
+// AltList's app list calls these on the Open App row.
+- (void)setPickedApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
+    if ([identifier isKindOfClass:NSString.class] && identifier.length) [self setItem:[TGAppPrefix stringByAppendingString:identifier] forPrefix:TGAppPrefix];
+}
+
+- (NSString *)pickedApp:(PSSpecifier *)spec {
+    return [[self itemWithPrefix:TGAppPrefix] substringFromIndex:TGAppPrefix.length];
+}
+
+- (void)presentSheet:(UIAlertController *)sheet fromRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [self.table cellForRowAtIndexPath:indexPath];
+    sheet.popoverPresentationController.sourceView = cell ?: self.view;
+    sheet.popoverPresentationController.sourceRect = cell ? cell.bounds : CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+// A switch can be toggled, turned on or turned off; several can be picked
+// (e.g. Flashlight On, a pause, Flashlight Off).
+- (void)pickVerbsForSwitch:(NSString *)name title:(NSString *)title atIndexPath:(NSIndexPath *)indexPath {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSArray<NSString *> *verb in @[@[@"toggle", @"切换"], @[@"on", @"开启"], @[@"off", @"关闭"]]) {
+        NSString *action = [NSString stringWithFormat:@"%@.%@", verb[0], name];
+        BOOL selected = [_selection containsObject:action];
+        UIAlertAction *item = [UIAlertAction actionWithTitle:verb[1] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { [self pickSwitchAction:action name:name]; }];
+        // UIAlertAction's own checkmark (private key); without it the row's detail still says what's picked.
+        @try { if (selected) [item setValue:@YES forKey:@"checked"]; } @catch (NSException *exception) {}
+        [sheet addAction:item];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentSheet:sheet fromRowAtIndexPath:indexPath];
+}
+
+// Picking Toggle / On / Off for a switch. When that switch is all that's
+// picked (no pause, nothing else), a different verb replaces it: Flashlight On
+// then Toggle means Toggle, not "On, then Toggle". With a pause or other
+// actions in the list it's a sequence, and the verb is added as usual.
+- (void)pickSwitchAction:(NSString *)action name:(NSString *)name {
+    BOOL onlyThisSwitch = _selection.count > 0 && ![_selection containsObject:action];
+    for (NSString *item in _selection) {
+        NSRange dot = [item rangeOfString:@"."];
+        if (dot.location == NSNotFound || ![[item substringFromIndex:dot.location + 1] isEqualToString:name] || [item hasPrefix:TGPausePrefix]) onlyThisSwitch = NO;
+    }
+    if (onlyThisSwitch) {
+        [[UISelectionFeedbackGenerator new] selectionChanged];
+        _selection = [@[action] mutableCopy];
+        [self noteRecent:action];
+        [self save];
+        return;
+    }
+    [self toggle:action];
+}
+
+// AirPlay To: the speakers and TVs iOS can see right now (found the way the
+// AirPlay menu finds them), or any name typed in.
+- (void)pickAirPlayDeviceAtIndexPath:(NSIndexPath *)indexPath specifier:(PSSpecifier *)spec existing:(NSString *)existingItem {
+    __block BOOL shown = NO;
+    __block int token = -1;
+    __weak typeof(self) weakSelf = self;
+    void (^show)(void) = ^{
+        if (shown) return;
+        shown = YES;
+        if (token != -1) notify_cancel(token);
+        typeof(self) strongSelf = weakSelf;
+        if (!strongSelf) return;
+        NSArray *names = [NSArray arrayWithContentsOfFile:TGAirPlayListPath];
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"AirPlay 到" message:names.count ? nil : @"暂时没发现扬声器或电视。你也可以直接输入名称。" preferredStyle:UIAlertControllerStyleActionSheet];
+        for (NSString *name in names) {
+            if (![name isKindOfClass:NSString.class]) continue;
+            [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                [weakSelf setItem:[TGAirPlayPrefix stringByAppendingString:name] forPrefix:TGAirPlayPrefix];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:@"输入名称…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [weakSelf promptForCommand:spec prefix:TGAirPlayPrefix existing:existingItem];
+        }]];
+        if (existingItem) {
+            [sheet addAction:[UIAlertAction actionWithTitle:@"移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+                [weakSelf setItem:nil forPrefix:TGAirPlayPrefix];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [strongSelf presentSheet:sheet fromRowAtIndexPath:indexPath];
+    };
+    // SpringBoard looks (Settings can't discover network devices itself) and
+    // answers within ~3 s; show whatever is there after 4 s at the latest.
+    [NSFileManager.defaultManager removeItemAtPath:TGAirPlayListPath error:nil];
+    notify_register_dispatch(TGAirPlayListReady, &token, dispatch_get_main_queue(), ^(int t) { show(); });
+    notify_post(TGAirPlayListRequest);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), show);
+}
+
+- (void)pickSettingsPageAtIndexPath:(NSIndexPath *)indexPath existing:(NSString *)existingItem {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"打开设置页" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    for (int i = 0; i < TG_COUNT(TGSettingsPages); i++) {
+        NSString *page = @(TGSettingsPages[i].identifier);
+        [sheet addAction:[UIAlertAction actionWithTitle:@(TGSettingsPages[i].title) style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self setItem:[TGSettingsPrefix stringByAppendingString:page] forPrefix:TGSettingsPrefix];
+        }]];
+    }
+    if (existingItem) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [self setItem:nil forPrefix:TGSettingsPrefix];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentSheet:sheet fromRowAtIndexPath:indexPath];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    NSString *category = [spec propertyForKey:@"tgCategory"];
+    if (category) {
+        // One category open at a time keeps the page short.
+        _expanded = [_expanded isEqualToString:category] ? nil : category;
+        [self reloadSpecifiers];
+        for (PSSpecifier *header in _expanded ? self.specifiers : @[]) {
+            if (![[header propertyForKey:@"tgCategory"] isEqualToString:category]) continue;
+            NSIndexPath *first = [self indexPathForSpecifier:header];
+            NSIndexPath *last = [NSIndexPath indexPathForRow:first.row + [self rowsForCategory:category].count inSection:first.section];
+            // Bring as much of the opened category into view as fits.
+            [tableView scrollToRowAtIndexPath:last atScrollPosition:UITableViewScrollPositionNone animated:NO];
+            [tableView scrollToRowAtIndexPath:first atScrollPosition:UITableViewScrollPositionNone animated:YES];
+            break;
+        }
+        return;
+    }
+    NSString *picked = [spec propertyForKey:@"tgPicked"];
+    if (picked) {
+        [self revealItem:picked];
+        return;
+    }
+    if ([spec propertyForKey:@"tgClear"]) {
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"移除全部动作" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) { [self toggle:@""]; }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentSheet:sheet fromRowAtIndexPath:indexPath];
+        return;
+    }
+    NSString *action = [spec propertyForKey:@"tgAction"];
+    if (action) {
+        [[UISelectionFeedbackGenerator new] selectionChanged];
+        [self toggle:action];
+        return;
+    }
+    NSString *name = [spec propertyForKey:@"tgSwitch"];
+    if (name) {
+        [self pickVerbsForSwitch:name title:spec.name atIndexPath:indexPath];
+        return;
+    }
+    if ([spec propertyForKey:@"tgOrder"]) {
+        TGSequenceController *editor = [TGSequenceController new];
+        editor.items = [_selection mutableCopy];
+        __weak typeof(self) weakSelf = self;
+        editor.onChange = ^(NSArray<NSString *> *items) {
+            __strong typeof(self) strongSelf = weakSelf;
+            if (!strongSelf) return;
+            strongSelf->_selection = [items mutableCopy];
+            [strongSelf setPreferenceValue:TGStoredValue(strongSelf->_selection) specifier:strongSelf.specifier];
+        };
+        [self.navigationController pushViewController:editor animated:YES];
+        return;
+    }
+    NSString *prefix = [spec propertyForKey:@"tgCommandPrefix"];
+    if (!prefix) return;
+    NSString *existingItem = [self itemWithPrefix:prefix];
+    if ([prefix isEqualToString:TGAppPrefix]) {
+        if (!existingItem) {
+            [super tableView:tableView didSelectRowAtIndexPath:indexPath]; // push AltList's app list
+            return;
+        }
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:TGDisplayTitle(existingItem) message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"选择其他应用…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [self setItem:nil forPrefix:prefix];
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [self presentSheet:sheet fromRowAtIndexPath:indexPath];
+        return;
+    }
+    if ([prefix isEqualToString:TGSettingsPrefix]) {
+        [self pickSettingsPageAtIndexPath:indexPath existing:existingItem];
+        return;
+    }
+    if ([prefix isEqualToString:TGAirPlayPrefix]) {
+        [self pickAirPlayDeviceAtIndexPath:indexPath specifier:spec existing:existingItem];
+        return;
+    }
+    [self promptForCommand:spec prefix:prefix existing:existingItem];
+}
+
+// A text (or number) for a command action, in an alert.
+- (void)promptForCommand:(PSSpecifier *)spec prefix:(NSString *)prefix existing:(NSString *)existingItem {
+    BOOL step = [prefix isEqualToString:TGBrightnessUpPrefix] || [prefix isEqualToString:TGBrightnessDownPrefix];
+    BOOL percent = step || [prefix isEqualToString:TGBrightnessPrefix] || [prefix isEqualToString:TGMediaVolumePrefix] || [prefix isEqualToString:TGRingerVolumePrefix];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:[spec.name stringByReplacingOccurrencesOfString:@"…" withString:@""] message:[spec propertyForKey:@"tgPrompt"] preferredStyle:UIAlertControllerStyleAlert];
+    NSString *existing = existingItem ? [existingItem substringFromIndex:prefix.length] : step ? @"10" : @"";
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.text = existing;
+        if (percent) field.keyboardType = UIKeyboardTypeNumberPad;
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (step && text.length) text = [NSString stringWithFormat:@"%d", (int)MIN(MAX(text.intValue, 1), 50)];
+        else if (percent && text.length) text = [NSString stringWithFormat:@"%d", (int)MIN(MAX(text.intValue, 0), 100)];
+        if (text.length) [self setItem:[prefix stringByAppendingString:text] forPrefix:prefix];
+    }]];
+    if (existingItem) {
+        [alert addAction:[UIAlertAction actionWithTitle:@"移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [self setItem:nil forPrefix:prefix];
+        }]];
+    }
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+@end
+
+#pragma mark - Trigger group (one button's triggers, or the custom events)
+
+static NSString *const TGCustomGroupTitle = @"自定义事件";
+
+// Which row of a place's page a trigger belongs under: an index into
+// TGTriggerGroups, or -1 for Custom Events.
+static NSInteger TGGroupOfTrigger(NSString *trigger) {
+    if (TGIsCustomTrigger(trigger)) return -1;
+    for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++)
+        for (int i = 0; i < TGTriggerGroups[g].count; i++)
+            if ([trigger isEqualToString:@(TGTriggerGroups[g].items[i].identifier)]) return g;
+    return NSNotFound;
+}
+
+// Lists of assigned triggers follow the catalog order (Single, Double, Triple...),
+// with custom events after them by name.
+static NSInteger TGTriggerRank(NSString *trigger) {
+    NSInteger rank = 0;
+    for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++)
+        for (int i = 0; i < TGTriggerGroups[g].count; i++, rank++)
+            if ([trigger isEqualToString:@(TGTriggerGroups[g].items[i].identifier)]) return rank;
+    return NSIntegerMax;
+}
+
+static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, PSSpecifier *b) {
+    NSInteger ra = TGTriggerRank([a propertyForKey:@"tgTrigger"]), rb = TGTriggerRank([b propertyForKey:@"tgTrigger"]);
+    if (ra != rb) return ra < rb ? NSOrderedAscending : NSOrderedDescending;
+    return [a.name localizedStandardCompare:b.name];
+};
+
+@interface TGGroupController : TGListController
+@end
+
+@implementation TGGroupController {
+    NSString *_mode;
+    NSInteger _group;
+    NSString *_pendingTrigger;   // App Opened event waiting for its action
+    NSString *_pendingFlickApp;  // App Icon Flicked: app picked, direction still to choose
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        _mode = [self.specifier propertyForKey:@"tgMode"];
+        _group = [[self.specifier propertyForKey:@"tgGroup"] integerValue];
+        self.title = self.specifier.name;
+        NSMutableArray *specs = [NSMutableArray array];
+        if (_group >= 0) {
+            const TGGroup *triggers = &TGTriggerGroups[_group];
+            PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
+            NSString *footer = triggers->footer ? @(triggers->footer) : nil;
+            // Buttons follow Replace Button Actions; say which way it's set.
+            if (triggers->items == TGHomeButton || triggers->items == TGLockButton || triggers->items == TGVolume || triggers->items == TGTouchID || triggers->items == TGMuteSwitch || triggers->items == TGSideCombos) {
+                NSString *mode = [self replacesButtons]
+                    ? @"「替换按键动作」已开启（选项）：被指派的按压将取代按键默认动作，未指派的按压照常。"
+                    : @"「替换按键动作」已关闭（选项）：被指派的按压与按键默认动作并行执行。";
+                footer = footer ? [NSString stringWithFormat:@"%@ %@", mode, footer] : mode;
+            }
+            // On Face ID devices Apple calls the lock button the side button.
+            if (triggers->items == TGLockButton && !TGHasHomeButton() && UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPhone)
+                footer = [footer stringByAppendingString:[self replacesButtons]
+                    ? @" Face ID 机型上，已指派的双击/三击会取代钱包/Apple Pay 或辅助功能快捷键；未指派时它们照常工作。"
+                    : @" Face ID 机型上，双击仍打开钱包/Apple Pay，三击仍运行辅助功能快捷键，与 Triggr 并行。"];
+            if (footer) [group setProperty:TGButtonText(footer) forKey:@"footerText"];
+            [specs addObject:group];
+            BOOL tapsOn = [self statusBarTapsOn];
+            if (triggers->items == TGStatusBar && !tapsOn)
+                [group setProperty:[([group propertyForKey:@"footerText"] ?: @"") stringByAppendingString:@" 单击已关闭（选项 → 状态栏单击）。"] forKey:@"footerText"];
+            for (int i = 0; i < triggers->count; i++) {
+                if (!tapsOn && TGIsStatusBarSingleTap(@(triggers->items[i].identifier))) continue;
+                [specs addObject:TGTriggerRow(@(triggers->items[i].title), self, @selector(assignedActionTitle:), _mode, @(triggers->items[i].identifier))];
+            }
+        } else {
+            NSArray *events = [self customEventRows];
+            PSSpecifier *mine = [PSSpecifier groupSpecifierWithName:nil];
+            [mine setProperty:events.count ? @"左滑事件可删除。" : @"还没有自定义事件。在下方添加一个，再选择它执行的动作。" forKey:@"footerText"];
+            [specs addObject:mine];
+            [specs addObjectsFromArray:events];
+            [specs addObject:[PSSpecifier groupSpecifierWithName:@"添加事件"]];
+            NSArray<NSArray<NSString *> *> *kinds = @[
+                @[@"加入 Wi-Fi 网络", TGWiFiJoinedPrefix], @[@"离开 Wi-Fi 网络", TGWiFiLeftPrefix],
+                @[@"蓝牙设备已连接", TGBTConnectedPrefix], @[@"蓝牙设备已断开", TGBTDisconnectedPrefix],
+                @[@"电量高于", TGBatteryAbovePrefix], @[@"电量低于", TGBatteryBelowPrefix],
+                @[@"定时", TGTimePrefix],
+            ];
+            for (NSArray<NSString *> *kind in kinds) {
+                PSSpecifier *add = [PSSpecifier preferenceSpecifierNamed:kind[0] target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+                [add setProperty:kind[1] forKey:@"tgAddEvent"];
+                [specs addObject:add];
+            }
+            // AltList's app list saves through this row's own setter, like Open App.
+            PSSpecifier *addApp = [PSSpecifier preferenceSpecifierNamed:@"打开了应用" target:self set:@selector(setOpenedApp:specifier:)
+                get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+            [addApp setProperty:@YES forKey:@"useSearchBar"];
+            [addApp setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+            [specs addObject:addApp];
+            PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:@"来自应用的通知" target:self set:@selector(setNotifyingApp:specifier:)
+                get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+            [addNotification setProperty:@YES forKey:@"useSearchBar"];
+            [addNotification setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+            [specs addObject:addNotification];
+            PSSpecifier *addFlick = [PSSpecifier preferenceSpecifierNamed:@"应用图标轻扫" target:self set:@selector(setFlickedApp:specifier:)
+                get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+            [addFlick setProperty:@YES forKey:@"useSearchBar"];
+            [addFlick setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+            [specs addObject:addFlick];
+        }
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+// Custom events assigned in this place (key "<mode>/<custom trigger>" with actions).
+- (NSArray<PSSpecifier *> *)customEventRows {
+    NSString *prefix = [_mode stringByAppendingString:@"/"];
+    NSMutableArray *rows = [NSMutableArray array];
+    for (NSString *key in TGAllAssignments()) {
+        if (![key hasPrefix:prefix]) continue;
+        NSString *trigger = [key substringFromIndex:prefix.length];
+        if (!TGIsCustomTrigger(trigger)) continue;
+        [rows addObject:TGSubtitled(TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), _mode, trigger))];
+    }
+    return [rows sortedArrayUsingComparator:^NSComparisonResult(PSSpecifier *a, PSSpecifier *b) { return [a.name localizedStandardCompare:b.name]; }];
+}
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    NSString *trigger = [spec propertyForKey:@"tgTrigger"];
+    if (!trigger || !TGActionList([self readPreferenceValue:spec]).count) return nil;
+    return TGIsCustomTrigger(trigger) ? @"删除" : @"清除";
+}
+
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    [self setPreferenceValue:@"" specifier:spec];
+    return TGIsCustomTrigger([spec propertyForKey:@"tgTrigger"]); // a button's row stays, now empty
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    // Back from AltList with an app picked: go straight to its action picker.
+    if (_pendingTrigger) {
+        NSString *trigger = _pendingTrigger;
+        _pendingTrigger = nil;
+        [self pushPickerForTrigger:trigger];
+    }
+    // Back from AltList with an app for a flick: which way, then its action picker.
+    if (_pendingFlickApp) {
+        NSString *app = _pendingFlickApp;
+        _pendingFlickApp = nil;
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"在 %@ 上轻扫", TGAppName(app)]
+            message:@"取代该方向上普通的图标轻扫。" preferredStyle:UIAlertControllerStyleActionSheet];
+        for (NSString *prefix in @[TGIconFlickUpPrefix, TGIconFlickDownPrefix, TGIconFlickLeftPrefix, TGIconFlickRightPrefix]) {
+            NSString *trigger = [prefix stringByAppendingString:app];
+            [sheet addAction:[UIAlertAction actionWithTitle:TGFlickDirectionTitle(trigger) style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                [self pushPickerForTrigger:trigger];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        sheet.popoverPresentationController.sourceView = self.view;
+        sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+        [self presentViewController:sheet animated:YES completion:nil];
+    }
+}
+
+- (void)setFlickedApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
+    if ([identifier isKindOfClass:NSString.class] && identifier.length) _pendingFlickApp = identifier;
+}
+
+- (void)pushPickerForTrigger:(NSString *)trigger {
+    TGActionPickerController *picker = [TGActionPickerController new];
+    picker.specifier = TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), _mode, trigger);
+    [self.navigationController pushViewController:picker animated:YES];
+}
+
+- (void)setOpenedApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
+    if ([identifier isKindOfClass:NSString.class] && identifier.length) _pendingTrigger = [TGAppLaunchedPrefix stringByAppendingString:identifier];
+}
+
+- (void)setNotifyingApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
+    if ([identifier isKindOfClass:NSString.class] && identifier.length) _pendingTrigger = [TGNotificationAppPrefix stringByAppendingString:identifier];
+}
+
+- (NSString *)openedApp:(PSSpecifier *)spec {
+    return nil;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [super tableView:tableView cellForRowAtIndexPath:indexPath];
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    if ([spec propertyForKey:@"tgAddEvent"]) cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator; // each leads to one more step
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    NSString *prefix = [spec propertyForKey:@"tgAddEvent"];
+    if (!prefix) {
+        [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+        return;
+    }
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if ([prefix isEqualToString:TGTimePrefix]) {
+        TGTimePickerController *timePicker = [TGTimePickerController new];
+        __weak typeof(self) weakSelf = self;
+        timePicker.onSave = ^(NSString *trigger) {
+            [weakSelf.navigationController popViewControllerAnimated:NO];
+            [weakSelf pushPickerForTrigger:trigger];
+        };
+        [self.navigationController pushViewController:timePicker animated:YES];
+        return;
+    }
+    void (^next)(NSString *) = ^(NSString *value) { [self pushPickerForTrigger:[prefix stringByAppendingString:value]]; };
+    if ([prefix isEqualToString:TGBatteryAbovePrefix] || [prefix isEqualToString:TGBatteryBelowPrefix]) {
+        BOOL above = [prefix isEqualToString:TGBatteryAbovePrefix];
+        [self promptTitle:spec.name message:above ? @"电量值，1–100 %。电量越过该值时执行一次；100 表示充满。"
+            : @"电量值，1–100 %。电量跌破该值时执行一次。" percent:YES then:next];
+        return;
+    }
+    // Wi-Fi and Bluetooth: pick from the saved networks / paired devices, or type a name.
+    BOOL wifi = [prefix isEqualToString:TGWiFiJoinedPrefix] || [prefix isEqualToString:TGWiFiLeftPrefix];
+    NSString *prompt = wifi ? @"网络名称（SSID），与设置 → Wi-Fi 中显示的一致" : @"设备名称，与设置 → 蓝牙中显示的一致";
+    UIAlertController *list = [UIAlertController alertControllerWithTitle:spec.name message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSString *name in wifi ? TGSavedWiFiNetworks() : TGPairedBluetoothDevices())
+        [list addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { next(name); }]];
+    [list addAction:[UIAlertAction actionWithTitle:@"其他…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [self promptTitle:spec.name message:prompt percent:NO then:next];
+    }]];
+    [list addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    list.popoverPresentationController.sourceView = cell;
+    list.popoverPresentationController.sourceRect = cell.bounds;
+    [self presentViewController:list animated:YES completion:nil];
+}
+
+- (void)promptTitle:(NSString *)title message:(NSString *)message percent:(BOOL)percent then:(void (^)(NSString *value))done {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        if (percent) field.keyboardType = UIKeyboardTypeNumberPad;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"下一步" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *value = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (percent) value = value.length ? [NSString stringWithFormat:@"%d", (int)MIN(MAX(value.intValue, 1), 100)] : @"";
+        if (value.length) done(value);
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+@end
+
+#pragma mark - Place (what's assigned there, then one row per kind of trigger)
+
+#pragma mark - Assigned (one place's assignments)
+
+@interface TGAssignedController : TGListController
+@end
+
+@implementation TGAssignedController {
+    NSString *_mode;
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        _mode = [self.specifier propertyForKey:@"tgMode"];
+        self.title = @"已指派";
+        NSString *prefix = [_mode stringByAppendingString:@"/"];
+        NSMutableArray *rows = [NSMutableArray array];
+        for (NSString *key in TGAllAssignments()) {
+            if (![key hasPrefix:prefix]) continue;
+            NSString *trigger = [key substringFromIndex:prefix.length];
+            [rows addObject:TGSubtitled(TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), _mode, trigger))];
+        }
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
+        [group setProperty:rows.count ? @"点按可修改，左滑可移除。" : [NSString stringWithFormat:@"此处的指派还是空的（%@）。", TGModePhrase(_mode)] forKey:@"footerText"];
+        [specs addObject:group];
+        [specs addObjectsFromArray:[rows sortedArrayUsingComparator:TGCatalogOrder]];
+        if (rows.count > 1) {
+            [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+            PSSpecifier *clear = [PSSpecifier preferenceSpecifierNamed:@"全部移除" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+            clear.buttonAction = @selector(confirmRemoveAll:);
+            [clear setProperty:@2 forKey:@"alignment"];
+            [clear setProperty:NSClassFromString(@"PSTableCell") forKey:@"cellClass"];
+            [clear setProperty:@YES forKey:@"tgDestructive"];
+            [specs addObject:clear];
+        }
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [super tableView:tableView cellForRowAtIndexPath:indexPath];
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    if ([spec propertyForKey:@"tgDestructive"]) cell.textLabel.textColor = UIColor.systemRedColor;
+    return cell;
+}
+
+- (void)confirmRemoveAll:(PSSpecifier *)spec {
+    NSUInteger count = 0;
+    for (PSSpecifier *row in self.specifiers) if ([row propertyForKey:@"tgTrigger"]) count++;
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:nil
+        message:[NSString stringWithFormat:@"移除全部 %lu 项指派（%@）？这些触发器将恢复系统默认行为。", (unsigned long)count, TGModePhrase(_mode)]
+        preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"全部移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        for (PSSpecifier *row in self.specifiers.copy) if ([row propertyForKey:@"tgTrigger"]) [self setPreferenceValue:@"" specifier:row];
+        [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+        [self reloadSpecifiers];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = self.view;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMaxY(self.view.bounds) - 80, 1, 1);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgTrigger"] ? @"移除" : nil;
+}
+
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    [self setPreferenceValue:@"" specifier:spec];
+    return YES;
+}
+
+@end
+
+@interface TGModeController : TGListController
+@end
+
+@implementation TGModeController {
+    NSString *_mode;
+    NSArray<NSString *> *_assigned; // this place's assigned triggers
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        _mode = [self.specifier propertyForKey:@"tgMode"];
+        self.title = [_mode hasPrefix:TGAppModePrefix] ? TGPlaceTitle(_mode) : self.specifier.name;
+        NSString *prefix = [_mode stringByAppendingString:@"/"];
+        NSMutableArray *assigned = [NSMutableArray array];
+        for (NSString *key in TGAllAssignments()) if ([key hasPrefix:prefix]) [assigned addObject:[key substringFromIndex:prefix.length]];
+        _assigned = assigned;
+
+        NSMutableArray *specs = [NSMutableArray array];
+        BOOL anywhere = [_mode isEqualToString:@"anywhere"];
+        BOOL oneApp = [_mode hasPrefix:TGAppModePrefix];
+        if (!anywhere) {
+            // Said up front: what's set here only works in this place.
+            PSSpecifier *intro = [PSSpecifier groupSpecifierWithName:nil];
+            [intro setProperty:oneApp
+                ? [NSString stringWithFormat:@"此处的指派只在%@生效，并取代同一触发器上“应用内”和“任意位置”的指派。", TGModePhrase(_mode)]
+                : [NSString stringWithFormat:@"此处指派仅在%@生效，并对同一触发器取代任意位置的指派；其他位置仍沿用任意位置的指派。", TGModePhrase(_mode)] forKey:@"footerText"];
+            [specs addObject:intro];
+        }
+        if (assigned.count) {
+            // One row, not the whole list: the list has its own page.
+            if (anywhere) [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:@"已指派" target:self set:nil get:@selector(assignedCount:)
+                detail:TGAssignedController.class cell:PSLinkListCell edit:nil];
+            [row setProperty:_mode forKey:@"tgMode"];
+            TGSetIcon(row, @"checklist", UIColor.systemGreenColor);
+            [specs addObject:row];
+        }
+
+        PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"触发器"];
+        if (anywhere) [group setProperty:@"此处指派在所有位置生效，除非其他位置对同一触发器另有指派。" forKey:@"footerText"];
+        [specs addObject:group];
+        NSDictionary<NSString *, NSArray *> *icons = @{
+            @"锁键": @[@"circle.circle", UIColor.systemGrayColor], @"Touch ID": @[@"touchid", UIColor.systemRedColor],
+            @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor], @"锁键 + 音量键": @[@"plus.rectangle.on.rectangle", UIColor.systemPurpleColor],
+            @"拨片开关": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
+            @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
+            @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
+        };
+        for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
+            if (!TGShowsTriggerGroup(&TGTriggerGroups[g])) continue;
+            // Inside one app: only what can happen while it's open.
+            const TGItem *items = TGTriggerGroups[g].items;
+            if (oneApp && (items == TGIcons || items == TGHomeGestures || items == TGOther || items == TGStateChanges)) continue;
+            NSString *title = @(TGTriggerGroups[g].title);
+            PSSpecifier *row = [self rowForGroup:g title:TGTriggerGroups[g].items == TGLockButton ? TGLockButtonName() : TGButtonText(title)];
+            if (icons[title]) TGSetIcon(row, icons[title][0], icons[title][1]);
+            [specs addObject:row];
+        }
+        if (!oneApp) {
+            PSSpecifier *custom = [self rowForGroup:-1 title:TGCustomGroupTitle];
+            TGSetIcon(custom, @"sparkles", UIColor.systemPurpleColor);
+            [specs addObject:custom];
+        }
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (NSString *)assignedCount:(PSSpecifier *)spec {
+    return TGCountTitle(_assigned.count);
+}
+
+- (PSSpecifier *)rowForGroup:(NSInteger)group title:(NSString *)title {
+    PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:@selector(groupCount:) detail:TGGroupController.class cell:PSLinkListCell edit:nil];
+    [row setProperty:_mode forKey:@"tgMode"];
+    [row setProperty:@(group) forKey:@"tgGroup"];
+    return row;
+}
+
+// How many of a group's triggers are assigned in this place.
+- (NSString *)groupCount:(PSSpecifier *)spec {
+    NSInteger group = [[spec propertyForKey:@"tgGroup"] integerValue];
+    NSUInteger count = 0;
+    for (NSString *trigger in _assigned) if (TGGroupOfTrigger(trigger) == group) count++;
+    return TGCountTitle(count);
+}
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgTrigger"] ? @"移除" : nil;
+}
+
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    [self setPreferenceValue:@"" specifier:spec];
+    return YES;
+}
+
+@end
+
+// Rows whose trigger and actions are both worth reading in full: the trigger
+// on top, what it runs (or where) underneath, instead of cut off on the right.
+#pragma mark - In Specific Apps
+
+@interface TGAppsController : TGListController
+@end
+
+@implementation TGAppsController {
+    NSString *_pendingApp; // picked in AltList, opened when we're back
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        self.title = @"指定应用内";
+        NSMutableDictionary<NSString *, NSNumber *> *counts = [NSMutableDictionary dictionary];
+        for (NSString *key in TGAllAssignments()) {
+            if (![key hasPrefix:TGAppModePrefix]) continue;
+            NSString *place = [key substringToIndex:[key rangeOfString:@"/"].location];
+            counts[place] = @(counts[place].integerValue + 1);
+        }
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
+        [group setProperty:@"为单个应用单独指派：在该应用内，同触发器会取代“应用内”和“任意位置”的指派，其他地方不受影响。" forKey:@"footerText"];
+        [specs addObject:group];
+        NSArray *places = [counts.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) { return [TGPlaceTitle(a) localizedStandardCompare:TGPlaceTitle(b)]; }];
+        for (NSString *place in places) {
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:TGPlaceTitle(place) target:self set:nil get:@selector(placeCount:) detail:TGModeController.class cell:PSLinkListCell edit:nil];
+            [row setProperty:place forKey:@"tgMode"];
+            [row setProperty:counts[place] forKey:@"tgCount"];
+            [specs addObject:row];
+        }
+        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+        // AltList's app list saves through this row's own setter (like Open App).
+        PSSpecifier *add = [PSSpecifier preferenceSpecifierNamed:@"添加应用…" target:self set:@selector(setAddedApp:specifier:)
+            get:@selector(addedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+        [add setProperty:@YES forKey:@"useSearchBar"];
+        [add setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+        [specs addObject:add];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (NSString *)placeCount:(PSSpecifier *)spec {
+    return TGCountTitle([[spec propertyForKey:@"tgCount"] unsignedIntegerValue]);
+}
+
+- (void)setAddedApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
+    if ([identifier isKindOfClass:NSString.class] && identifier.length) _pendingApp = identifier;
+}
+
+- (NSString *)addedApp:(PSSpecifier *)spec {
+    return nil;
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (!_pendingApp) return;
+    // Back from the app list: open that app's page.
+    NSString *place = [TGAppModePrefix stringByAppendingString:_pendingApp];
+    _pendingApp = nil;
+    PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:TGPlaceTitle(place) target:self set:nil get:nil detail:TGModeController.class cell:PSLinkListCell edit:nil];
+    [row setProperty:place forKey:@"tgMode"];
+    TGModeController *page = [TGModeController new];
+    page.specifier = row;
+    [self.navigationController pushViewController:page animated:YES];
+}
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgMode"] ? @"移除" : nil;
+}
+
+// Removes every assignment this app has.
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    NSString *prefix = [[spec propertyForKey:@"tgMode"] stringByAppendingString:@"/"];
+    for (NSString *key in TGAllAssignments()) {
+        if (![key hasPrefix:prefix]) continue;
+        PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
+        [storage setProperty:TGDomain forKey:@"defaults"];
+        [storage setProperty:key forKey:@"key"];
+        [storage setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+        [self setPreferenceValue:@"" specifier:storage];
+    }
+    return YES;
+}
+
+@end
+
+@interface TGSubtitleCell : PSTableCell
+@end
+
+@implementation TGSubtitleCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier specifier:(PSSpecifier *)specifier {
+    return [super initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:reuseIdentifier specifier:specifier];
+}
+
+- (void)refreshCellContentsWithSpecifier:(PSSpecifier *)specifier {
+    [super refreshCellContentsWithSpecifier:specifier];
+    id value = [specifier performGetter];
+    self.detailTextLabel.text = [value isKindOfClass:NSString.class] ? value : nil;
+    self.detailTextLabel.textColor = UIColor.secondaryLabelColor;
+    self.detailTextLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleSubheadline];
+    self.detailTextLabel.numberOfLines = 2;
+    self.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+}
+
+@end
+
+static PSSpecifier *TGSubtitled(PSSpecifier *spec) {
+    [spec setProperty:TGSubtitleCell.class forKey:@"cellClass"];
+    [spec setProperty:@64 forKey:@"height"];
+    return spec;
+}
+
+static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString *mode, NSString *trigger) {
+    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:name target:target set:nil get:getter
+        detail:TGActionPickerController.class cell:PSLinkListCell edit:nil];
+    [spec setProperty:mode forKey:@"tgMode"];
+    [spec setProperty:trigger forKey:@"tgTrigger"];
+    TGConfigureStorage(spec, mode, trigger);
+    return spec;
+}
+
+#pragma mark - All Assignments (every assignment, grouped by action)
+
+@interface TGByActionController : TGListController
+@end
+
+@implementation TGByActionController {
+    BOOL _byAction; // the page's two views: by trigger (grouped by place) or by action
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UISegmentedControl *view = [[UISegmentedControl alloc] initWithItems:@[@"按触发器", @"按动作"]];
+    view.selectedSegmentIndex = _byAction;
+    [view addTarget:self action:@selector(viewChanged:) forControlEvents:UIControlEventValueChanged];
+    view.translatesAutoresizingMaskIntoConstraints = NO;
+    UIView *header = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 52)];
+    [header addSubview:view];
+    [NSLayoutConstraint activateConstraints:@[
+        [view.leadingAnchor constraintEqualToAnchor:header.layoutMarginsGuide.leadingAnchor],
+        [view.trailingAnchor constraintEqualToAnchor:header.layoutMarginsGuide.trailingAnchor],
+        [view.bottomAnchor constraintEqualToAnchor:header.bottomAnchor],
+    ]];
+    self.table.tableHeaderView = header;
+}
+
+- (void)viewChanged:(UISegmentedControl *)view {
+    _byAction = view.selectedSegmentIndex == 1;
+    [self reloadSpecifiers];
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        self.title = @"全部指派";
+        NSDictionary<NSString *, NSArray<NSString *> *> *assignments = TGAllAssignments();
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *top = [PSSpecifier groupSpecifierWithName:nil];
+        [top setProperty:!assignments.count ? @"还没有指派。返回后先选位置，再选触发器。"
+            : _byAction ? @"按执行内容分组。点按触发器可修改，左滑可将其动作从触发器上移除。"
+            : @"按生效位置分组。点按可修改，左滑可移除。" forKey:@"footerText"];
+        [specs addObject:top];
+        if (!_byAction) {
+            NSMutableArray *places = [TGModeIdentifiers() mutableCopy];
+            NSMutableSet *apps = [NSMutableSet set];
+            for (NSString *key in assignments) if ([key hasPrefix:TGAppModePrefix]) [apps addObject:[key substringToIndex:[key rangeOfString:@"/"].location]];
+            [places addObjectsFromArray:[apps.allObjects sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) { return [TGPlaceTitle(a) localizedStandardCompare:TGPlaceTitle(b)]; }]];
+            for (NSString *place in places) {
+                NSString *prefix = [place stringByAppendingString:@"/"];
+                NSMutableArray *rows = [NSMutableArray array];
+                for (NSString *key in assignments) {
+                    if (![key hasPrefix:prefix]) continue;
+                    NSString *trigger = [key substringFromIndex:prefix.length];
+                    [rows addObject:TGSubtitled(TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), place, trigger))];
+                }
+                if (!rows.count) continue;
+                [specs addObject:[PSSpecifier groupSpecifierWithName:[place hasPrefix:TGAppModePrefix] ? [NSString stringWithFormat:@"应用内“%@”", TGPlaceTitle(place)] : TGModeTitle(place)]];
+                [specs addObjectsFromArray:[rows sortedArrayUsingComparator:TGCatalogOrder]];
+            }
+            _specifiers = specs;
+            return _specifiers;
+        }
+        NSMutableDictionary<NSString *, NSMutableArray *> *byAction = [NSMutableDictionary dictionary];
+        [assignments enumerateKeysAndObjectsUsingBlock:^(NSString *key, NSArray<NSString *> *actions, BOOL *stop) {
+            NSRange slash = [key rangeOfString:@"/"];
+            NSString *mode = [key substringToIndex:slash.location], *trigger = [key substringFromIndex:slash.location + 1];
+            for (NSString *action in actions) {
+                if ([action hasPrefix:TGPausePrefix]) continue;
+                NSString *title = TGDisplayTitle(action);
+                if (!byAction[title]) byAction[title] = [NSMutableArray array];
+                PSSpecifier *row = TGSubtitled(TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(modeTitle:), mode, trigger));
+                [row setProperty:action forKey:@"tgListedAction"];
+                [byAction[title] addObject:row];
+            }
+        }];
+        for (NSString *title in [byAction.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
+            [specs addObject:[PSSpecifier groupSpecifierWithName:title]];
+            [specs addObjectsFromArray:[byAction[title] sortedArrayUsingComparator:TGCatalogOrder]];
+        }
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (NSString *)modeTitle:(PSSpecifier *)spec {
+    return TGPlaceTitle([spec propertyForKey:@"tgMode"]);
+}
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgTrigger"] ? @"移除" : nil;
+}
+
+// By trigger: clears the assignment. By action: takes just this action off the trigger; its other actions stay.
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    if (![spec propertyForKey:@"tgListedAction"]) {
+        [self setPreferenceValue:@"" specifier:spec];
+        return YES;
+    }
+    NSMutableArray *actions = [TGActionList([self readPreferenceValue:spec]) mutableCopy];
+    NSUInteger index = [actions indexOfObject:[spec propertyForKey:@"tgListedAction"]];
+    if (index != NSNotFound) [actions removeObjectAtIndex:index];
+    [self setPreferenceValue:TGStoredValue(TGTidyPauses(actions)) specifier:spec];
+    return YES;
+}
+
+@end
+
+#pragma mark - Menus
+
+@interface TGMenusController : TGListController
+@end
+
+@implementation TGMenusController
+
+- (PSSpecifier *)menusStorage {
+    PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
+    [spec setProperty:TGDomain forKey:@"defaults"];
+    [spec setProperty:TGMenusKey forKey:@"key"];
+    [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+    return spec;
+}
+
+- (void)saveMenus:(NSArray *)menus {
+    [self setPreferenceValue:menus specifier:[self menusStorage]];
+}
+
+- (PSSpecifier *)editorSpecifierForMenu:(NSDictionary *)menu {
+    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:[menu[@"name"] description] target:self set:nil get:@selector(menuSummary:)
+        detail:TGActionPickerController.class cell:PSLinkListCell edit:nil];
+    [spec setProperty:TGDomain forKey:@"defaults"];
+    [spec setProperty:[TGMenuKeyPrefix stringByAppendingString:menu[@"id"]] forKey:@"key"];
+    [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+    [spec setProperty:@YES forKey:@"tgMenuEditor"];
+    [spec setProperty:menu[@"id"] forKey:@"tgMenuID"];
+    return spec;
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        self.title = @"菜单";
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
+        [group setProperty:TGReadMenus().count ? @"菜单会弹出一张动作列表供选择。在动作选择器的「菜单」分类里把它指派给触发器。左滑菜单可删除。"
+            : @"菜单会弹出一张动作列表供选择。先创建菜单，再在动作选择器的「菜单」分类里把它指派给触发器。" forKey:@"footerText"];
+        [specs addObject:group];
+        for (NSDictionary *menu in TGReadMenus()) [specs addObject:[self editorSpecifierForMenu:menu]];
+        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+        PSSpecifier *add = [PSSpecifier preferenceSpecifierNamed:@"新建菜单…" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+        [add setProperty:@"new" forKey:@"tgMenuCommand"];
+        [specs addObject:add];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (NSString *)menuSummary:(PSSpecifier *)spec {
+    NSUInteger count = 0;
+    for (NSString *item in TGActionList([self readPreferenceValue:spec])) if (![item hasPrefix:TGPausePrefix]) count++;
+    return count == 1 ? @"1 个动作" : [NSString stringWithFormat:@"%lu 个动作", (unsigned long)count];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    NSString *command = [spec propertyForKey:@"tgMenuCommand"];
+    if (!command) {
+        [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+        return;
+    }
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"新建菜单" message:@"显示在菜单顶部的名称" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:nil];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"Create" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *name = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (!name.length) return;
+        NSDictionary *menu = @{ @"id": [NSUUID.UUID.UUIDString substringToIndex:8], @"name": name };
+        [self saveMenus:[TGReadMenus() arrayByAddingObject:menu]];
+        TGActionPickerController *editor = [TGActionPickerController new];
+        editor.specifier = [self editorSpecifierForMenu:menu];
+        [self.navigationController pushViewController:editor animated:YES];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgMenuID"] ? @"删除" : nil;
+}
+
+// Triggers that used the menu simply stop showing it.
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    NSString *menuID = [spec propertyForKey:@"tgMenuID"];
+    NSMutableArray *menus = [TGReadMenus() mutableCopy];
+    [menus filterUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *menu, NSDictionary *bindings) { return ![menu[@"id"] isEqualToString:menuID]; }]];
+    [self setPreferenceValue:@"" specifier:spec]; // clear its items
+    [self saveMenus:menus];
+    return YES;
+}
+
+@end
+
+#pragma mark - Setups (profiles, export / import, reset)
+
+// Settings keys that belong to a setup, besides "<mode>/<trigger>" and "menu/<id>".
+static NSDictionary *TGSetupDefaults(void) {
+    return @{ TGEnabledKey: @YES, TGRequireUnlockKey: @YES, TGShowBannersKey: @NO, TGBlockedAppsKey: @[], TGMenusKey: @[] };
+}
+
+static BOOL TGIsStringList(id value) {
+    if ([value isKindOfClass:NSString.class]) return YES;
+    if (![value isKindOfClass:NSArray.class]) return NO;
+    for (id item in value) if (![item isKindOfClass:NSString.class]) return NO;
+    return YES;
+}
+
+// Keeps only keys and value types Triggr understands; everything else is dropped.
+static NSDictionary *TGSanitizedSetup(NSDictionary *input) {
+    NSMutableDictionary *setup = [NSMutableDictionary dictionary];
+    NSSet *modes = [NSSet setWithObjects:@"anywhere", @"home", @"app", @"lock", nil];
+    [input enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL *stop) {
+        if (![key isKindOfClass:NSString.class]) return;
+        NSRange slash = [key rangeOfString:@"/"];
+        if ([key hasPrefix:TGMenuKeyPrefix]) {
+            if (TGIsStringList(value)) setup[key] = value;
+        } else if (slash.location != NSNotFound) {
+            if ([modes containsObject:[key substringToIndex:slash.location]] && TGIsKnownTrigger([key substringFromIndex:slash.location + 1]) && TGIsStringList(value)) setup[key] = value;
+        } else if ([key isEqualToString:TGEnabledKey] || [key isEqualToString:TGRequireUnlockKey] || [key isEqualToString:TGShowBannersKey]) {
+            // (Allow API is deliberately not imported: a shared setup shouldn't switch it on.)
+            if ([value isKindOfClass:NSNumber.class]) setup[key] = value;
+        } else if ([key isEqualToString:TGBlockedAppsKey]) {
+            if ([value isKindOfClass:NSArray.class] && TGIsStringList(value)) setup[key] = value;
+        } else if ([key isEqualToString:TGMenusKey] && [value isKindOfClass:NSArray.class]) {
+            NSMutableArray *menus = [NSMutableArray array];
+            for (id menu in value)
+                if ([menu isKindOfClass:NSDictionary.class] && [menu[@"id"] isKindOfClass:NSString.class] && [menu[@"name"] isKindOfClass:NSString.class]) [menus addObject:@{ @"id": menu[@"id"], @"name": menu[@"name"] }];
+            setup[key] = menus;
+        }
+    }];
+    return setup;
+}
+
+// The current setup: every setup key with a real value (empty assignments skipped).
+static NSDictionary *TGCurrentSetup(void) {
+    CFStringRef domain = (__bridge CFStringRef)TGDomain;
+    CFPreferencesAppSynchronize(domain);
+    NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+    NSDictionary *values = keys.count ? CFBridgingRelease(CFPreferencesCopyMultiple((__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) : @{};
+    NSMutableDictionary *setup = [TGSanitizedSetup(values) mutableCopy];
+    for (NSString *key in setup.allKeys)
+        if (TGIsStringList(setup[key]) && ![key isEqualToString:TGBlockedAppsKey] && !TGActionList(setup[key]).count) [setup removeObjectForKey:key];
+    return setup;
+}
+
+// What a setup would do, for the import review and export warning.
+static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *hasPersonal) {
+    NSUInteger assignments = 0, commands = 0, urls = 0;
+    BOOL personal = NO;
+    for (NSString *key in setup) {
+        if (!TGIsStringList(setup[key]) || [key isEqualToString:TGBlockedAppsKey]) continue;
+        if ([key containsString:@"/"] && ![key hasPrefix:TGMenuKeyPrefix]) assignments++;
+        if ([key containsString:TGWiFiJoinedPrefix] || [key containsString:TGWiFiLeftPrefix] || [key containsString:TGBTConnectedPrefix] || [key containsString:TGBTDisconnectedPrefix]) personal = YES;
+        for (NSString *action in TGActionList(setup[key])) {
+            if ([action hasPrefix:TGShellPrefix]) commands++;
+            if ([action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShortcutPrefix]) urls++;
+        }
+    }
+    if (hasCommands) *hasCommands = commands > 0;
+    if (hasPersonal) *hasPersonal = personal;
+    return [NSString stringWithFormat:@"%lu 项指派、%lu 个菜单、%lu 条 shell 命令、%lu 个 URL 或快捷指令。",
+        (unsigned long)assignments, (unsigned long)[setup[TGMenusKey] count], (unsigned long)commands, (unsigned long)urls];
+}
+
+@interface TGProfilesController : TGListController <UIDocumentPickerDelegate>
+@end
+
+@implementation TGProfilesController
+
+- (PSSpecifier *)storageForKey:(NSString *)key {
+    PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
+    [spec setProperty:TGDomain forKey:@"defaults"];
+    [spec setProperty:key forKey:@"key"];
+    return spec;
+}
+
+- (void)writeValue:(id)value forKey:(NSString *)key {
+    [self setPreferenceValue:value specifier:[self storageForKey:key]];
+}
+
+- (NSDictionary *)profiles {
+    id profiles = [self readPreferenceValue:[self storageForKey:TGProfilesKey]];
+    return [profiles isKindOfClass:NSDictionary.class] ? profiles : @{};
+}
+
+- (NSString *)activeProfile {
+    id name = [self readPreferenceValue:[self storageForKey:TGActiveProfileKey]];
+    return [name isKindOfClass:NSString.class] && [name length] && self.profiles[name] ? name : nil;
+}
+
+// Replace the live setup: clear what isn't in `setup`, then write it.
+- (void)applySetup:(NSDictionary *)setup {
+    NSDictionary *defaults = TGSetupDefaults();
+    for (NSString *key in TGCurrentSetup()) if (!setup[key]) [self writeValue:defaults[key] ?: @"" forKey:key];
+    for (NSString *key in defaults) if (!setup[key]) [self writeValue:defaults[key] forKey:key];
+    [setup enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop) { [self writeValue:value forKey:key]; }];
+    notify_post(TGPrefsChangedNotification);
+}
+
+- (void)saveCurrentAs:(NSString *)name {
+    NSMutableDictionary *profiles = [self.profiles mutableCopy];
+    profiles[name] = TGCurrentSetup();
+    [self writeValue:profiles forKey:TGProfilesKey];
+    [self writeValue:name forKey:TGActiveProfileKey];
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        self.title = @"配置与共享";
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"配置"];
+        [group setProperty:@"点按配置可切换或导出；左滑可删除。切换前会先把当前设置存入当前生效的配置，不会丢失。" forKey:@"footerText"];
+        [specs addObject:group];
+        for (NSString *name in [self.profiles.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name target:self set:nil get:@selector(profileStatus:) detail:nil cell:PSTitleValueCell edit:nil];
+            [row setProperty:name forKey:@"tgProfile"];
+            [specs addObject:row];
+        }
+        [specs addObject:[self button:@"将当前设置存为配置…" command:@"save"]];
+
+        PSSpecifier *share = [PSSpecifier groupSpecifierWithName:@"共享"];
+        [share setProperty:@"导出生成一个文件，可用隔空投送、信息或「文件」发送。导入会先展示内容，再替换当前设置。" forKey:@"footerText"];
+        [specs addObject:share];
+        [specs addObject:[self button:@"导出当前设置…" command:@"export"]];
+        [specs addObject:[self button:@"导入设置…" command:@"import"]];
+
+        PSSpecifier *reset = [PSSpecifier groupSpecifierWithName:nil];
+        [reset setProperty:TGButtonText(@"清除全部指派、菜单和设置，并关闭允许 API（替换按键动作恢复开启）。已保存的方案保留。") forKey:@"footerText"];
+        [specs addObject:reset];
+        [specs addObject:[self button:@"恢复默认设置…" command:@"reset"]];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (PSSpecifier *)button:(NSString *)title command:(NSString *)command {
+    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+    [spec setProperty:command forKey:@"tgCommand"];
+    return spec;
+}
+
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgProfile"] ? @"删除" : nil;
+}
+
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    [self deleteProfile:[spec propertyForKey:@"tgProfile"]];
+    return YES;
+}
+
+- (void)deleteProfile:(NSString *)name {
+    NSMutableDictionary *profiles = [self.profiles mutableCopy];
+    BOOL active = [name isEqualToString:self.activeProfile];
+    [profiles removeObjectForKey:name];
+    [self writeValue:profiles forKey:TGProfilesKey];
+    if (active) [self writeValue:@"" forKey:TGActiveProfileKey];
+}
+
+- (NSString *)profileStatus:(PSSpecifier *)spec {
+    return [[spec propertyForKey:@"tgProfile"] isEqualToString:self.activeProfile] ? @"使用中" : @"";
+}
+
+- (void)confirm:(NSString *)title message:(NSString *)message button:(NSString *)button destructive:(BOOL)destructive then:(void (^)(void))done {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:button style:destructive ? UIAlertActionStyleDestructive : UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(); }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
+    NSString *profile = [spec propertyForKey:@"tgProfile"], *command = [spec propertyForKey:@"tgCommand"];
+    if (profile) [self showProfile:profile fromCell:cell];
+    else if ([command isEqualToString:@"save"]) [self promptSave];
+    else if ([command isEqualToString:@"export"]) [self exportSetup:TGCurrentSetup() name:@"Triggr 配置" fromCell:cell];
+    else if ([command isEqualToString:@"import"]) [self pickImport];
+    else if ([command isEqualToString:@"reset"]) {
+        [self confirm:@"恢复默认设置？" message:@"所有指派、菜单和设置都会被清除。已保存的配置会保留。" button:@"重置" destructive:YES then:^{
+            [self applySetup:@{}];
+            [self writeValue:@NO forKey:TGAllowAPIKey]; // only Reset (or their switches) change these two
+            [self writeValue:@YES forKey:TGLockReplacesKey];
+            [self writeValue:@"" forKey:TGActiveProfileKey];
+            [self reloadSpecifiers];
+        }];
+    }
+}
+
+- (void)showProfile:(NSString *)name fromCell:(UITableViewCell *)cell {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:name message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    if (![name isEqualToString:self.activeProfile]) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"切换到" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            NSString *active = self.activeProfile;
+            if (active) [self saveCurrentAs:active]; // keep edits made since switching
+            [self applySetup:TGSanitizedSetup(self.profiles[name])];
+            [self writeValue:name forKey:TGActiveProfileKey];
+            [self reloadSpecifiers];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"导出" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSDictionary *setup = [name isEqualToString:self.activeProfile] ? TGCurrentSetup() : TGSanitizedSetup(self.profiles[name]);
+        [self exportSetup:setup name:name fromCell:cell];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        [self deleteProfile:name];
+        [self reloadSpecifiers];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = cell;
+    sheet.popoverPresentationController.sourceRect = cell.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)promptSave {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"保存配置" message:@"保存当前的指派、菜单和设置。同名配置会被覆盖。" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.placeholder = @"名称"; }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *name = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (!name.length) return;
+        [self saveCurrentAs:name];
+        [self reloadSpecifiers];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+#pragma mark Export / import
+
+- (void)exportSetup:(NSDictionary *)setup name:(NSString *)name fromCell:(UITableViewCell *)cell {
+    BOOL commands = NO, personal = NO;
+    NSString *summary = TGSetupSummary(setup, &commands, &personal);
+    NSMutableString *message = [summary mutableCopy];
+    if (personal) [message appendString:@"\n\n其中包含你的事件所用的 Wi-Fi 网络和蓝牙设备名称。"];
+    if (commands) [message appendString:@"\n\n其中包含你的 shell 命令；请确认不含隐私内容。"];
+    [self confirm:@"导出设置" message:message button:@"共享" destructive:NO then:^{
+        NSDictionary *file = @{ @"Triggr": @1, @"setup": setup };
+        NSData *data = [NSJSONSerialization dataWithJSONObject:file options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys error:nil];
+        NSString *safeName = [[name componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/\\:"]] componentsJoinedByString:@"-"];
+        NSURL *url = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:[safeName stringByAppendingString:@".json"]]];
+        if (![data writeToURL:url atomically:YES]) return;
+        UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];
+        share.popoverPresentationController.sourceView = cell;
+        share.popoverPresentationController.sourceRect = cell.bounds;
+        [self presentViewController:share animated:YES completion:nil];
+    }];
+}
+
+- (void)pickImport {
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeJSON] asCopy:YES];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSData *data = urls.firstObject ? [NSData dataWithContentsOfURL:urls.firstObject] : nil;
+    id file = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+    if (![file isKindOfClass:NSDictionary.class] || ![file[@"Triggr"] isKindOfClass:NSNumber.class] || ![file[@"setup"] isKindOfClass:NSDictionary.class]) {
+        [self confirm:@"不是 Triggr 配置文件" message:@"该文件不是从 Triggr 导出的设置。" button:@"好" destructive:NO then:^{}];
+        return;
+    }
+    NSDictionary *setup = TGSanitizedSetup(file[@"setup"]);
+    BOOL commands = NO;
+    NSMutableString *message = [TGSetupSummary(setup, &commands, NULL) mutableCopy];
+    [message appendString:@"\n\n导入会替换当前配置。想保留的话，先存为方案。"];
+    if (commands) [message appendString:@"\n\n该配置会在你的设备上运行 shell 命令。只导入你信任的人提供的配置。"];
+    [self confirm:@"导入设置？" message:message button:@"替换我的设置" destructive:YES then:^{
+        [self applySetup:setup];
+        [self writeValue:@"" forKey:TGActiveProfileKey];
+        [self reloadSpecifiers];
+    }];
+}
+
+@end
+
+#pragma mark - Options
+
+@interface TGOptionsController : TGListController
+@end
+
+@implementation TGOptionsController
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        self.title = @"选项";
+        NSMutableArray *specs = [NSMutableArray array];
+        PSSpecifier *banners = [PSSpecifier groupSpecifierWithName:nil];
+        [banners setProperty:@"执行时在顶部显示小横幅，标明刚运行的内容。" forKey:@"footerText"];
+        [specs addObject:banners];
+        [specs addObject:TGSwitchRow(@"显示动作横幅", TGShowBannersKey, NO, self)];
+
+        PSSpecifier *block = [PSSpecifier groupSpecifierWithName:nil];
+        [block setProperty:@"这些应用在前台时忽略所有触发器，例如使用音量键的游戏。" forKey:@"footerText"];
+        [specs addObject:block];
+        // AltList's multi-app list saves through this row's own setter and getter
+        // (like Open App), which store the list through PSListController.
+        PSSpecifier *blockList = [PSSpecifier preferenceSpecifierNamed:@"屏蔽列表" target:self set:@selector(setBlockedApps:specifier:)
+            get:@selector(blockedApps:) detail:ATLApplicationListMultiSelectionController.class cell:PSLinkCell edit:nil];
+        [blockList setProperty:@YES forKey:@"useSearchBar"];
+        [blockList setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+        [specs addObject:blockList];
+
+        PSSpecifier *statusBar = [PSSpecifier groupSpecifierWithName:@"状态栏"];
+        [statusBar setProperty:TGHasHomeButton()
+            ? @"状态栏的轻点、左侧轻点、右侧轻点。若你使用 iPhone X 式手势（从顶部下拉打开控制中心/通知中心），请关闭此项。双击和长按始终有效。"
+            : @"在 Face ID 机型上属实验性，默认关闭：顶部轻点也可能触发下拉控制中心/通知中心。双击和长按始终有效。"
+            forKey:@"footerText"];
+        [specs addObject:statusBar];
+        [specs addObject:TGSwitchRow(TGHasHomeButton() ? @"状态栏点按" : @"状态栏点按（实验性）", TGStatusBarTapKey, TGHasHomeButton(), self)];
+
+        PSSpecifier *lock = [PSSpecifier groupSpecifierWithName:@"锁屏界面"];
+        [lock setProperty:@"应用、URL 和快捷指令无法在锁屏界面上打开，因此它们总会等到解锁后才执行。开启后，shell 命令也会等解锁（设置了密码时）。其他动作照常立即执行。" forKey:@"footerText"];
+        [specs addObject:lock];
+        [specs addObject:TGSwitchRow(@"命令需解锁", TGRequireUnlockKey, YES, self)];
+
+        PSSpecifier *buttons = [PSSpecifier groupSpecifierWithName:@"按键"];
+        [buttons setProperty:TGButtonText(@"开：已指派的按压会取代按键自身动作（回主屏、音量步进、锁屏、静音…）。想两者都保留，就补一个对应动作，如锁键配\"熄屏\"。关：一切照旧与按键并行。唤醒、紧急 SOS 和强制重启始终不受影响。") forKey:@"footerText"];
+        [specs addObject:buttons];
+        PSSpecifier *replace = [PSSpecifier preferenceSpecifierNamed:@"替换按键动作" target:self set:@selector(setPreferenceValue:specifier:)
+            get:@selector(readPreferenceValue:) detail:nil cell:PSSwitchCell edit:nil];
+        [replace setProperty:TGDomain forKey:@"defaults"];
+        [replace setProperty:TGLockReplacesKey forKey:@"key"];
+        [replace setProperty:@YES forKey:@"default"];
+        [replace setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+        [specs addObject:replace];
+
+        PSSpecifier *api = [PSSpecifier groupSpecifierWithName:@"API"];
+        [api setProperty:@"允许其他插件和 triggr 命令运行你的触发器、菜单与内置动作（不会直接执行 shell 命令、URL 或打开应用）。任何应用都可能发起请求，不用就保持关闭。“triggr list”可查看 ID。" forKey:@"footerText"];
+        [specs addObject:api];
+        [specs addObject:TGSwitchRow(@"允许 API", TGAllowAPIKey, NO, self)];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (PSSpecifier *)blockListStorage {
+    PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
+    [spec setProperty:TGDomain forKey:@"defaults"];
+    [spec setProperty:TGBlockedAppsKey forKey:@"key"];
+    [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+    return spec;
+}
+
+- (void)setBlockedApps:(NSArray *)apps specifier:(PSSpecifier *)spec {
+    [self setPreferenceValue:[apps isKindOfClass:NSArray.class] ? apps : @[] specifier:[self blockListStorage]];
+}
+
+- (NSArray *)blockedApps:(PSSpecifier *)spec {
+    id apps = [self readPreferenceValue:[self blockListStorage]];
+    return [apps isKindOfClass:NSArray.class] ? apps : @[];
+}
+
+@end
+
+#pragma mark - Root
+
+@interface TGRootListController : TGListController <UISearchResultsUpdating>
+@end
+
+@implementation TGRootListController {
+    NSDictionary<NSString *, NSArray<NSString *> *> *_assignments;
+    NSString *_query; // trigger search, or nil
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
+    search.searchResultsUpdater = self;
+    search.obscuresBackgroundDuringPresentation = NO;
+    search.searchBar.placeholder = @"搜索触发器";
+    search.searchBar.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    self.navigationItem.searchController = search;
+    self.navigationItem.hidesSearchBarWhenScrolling = NO; // always in sight on the main page
+    self.definesPresentationContext = YES;
+}
+
+- (void)updateSearchResultsForSearchController:(UISearchController *)searchController {
+    NSString *query = [searchController.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!query.length) query = nil;
+    if (query == _query || [query isEqualToString:_query]) return;
+    _query = query;
+    [self reloadSpecifiers];
+}
+
+// Search: every trigger this device has, matched on its name or its button, and
+// opened in Anywhere (where most assignments belong).
+- (NSMutableArray *)searchSpecifiers {
+    NSMutableArray *specs = [NSMutableArray array];
+    PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"任意位置"];
+    [specs addObject:group];
+    for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
+        const TGGroup *triggers = &TGTriggerGroups[g];
+        if (!TGShowsTriggerGroup(triggers)) continue;
+        NSString *groupTitle = TGButtonText(@(triggers->title));
+        for (int i = 0; i < triggers->count; i++) {
+            NSString *trigger = @(triggers->items[i].identifier);
+            if (!TGTriggerFitsHardware(trigger, TGHasHomeButton())) continue;
+            if (TGIsStatusBarSingleTap(trigger) && ![self statusBarTapsOn]) continue;
+            NSString *title = TGSettingsTriggerTitle(trigger);
+            NSString *haystack = [NSString stringWithFormat:@"%@ %@ %@", title, groupTitle, @(triggers->items[i].title)];
+            if ([haystack rangeOfString:_query options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch].location == NSNotFound) continue;
+            [specs addObject:TGSubtitled(TGTriggerRow(title, self, @selector(assignedActionTitle:), @"anywhere", trigger))];
+        }
+    }
+    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"没有匹配“%@”的触发器。", _query] forKey:@"footerText"];
+    else [group setProperty:@"只想对单一位置（主屏幕、应用内、锁屏）生效，请改在上方对应位置设置。" forKey:@"footerText"];
+    return specs;
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers && _query) _specifiers = [self searchSpecifiers];
+    if (!_specifiers) {
+        _assignments = TGAllAssignments();
+        NSMutableArray *specs = [NSMutableArray array];
+        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+        [specs addObject:TGSwitchRow(@"启用", TGEnabledKey, YES, self)];
+
+        PSSpecifier *assign = [PSSpecifier groupSpecifierWithName:@"指派"];
+        [assign setProperty:@"先选生效位置，再选触发器和执行内容。大多数指派放在任意位置即可。" forKey:@"footerText"];
+        [specs addObject:assign];
+        NSDictionary<NSString *, NSArray *> *icons = @{
+            @"anywhere": @[@"globe", UIColor.systemBlueColor], @"home": @[@"house.fill", UIColor.systemIndigoColor],
+            @"app": @[@"square.grid.2x2.fill", UIColor.systemOrangeColor], @"lock": @[@"lock.fill", UIColor.systemGrayColor],
+        };
+        for (int m = 0; m < TG_COUNT(TGModes); m++) {
+            NSString *mode = @(TGModes[m].identifier);
+            PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:@(TGModes[m].title) target:self set:nil get:@selector(modeCount:)
+                detail:TGModeController.class cell:PSLinkListCell edit:nil];
+            [spec setProperty:mode forKey:@"tgMode"];
+            TGSetIcon(spec, icons[mode][0], icons[mode][1]);
+            [specs addObject:spec];
+        }
+        PSSpecifier *apps = [PSSpecifier preferenceSpecifierNamed:@"指定应用内" target:self set:nil get:@selector(appPlacesCount:)
+            detail:TGAppsController.class cell:PSLinkListCell edit:nil];
+        TGSetIcon(apps, @"app.badge.fill", UIColor.systemTealColor);
+        [specs addObject:apps];
+
+        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+        PSSpecifier *all = [PSSpecifier preferenceSpecifierNamed:@"全部指派" target:self set:nil get:@selector(assignmentCount:)
+            detail:TGByActionController.class cell:PSLinkListCell edit:nil];
+        TGSetIcon(all, @"list.bullet", UIColor.systemGreenColor);
+        [specs addObject:all];
+        PSSpecifier *menus = [PSSpecifier preferenceSpecifierNamed:@"菜单" target:self set:nil get:@selector(menuCount:) detail:TGMenusController.class cell:PSLinkListCell edit:nil];
+        TGSetIcon(menus, @"list.bullet.rectangle.fill", UIColor.systemPinkColor);
+        [specs addObject:menus];
+
+        PSSpecifier *more = [PSSpecifier groupSpecifierWithName:nil];
+        [more setProperty:[NSString stringWithFormat:@"Triggr %@ · 汉化 777qwq · 原作 John d_ie", [TG_VERSION stringByReplacingOccurrencesOfString:@"~" withString:@" "]] forKey:@"footerText"];
+        [more setProperty:@1 forKey:@"footerAlignment"]; // centred
+        [specs addObject:more];
+        PSSpecifier *options = [PSSpecifier preferenceSpecifierNamed:@"选项" target:self set:nil get:nil detail:TGOptionsController.class cell:PSLinkCell edit:nil];
+        TGSetIcon(options, @"gearshape.fill", UIColor.systemGrayColor);
+        [specs addObject:options];
+        PSSpecifier *profiles = [PSSpecifier preferenceSpecifierNamed:@"配置与共享" target:self set:nil get:@selector(activeProfileName:) detail:TGProfilesController.class cell:PSLinkListCell edit:nil];
+        TGSetIcon(profiles, @"square.and.arrow.up.fill", UIColor.systemBlueColor);
+        [specs addObject:profiles];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (NSString *)modeCount:(PSSpecifier *)spec {
+    NSString *prefix = [[spec propertyForKey:@"tgMode"] stringByAppendingString:@"/"];
+    NSUInteger count = 0;
+    for (NSString *key in _assignments) if ([key hasPrefix:prefix]) count++;
+    return TGCountTitle(count);
+}
+
+- (NSString *)appPlacesCount:(PSSpecifier *)spec {
+    NSMutableSet *apps = [NSMutableSet set];
+    for (NSString *key in _assignments) if ([key hasPrefix:TGAppModePrefix]) [apps addObject:[key substringToIndex:[key rangeOfString:@"/"].location]];
+    return TGCountTitle(apps.count);
+}
+
+- (NSString *)assignmentCount:(PSSpecifier *)spec {
+    return TGCountTitle(_assignments.count);
+}
+
+- (NSString *)menuCount:(PSSpecifier *)spec {
+    return TGCountTitle(TGReadMenus().count);
+}
+
+- (NSString *)activeProfileName:(PSSpecifier *)spec {
+    PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
+    [storage setProperty:TGDomain forKey:@"defaults"];
+    [storage setProperty:TGActiveProfileKey forKey:@"key"];
+    id name = [self readPreferenceValue:storage];
+    return [name isKindOfClass:NSString.class] ? name : @"";
+}
+
+@end
+
