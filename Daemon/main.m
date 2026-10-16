@@ -87,8 +87,9 @@ static void TGSyncShortcutDB(void); // fwd — the watcher calls it
 // Daemon lifecycle log (own file; SB uses diag.log). mobile user, same dir.
 static void TGDLog(NSString *msg) {
     [NSFileManager.defaultManager createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
-    NSString *line = [NSString stringWithFormat:@"[daemon %@] %@\n",
-        [NSDateFormatter new].localizedStringFromDate([NSDate date]) ?: @"", msg];
+    NSDateFormatter *df = [NSDateFormatter new];
+    df.dateFormat = @"MM-dd HH:mm:ss";
+    NSString *line = [NSString stringWithFormat:@"[daemon %@] %@\n", [df stringFromDate:[NSDate date]], msg];
     FILE *fp = fopen("/var/mobile/Library/Triggr/daemon.log", "a");
     if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
 }
