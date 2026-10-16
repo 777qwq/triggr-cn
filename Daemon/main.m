@@ -144,6 +144,7 @@ static id s_scObserver;
 @end
 
 static void TGRunShortcutInDaemon(NSString *name) {
+    TGSyncShortcutDB(); // refresh the local copy before reading
     if (!s_scObserver) s_scObserver = [TGSCObserver new];
     dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
     dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
@@ -157,25 +158,17 @@ static void TGRunShortcutInDaemon(NSString *name) {
         // then the rest is taken verbatim, so walk out with FOUR ".." (one per
         // path level: Application->Bundle->containers->/var->/) and do NOT
         // standardize (realpath is wrapped by vroot too).
-        // Multi-candidate: the live DB sits in whichever libvroot view holds
-        // the shortcuts data. First one that stats wins.
-        NSString *jbBase = [TGJB(@"/") substringToIndex:([TGJB(@"/") length] - @"/var/jb/".length)];
-        NSArray *candidates = @[
-            @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite",                       // plain
-            [jbBase stringByAppendingString:@"var/mobile/Library/Shortcuts/Shortcuts.sqlite"], // jbroot/var/jb view
-            [jbBase stringByAppendingString:@"../../../../var/mobile/Library/Shortcuts/Shortcuts.sqlite"], // escape walk
-        ];
-        NSString *dbPath = nil;
+        // Use the local copy: TGSyncShortcutDB() (called just above, and on
+        // every drain) refreshes it from the passthrough dir that Settings'
+        // panel fills — daemon's view of /var/mobile/Library/Triggr is proven
+        // readable (YES 1884160B, cn2.40 log).
+        NSString *dbPath = TGShortcutDBCopy;
         struct stat st;
-        for (NSString *cand in candidates) {
-            if (stat(cand.fileSystemRepresentation, &st) == 0) { dbPath = cand; break; }
-        }
-        if (!dbPath) {
-            for (NSString *cand in candidates)
-                TGDLog([NSString stringWithFormat:@"sc: MISSING %@", cand]);
+        if (stat(dbPath.fileSystemRepresentation, &st) != 0) {
+            TGDLog(@"sc: copy missing even after sync");
             return;
         }
-        TGDLog([NSString stringWithFormat:@"sc: db path %@", dbPath]);
+        TGDLog([NSString stringWithFormat:@"sc: db copy %@ (%lldB)", dbPath, (long long)st.st_size]);
         id desc = ((id (*)(id, SEL, id))objc_msgSend)(
             ((id (*)(id, SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), @selector(alloc)),
             @selector(initWithURL:), [NSURL fileURLWithPath:dbPath]);
