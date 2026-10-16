@@ -856,7 +856,6 @@ static void TGRunShortcut(NSString *name) {
         TGSDiag([NSString stringWithFormat:@"run: exception %@", e]);
     }
 }
-}
 
 static void TGUnlockDevice(NSString *password) {
     id mgr = TGShared("SBLockScreenManager");
