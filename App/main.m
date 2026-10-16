@@ -2,6 +2,8 @@
 // settings bundle, so both always show and change the same assignments.
 #import <UIKit/UIKit.h>
 #import <dlfcn.h>
+#import <objc/runtime.h>
+#import <objc/message.h>
 #import "../Shared/TGPaths.h"
 
 @interface TGAppDelegate : UIResponder <UIApplicationDelegate>
@@ -47,8 +49,6 @@ static UIViewController *TGMessage(NSString *text) {
 // directly and writes name->UUID into a standalone plist both the app and
 // SpringBoard can see. Replaces the daemon copy/sync channel entirely.
 // Pure-C msgSend style (TGShortcutDB.c lessons: no ARC cast traps).
-#import <objc/runtime.h>
-#import <objc/message.h>
 static void TGSyncShortcutMap(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -64,7 +64,7 @@ static void TGSyncShortcutMap(void) {
             store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
             if (!store) return;
             ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
-            ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
+            ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
             id db = ((id(*)(id,SEL,id,BOOL,BOOL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel0), initDB, store, NO, NO, nil);
             if (!db) return;
             id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
