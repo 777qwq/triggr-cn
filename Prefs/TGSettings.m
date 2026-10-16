@@ -235,19 +235,33 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self reloadSpecifiers];
-    // Ship a DB copy into the libvroot-passthrough dir (/var/tmp survives the
-    // jbroot view split — probe-proven), so triggrd can serve name lookups.
-    // Opening Triggr settings is the only moment Settings' sandbox can read
-    // the live shortcuts DB.
+    // Actra-style app-side config: Settings has no sandbox, so opening this
+    // panel is the moment to read the live shortcuts DB and write a
+    // name->UUID map. SpringBoard reads the map and builds descriptors by
+    // hand — no copy DB, no daemon, no passthrough.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        NSFileManager *fm = NSFileManager.defaultManager;
-        [fm createDirectoryAtPath:@"/var/tmp/com.johndie.triggr-db" withIntermediateDirectories:YES attributes:nil error:nil];
-        for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
-            NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
-            NSString *dst = [@"/var/tmp/com.johndie.triggr-db/Shortcuts.sqlite" stringByAppendingString:suffix];
-            if (![fm fileExistsAtPath:src]) continue;
-            [fm removeItemAtPath:dst error:nil];
-            [fm copyItemAtPath:src toPath:dst error:nil];
+        dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+        dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+        Class dbCls = NSClassFromString(@"WFDatabase");
+        if (!dbCls) return;
+        NSURL *url = [NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"];
+        NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc] initWithURL:url];
+        desc.type = @"SQLite";
+        [desc setOption:@YES forKey:@"NSReadOnlyPersistentStoreOption"];
+        NSError *err = nil;
+        id db = [[dbCls alloc] initWithStoreDescription:desc runMigrationsIfNecessary:NO useLockFile:NO error:&err];
+        if (!db) return;
+        NSArray *refs = [db sortedVisibleWorkflowsByName];
+        NSMutableDictionary *map = [NSMutableDictionary dictionary];
+        for (id ref in refs) {
+            NSString *name = [ref name];
+            id ident = [ref identifier];
+            if (![name isKindOfClass:NSString.class] || !ident) continue;
+            id uuid = [ident isKindOfClass:NSUUID.class] ? [(NSUUID *)ident UUIDString] : ident;
+            if ([uuid isKindOfClass:NSString.class]) map[name] = uuid;
+        }
+        if (map.count) {
+            [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
         }
     });
 }
