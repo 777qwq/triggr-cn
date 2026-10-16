@@ -8,7 +8,6 @@
 #import <AltList/ATLApplicationListSelectionController.h>
 #import <AltList/ATLApplicationListMultiSelectionController.h>
 #import <LocalAuthentication/LocalAuthentication.h>
-#import <CoreData/CoreData.h>
 #import <dlfcn.h>
 #import <notify.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>

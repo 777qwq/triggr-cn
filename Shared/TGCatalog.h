@@ -539,7 +539,6 @@ static inline NSString *TGAssignmentKey(NSString *mode, NSString *trigger) {
 #define TGRunQueue @"/var/tmp/com.johndie.triggr-run"
 #define TGRunRequestNotification "com.johndie.triggr/run-request"
 #define TGShortcutDBRefreshNotification "com.johndie.triggr/shortcut-db-refresh"
-#define TGShortcutDBReadyNotification "com.johndie.triggr/shortcut-db-ready"
 #define TGShortcutDBCopy @"/var/mobile/Library/Triggr/Shortcuts.sqlite"
 
 static inline NSString *TGExtensionsDirectory(void) {

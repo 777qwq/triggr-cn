@@ -130,7 +130,6 @@ static void TGSyncShortcutDB(void) {
         [files removeItemAtPath:dst error:nil];
         if ([files copyItemAtPath:src toPath:dst error:nil]) chmod(dst.fileSystemRepresentation, 0644);
     }
-    notify_post(TGShortcutDBReadyNotification);
 }
 
 int main(void) {
