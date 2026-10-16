@@ -292,6 +292,11 @@ static void TGRunViaDaemon(NSString *action) {
     NSString *path = [queue stringByAppendingPathComponent:[NSString stringWithFormat:@"%.6f-%u.plist", CFAbsoluteTimeGetCurrent(), arc4random()]];
     [[NSFileManager defaultManager] createDirectoryAtPath:queue withIntermediateDirectories:YES attributes:nil error:nil];
     BOOL ok = [@{@"Action": action} writeToFile:path atomically:YES];
+    // [sb] diag: the daemon mirrors its drain count into the same file.
+    NSString *line = [NSString stringWithFormat:@"[sb %f] queue=%@ write=%@\n",
+        [NSDate timeIntervalSinceReferenceDate], path, ok ? @"ok" : @"FAILED"];
+    FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
+    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
     if (ok) notify_post(TGRunRequestNotification);
 }
 

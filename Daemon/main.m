@@ -69,6 +69,7 @@ static void TGPerform(NSString *action) {
 static void TGDrainQueue(void) {
     NSFileManager *files = NSFileManager.defaultManager;
     NSArray *names = [[files contentsOfDirectoryAtPath:TGRunQueue error:nil] sortedArrayUsingSelector:@selector(compare:)];
+    TGDLog([NSString stringWithFormat:@"drain: %lu file(s) in %@", (unsigned long)names.count, TGRunQueue]);
     if (!names.count) return;
     NSSet *allowed = TGAllowedActions();
     for (NSString *name in names) {
