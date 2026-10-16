@@ -87,19 +87,27 @@ static void TGSyncShortcutDB(void); // fwd — the watcher calls it
 // Watches the live database for writes (Shortcuts App commits to its WAL) and
 // syncs on change. Event-driven: zero polling. Re-arms itself if the file is
 // replaced; a 300ms debounce merges bursty WAL commits into one copy.
-static void TGWatchShortcutDB(void) {
-    static dispatch_source_t src;
-    static dispatch_source_t debounce;
-    int fd = open("/var/mobile/Library/Shortcuts/Shortcuts.sqlite", O_RDONLY);
-    if (fd < 0) { // DB may not exist yet; retry on the next refresh poke
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60ull * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{ TGWatchShortcutDB(); });
-        return;
-    }
-    src = dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, fd,
+static void TGWatchShortcutDB(void);
+static dispatch_source_t s_vnodes[3]; // .sqlite / -wal / -shm
+
+static void TGWatchFile(int idx, const char *path) {
+    // SQLite runs in WAL mode: commits land in -wal, so all three files are
+    // watched — any of them moving means the database changed.
+    static const char *suffixes[3] = {"", "-wal", "-shm"};
+    char full[256];
+    snprintf(full, sizeof(full), "/var/mobile/Library/Shortcuts/Shortcuts.sqlite%s", suffixes[idx]);
+    int fd = open(full, O_RDONLY);
+    if (fd < 0) return; // e.g. no WAL/shm yet — main file is always there
+    dispatch_source_t src = dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, fd,
                                  DISPATCH_VNODE_WRITE | DISPATCH_VNODE_EXTEND | DISPATCH_VNODE_DELETE | DISPATCH_VNODE_RENAME,
                                  dispatch_get_main_queue());
+    s_vnodes[idx] = src;
+    __block BOOL armed = YES;
     dispatch_source_set_event_handler(src, ^{
+        if (!armed) return;
+        armed = NO; // re-arm below after handling
+        dispatch_source_cancel(src);
+        static dispatch_source_t debounce;
         if (debounce) { dispatch_source_cancel(debounce); debounce = nil; }
         debounce = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
         dispatch_source_set_timer(debounce, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
@@ -107,12 +115,24 @@ static void TGWatchShortcutDB(void) {
         dispatch_source_set_event_handler(debounce, ^{
             debounce = nil;
             TGSyncShortcutDB();
-            if (src) { dispatch_source_cancel(src); src = nil; TGWatchShortcutDB(); } // re-arm
+            TGWatchShortcutDB(); // re-arm all three (DELETE invalidates fds)
         });
         dispatch_resume(debounce);
     });
     dispatch_source_set_cancel_handler(src, ^{ close(fd); });
     dispatch_resume(src);
+}
+
+static void TGWatchShortcutDB(void) {
+    for (int i = 0; i < 3; i++) {
+        if (s_vnodes[i]) { dispatch_source_cancel(s_vnodes[i]); s_vnodes[i] = nil; }
+    }
+    static const char *suffixes[3] = {"", "-wal", "-shm"};
+    for (int i = 0; i < 3; i++) {
+        char full[256];
+        snprintf(full, sizeof(full), "/var/mobile/Library/Shortcuts/Shortcuts.sqlite%s", suffixes[i]);
+        TGWatchFile(i, full);
+    }
 }
 
 // Copies the shortcuts database into the Triggr dir so SpringBoard (sandboxed
