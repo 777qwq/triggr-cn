@@ -13,6 +13,8 @@
 
 #import <UIKit/UIKit.h>
 
+extern char **environ;
+
 
 #import <UIKit/UIGestureRecognizerSubclass.h>
 #import <AVFoundation/AVFoundation.h>
@@ -751,7 +753,31 @@ static void TGRunAutoTouch(NSString *name) {
 
 
 void TGInjectShortcutDB(void);  // TGShortcutDB.c (pure C)
+void TGSpawnDaemon(void);       // below: SB spawns triggrd on demand
 id TGShortcutIdentifierForName(void *name); // same file
+
+// Spawns triggrd on demand: launchd KeepAlive does not resurrect jbroot
+// daemons under roothide (cn2.24 pkill left it dead), so SpringBoard brings
+// it back itself — same posix_spawn path as every other Triggr helper.
+void TGSpawnDaemon(void) {
+    static BOOL tried;
+    if (tried) return; // once per respring; flock in triggrd guards doubles
+    tried = YES;
+    NSString *path = TGJB(@"/usr/libexec/triggrd");
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) return;
+    const char *argv[] = {path.fileSystemRepresentation, NULL};
+    pid_t pid = 0;
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    int error = posix_spawn(&pid, path.fileSystemRepresentation, &actions, NULL, (char *const *)argv, environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (error == 0) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ int st; waitpid(pid, &st, 0); });
+    }
+}
 
 static void TGStartShortcut(NSString *ident) {
     static id observer;
@@ -792,6 +818,7 @@ static void TGRunShortcut(NSString *name) {
         // Unknown name: ask triggrd to refresh the copy, retry once shortly.
         // Covers shortcuts added after the last sync, without opening Settings.
         notify_post("com.johndie.triggr/shortcut-db-refresh");
+        TGSpawnDaemon();
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             TGInjectShortcutDB();

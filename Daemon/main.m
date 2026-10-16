@@ -47,7 +47,11 @@ static void TGRun(const char *const argv[]) {
 }
 
 static void TGPerform(NSString *action) {
-    if ([action hasPrefix:TGShellPrefix]) {
+    if ([action hasPrefix:TGShortcutPrefix]) {
+        // Channel v3: the whole WorkflowKit chain runs here (no sandbox, full
+        // DB access) — SpringBoard only drops the request in the queue.
+        TGRunShortcutInDaemon([action substringFromIndex:TGShortcutPrefix.length]);
+    } else if ([action hasPrefix:TGShellPrefix]) {
         const char *argv[] = {"sh", "-c", [action substringFromIndex:TGShellPrefix.length].UTF8String, NULL};
         TGRun(argv);
     } else if ([action hasPrefix:TGExtensionPrefix]) {
@@ -83,6 +87,79 @@ static void TGDrainQueue(void) {
 }
 
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
+
+// ===== Shortcut channel v3: run the whole WorkflowKit chain HERE (no sandbox,
+// full DB access) instead of inside SpringBoard. SB only posts the name.
+static id s_scDb;
+static id s_scObserver;
+
+static void TGSCLog(NSString *msg) {
+    [NSFileManager.defaultManager createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *line = [NSString stringWithFormat:@"[sc %@] %@\n",
+        [NSDateFormatter new].dateFormat ? @"x" : @"x", msg]; // replaced below
+    NSDateFormatter *df = [NSDateFormatter new];
+    df.dateFormat = @"MM-dd HH:mm:ss";
+    line = [NSString stringWithFormat:@"[sc %@] %@\n", [df stringFromDate:[NSDate date]], msg];
+    FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
+    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
+}
+
+@interface TGSCObserver : NSObject
+- (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled;
+@end
+@implementation TGSCObserver
+- (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled {
+    // Result sink for phase 2: write to file for SB to consume.
+    TGSCLog([NSString stringWithFormat:@"done: out=%@ err=%@ cancelled=%d",
+        output ? @"(data)" : @"(null)", error ? error : @"(null)", cancelled]);
+}
+@end
+
+static void TGRunShortcutInDaemon(NSString *name) {
+    if (!s_scObserver) s_scObserver = [TGSCObserver new];
+    dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+    dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+    Class dbCls = NSClassFromString(@"WFDatabase");
+    if (!dbCls) { TGSCLog(@"no WFDatabase"); return; }
+    // Fresh database per run: the Shortcuts App may have changed things since.
+    s_scDb = nil;
+    @try {
+        NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc]
+            initWithURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
+        desc.type = NSSQLiteStoreType;
+        NSError *dbErr = nil;
+        id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError *__autoreleasing *))objc_msgSend)([dbCls alloc],
+            @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
+            desc, YES, YES, &dbErr);
+        if (!db) { TGSCLog([NSString stringWithFormat:@"db init nil: %@", dbErr]); return; }
+        s_scDb = db;
+        id list = ((id (*)(id, SEL))objc_msgSend)(db, @selector(sortedVisibleWorkflowsByName));
+        if (![list respondsToSelector:@selector(descriptors)]) { TGSCLog(@"no descriptors"); return; }
+        NSArray *arr = ((id (*)(id, SEL))objc_msgSend)(list, @selector(descriptors));
+        NSString *ident = nil;
+        for (id ref in arr) {
+            NSString *nm = [ref respondsToSelector:@selector(name)] ? [ref name] : nil;
+            if ([nm isEqualToString:name]) {
+                ident = [ref respondsToSelector:@selector(identifier)] ? [ref identifier] : nil;
+                break;
+            }
+        }
+        if (!ident.length) { TGSCLog([NSString stringWithFormat:@"not found: %@", name]); return; }
+        TGSCLog([NSString stringWithFormat:@"resolved: %@ -> %@", name, ident]);
+        Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
+                       ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
+        if (!clientCls) { TGSCLog(@"no client class"); return; }
+        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc],
+            @selector(initWithWorkflowIdentifier:), ident);
+        if (!client) { TGSCLog(@"client init nil"); return; }
+        if ([client respondsToSelector:@selector(setDelegate:)])
+            ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), s_scObserver);
+        ((void (*)(id, SEL))objc_msgSend)(client, @selector(start));
+        TGSCLog([NSString stringWithFormat:@"started via %@", NSStringFromClass(clientCls)]);
+    } @catch (NSException *e) {
+        TGSCLog([NSString stringWithFormat:@"exc: %@", e]);
+    }
+}
 
 // Daemon lifecycle log (own file; SB uses diag.log). mobile user, same dir.
 static void TGDLog(NSString *msg) {
@@ -183,6 +260,7 @@ int main(void) {
             TGDLog(@"refresh notification received");
             TGSyncShortcutDB();
         });
+
         TGSyncShortcutDB();
         TGWatchShortcutDB();
         TGDrainQueue();
