@@ -84,6 +84,17 @@ static void TGDrainQueue(void) {
 
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
 
+// Daemon lifecycle log (own file; SB uses diag.log). mobile user, same dir.
+static void TGDLog(NSString *msg) {
+    [NSFileManager.defaultManager createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *line = [NSString stringWithFormat:@"[daemon %@] %@\n",
+        [NSDateFormatter new].localizedStringFromDate([NSDate date]) ?: @"", msg];
+    FILE *fp = fopen("/var/mobile/Library/Triggr/daemon.log", "a");
+    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
+}
+
+
+
 // Watches the live database for writes (Shortcuts App commits to its WAL) and
 // syncs on change. Event-driven: zero polling. Re-arms itself if the file is
 // replaced; a 300ms debounce merges bursty WAL commits into one copy.
@@ -141,15 +152,21 @@ static void TGWatchShortcutDB(void) {
 // out of /var/mobile/Library/Shortcuts, POSIX EPERM on 16.3) can read it.
 // Plain file work: no WorkflowKit in this process, minimal moving parts.
 static void TGSyncShortcutDB(void) {
+    TGDLog(@"sync begin");
     NSFileManager *files = NSFileManager.defaultManager;
     [files createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
     for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
         NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
         NSString *dst = [TGShortcutDBCopy stringByAppendingString:suffix];
-        if (![files fileExistsAtPath:src]) continue;
+        BOOL srcThere = [files fileExistsAtPath:src];
+        if (!srcThere) { TGDLog([NSString stringWithFormat:@"sync: src missing%@", suffix]); continue; }
         [files removeItemAtPath:dst error:nil];
-        if ([files copyItemAtPath:src toPath:dst error:nil]) chmod(dst.fileSystemRepresentation, 0644);
+        NSError *e = nil;
+        BOOL ok = [files copyItemAtPath:src toPath:dst error:&e];
+        if (ok) chmod(dst.fileSystemRepresentation, 0644);
+        TGDLog([NSString stringWithFormat:@"sync: copy%@ %@", suffix, ok ? @"ok" : [NSString stringWithFormat:@"FAILED %@", e]]);
     }
+    TGDLog(@"sync done");
 }
 
 int main(void) {
@@ -159,8 +176,12 @@ int main(void) {
         chmod(TGRunQueue.fileSystemRepresentation, 0700);
         int token;
         notify_register_dispatch(TGRunRequestNotification, &token, dispatch_get_main_queue(), ^(int t) { TGDrainQueue(); });
+        TGDLog(@"daemon started (this line = fresh binary running)");
         int dbToken;
-        notify_register_dispatch(TGShortcutDBRefreshNotification, &dbToken, dispatch_get_main_queue(), ^(int t) { TGSyncShortcutDB(); });
+        notify_register_dispatch(TGShortcutDBRefreshNotification, &dbToken, dispatch_get_main_queue(), ^(int t) {
+            TGDLog(@"refresh notification received");
+            TGSyncShortcutDB();
+        });
         TGSyncShortcutDB();
         TGWatchShortcutDB();
         TGDrainQueue();
