@@ -778,6 +778,19 @@ __attribute__((unused)) static void TGSpawnDaemon(void) {
     }
 }
 
+// v4.2: serve manually-built descriptors from the descriptor getter. start()
+// re-queries the DB (EPERM on SB) and would otherwise fall back to the dead
+// VoiceShortcuts.xpc — same reason Actra hooks setContext:.
+static NSMapTable *s_manualDescriptors;
+static id s_pendingDescriptor;
+%hook WFWorkflowRunnerClient
+- (id)descriptor {
+    id own = [s_manualDescriptors objectForKey:self];
+    if (own) return own;
+    return %orig;
+}
+%end
+
 @interface TGShortcutRunObserver : NSObject
 @end
 @implementation TGShortcutRunObserver
@@ -848,14 +861,15 @@ static void TGRunShortcut(NSString *name) {
     id desc = ((id(*)(id,SEL,id,id,long long,unsigned short,id))objc_msgSend)(
         ((id(*)(id,SEL))objc_msgSend)(descCls, sel_registerName("alloc")), dInit,
         ident, name, (long long)0, (unsigned short)0x2699, nil);
-    // SpringBoard subclass (start -> BackgroundShortcutRunner, NOT VoiceShortcuts.xpc),
-    // then force-feed the manual descriptor so start never needs the DB.
+    // Register for the descriptor getter hook (start re-queries the DB and
+    // would otherwise fall back to the dead VoiceShortcuts.xpc — cn2.54).
+    if (!s_manualDescriptors) s_manualDescriptors = [NSMapTable mapTableWithStrongToStrongObjects];
+    s_pendingDescriptor = desc;
+    // SpringBoard subclass (start -> BackgroundShortcutRunner, NOT VoiceShortcuts.xpc)
     SEL cInit = NSSelectorFromString(@"initWithWorkflowIdentifier:");
     id client = ((id(*)(id,SEL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")), cInit, ident);
     if (!client) { TGSDiag(@"run: client init nil"); return; }
-    if ([client respondsToSelector:NSSelectorFromString(@"setDescriptor:")])
-        ((void(*)(id,SEL,id))objc_msgSend)(client, NSSelectorFromString(@"setDescriptor:"), desc);
-    else TGSDiag(@"run: client no setDescriptor: (start may query DB)");
+    [s_manualDescriptors setObject:desc forKey:client]; // hook serves this from descriptor getter
     static id observer;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
