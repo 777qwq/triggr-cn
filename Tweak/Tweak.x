@@ -840,7 +840,7 @@ static void TGRunShortcut(NSString *name) {
     dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
     dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
     Class descCls = NSClassFromString(@"WFWorkflowDescriptor");
-    Class clientCls = NSClassFromString(@"WFWorkflowRunnerClient");
+    Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient");
     if (!descCls || !clientCls) { TGSDiag(@"run: no classes"); return; }
     // WFWorkflowDescriptor: initWithIdentifier:name:color:glyphCharacter:associatedAppBundleIdentifier:
     SEL dInit = NSSelectorFromString(@"initWithIdentifier:name:color:glyphCharacter:associatedAppBundleIdentifier:");
@@ -848,14 +848,20 @@ static void TGRunShortcut(NSString *name) {
     id desc = ((id(*)(id,SEL,id,id,long long,unsigned short,id))objc_msgSend)(
         ((id(*)(id,SEL))objc_msgSend)(descCls, sel_registerName("alloc")), dInit,
         ident, name, (long long)0, (unsigned short)0x2699, nil);
-    id req = [[NSClassFromString(@"WFWorkflowRunRequest") alloc] init];
-    id client = ((id(*)(id,SEL,id,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")), sel_registerName("initWithDescriptor:runRequest:"), desc, req);
-    if (!client) { TGSDiag(@"run: init nil"); return; }
+    // SpringBoard subclass (start -> BackgroundShortcutRunner, NOT VoiceShortcuts.xpc),
+    // then force-feed the manual descriptor so start never needs the DB.
+    SEL cInit = NSSelectorFromString(@"initWithWorkflowIdentifier:");
+    id client = ((id(*)(id,SEL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")), cInit, ident);
+    if (!client) { TGSDiag(@"run: client init nil"); return; }
+    if ([client respondsToSelector:NSSelectorFromString(@"setDescriptor:")])
+        ((void(*)(id,SEL,id))objc_msgSend)(client, NSSelectorFromString(@"setDescriptor:"), desc);
+    else TGSDiag(@"run: client no setDescriptor: (start may query DB)");
     static id observer;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
     SEL delSel = NSSelectorFromString(@"setDelegate:");
     if ([client respondsToSelector:delSel]) ((void(*)(id,SEL,id))objc_msgSend)(client, delSel, observer);
+    else TGSDiag(@"run: client no setDelegate:");
     SEL startSel = NSSelectorFromString(@"start");
     if (![client respondsToSelector:startSel]) { TGSDiag(@"run: no start"); return; }
     @try {
