@@ -82,6 +82,8 @@ static void TGDrainQueue(void) {
     }
 }
 
+static void TGSyncShortcutDB(void); // fwd — the watcher calls it
+
 // Watches the live database for writes (Shortcuts App commits to its WAL) and
 // syncs on change. Event-driven: zero polling. Re-arms itself if the file is
 // replaced; a 300ms debounce merges bursty WAL commits into one copy.
