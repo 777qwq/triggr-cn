@@ -3215,7 +3215,3 @@ static BOOL tgHomeLongFired;
 static BOOL tgHomeSwallowSingle;  // after a short hold or a triple press
 static BOOL tgHomeAwaitingTriple; // a double press is waiting to see if a third follows
 static NSUInteger tgHomeGeneration;
-
-%hook SBHomeHardwareButton
-
-
