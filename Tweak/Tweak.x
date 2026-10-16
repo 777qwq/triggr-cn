@@ -3056,6 +3056,37 @@ static void TGUpdateOtherEvents(void) {
     }
 }
 
+
+// ---- v4 runtime recon: dump Actra/WorkflowKit method tables (diagnostic build) ----
+static void TGDumpActraRuntime(void) {
+    @autoreleasepool {
+        FILE *f = fopen("/var/tmp/com.johndie.triggr-dump.txt", "w");
+        if (!f) return;
+        // image slides for static-address mapping
+        for (uint32_t i = 0; i < _dyld_image_count(); i++) {
+            const char *nm = _dyld_get_image_name(i);
+            if (strstr(nm, "Actra") || strstr(nm, "VoiceShortcutClient") || strstr(nm, "WorkflowKit"))
+                fprintf(f, "image %s slide=0x%llx\n", nm, (unsigned long long)_dyld_get_image_vmaddr_slide(i));
+        }
+        unsigned int count = 0;
+        Class *classes = objc_copyClassList(&count);
+        fprintf(f, "total classes: %u\n", count);
+        for (unsigned int i = 0; i < count; i++) {
+            const char *cn = class_getName(classes[i]);
+            if (!strstr(cn, "Actra") && !strstr(cn, "WorkflowRunnerClient") && !strstr(cn, "ShortcutAction")) continue;
+            fprintf(f, "\n== %s\n", cn);
+            unsigned int mc = 0;
+            Method *methods = class_copyMethodList(classes[i], &mc);
+            for (unsigned int j = 0; j < mc; j++)
+                fprintf(f, "  - %s @%p\n", sel_getName(method_getName(methods[j])), method_getImplementation(methods[j]));
+            if (methods) free(methods);
+        }
+        if (classes) free(classes);
+        fprintf(f, "\n-- done\n");
+        fclose(f);
+    }
+}
+
 %ctor {
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) return;
     TGReadAssignments();
@@ -3091,4 +3122,5 @@ static void TGUpdateOtherEvents(void) {
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");
     Class uiBarWindow = objc_getClass("UIStatusBarWindow");
     if (sbBarWindow && !(uiBarWindow && [sbBarWindow isSubclassOfClass:uiBarWindow])) %init(StatusBarWindow17);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(12 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ TGDumpActraRuntime(); });
 }
