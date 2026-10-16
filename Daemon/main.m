@@ -15,6 +15,8 @@
 #import "../Shared/TGCatalog.h"
 #import "../Shared/TGPaths.h"
 
+void TGDLog(NSString *msg); // fwd (defined below)
+
 extern char **environ;
 
 // Every action in the user's assignments and menus.
@@ -116,7 +118,6 @@ static NSString *TGRealShortcutsDB(void) {
 }
 
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
-void TGDLog(NSString *msg); // fwd
 
 
 // ===== Shortcut channel v3: run the whole WorkflowKit chain HERE (no sandbox,
