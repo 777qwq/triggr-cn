@@ -241,20 +241,24 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
     // name->UUID map. SpringBoard reads the map and builds descriptors by
     // hand — no copy DB, no daemon, no passthrough.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        FILE *dfp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
+        #define PSDiag(fmt, ...) do { if (dfp) { fprintf(dfp, "[ps %f] " fmt "\n", [NSDate timeIntervalSinceReferenceDate], ##__VA_ARGS__); fflush(dfp); } } while(0)
+        PSDiag("panel sync start");
         dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
         dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
         Class dbCls = NSClassFromString(@"WFDatabase");
-        if (!dbCls) return;
+        if (!dbCls) { PSDiag("panel: no dbCls"); if(dfp) fclose(dfp); return; }
         id url = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
         id store = ((id(*)(id,SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
         store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
-        if (!store) return;
+        if (!store) { PSDiag("panel: store nil"); if(dfp) fclose(dfp); return; }
         ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
         ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
         void *errp = NULL;
         id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, NO, NO, &errp);
-        if (!db) return;
+        if (!db) { PSDiag("panel: db nil"); if(dfp) fclose(dfp); return; }
         id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
+        PSDiag("panel: refs count=%lu", (unsigned long)[refs count]);
         NSMutableDictionary *map = [NSMutableDictionary dictionary];
         for (id ref in refs) {
             NSString *name = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("name"));
@@ -263,9 +267,9 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
             id uuid = [ident isKindOfClass:NSUUID.class] ? ((id(*)(id,SEL))objc_msgSend)(ident, sel_registerName("UUIDString")) : ident;
             if ([uuid isKindOfClass:NSString.class]) map[name] = uuid;
         }
-        if (map.count) {
-            [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
-        }
+        BOOL ok = [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
+        PSDiag("panel: map=%lu write=%d", (unsigned long)map.count, ok);
+        if (dfp) fclose(dfp);
     });
 }
 
