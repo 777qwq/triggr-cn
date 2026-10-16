@@ -250,7 +250,7 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         Class dbCls = NSClassFromString(@"WFDatabase");
         if (!dbCls) { PSDiag("panel: no dbCls"); if(dfp) fclose(dfp); return; }
         id url = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
-        id store = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
+        id store = ((id(*)(id,SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
         store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
         if (!store) { PSDiag("panel: store nil"); if(dfp) fclose(dfp); return; }
         ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
