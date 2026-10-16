@@ -159,13 +159,25 @@ static void TGRunShortcutInDaemon(NSString *name) {
         // standardize (realpath is wrapped by vroot too).
         NSString *jbr = TGJB(@"/"); // /var/containers/.../.jbroot-XXX/var/jb/
         NSString *jbBase = [jbr substringToIndex:([jbr length] - @"/var/jb/".length)]; // .../.jbroot-XXX/
-        NSString *dbPath = [jbBase stringByAppendingString:
-            @"../../../../var/mobile/Library/Shortcuts/Shortcuts.sqlite"];
+        // Multi-candidate: the live DB sits in whichever libvroot view holds
+        // the shortcuts data. First one that stats wins.
+        NSString *jbBase = [TGJB(@"/") substringToIndex:([TGJB(@"/") length] - @"/var/jb/".length)];
+        NSArray *candidates = @[
+            @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite",                       // plain
+            [jbBase stringByAppendingString:@"var/mobile/Library/Shortcuts/Shortcuts.sqlite"], // jbroot/var/jb view
+            [jbBase stringByAppendingString:@"../../../../var/mobile/Library/Shortcuts/Shortcuts.sqlite"], // escape walk
+        ];
+        NSString *dbPath = nil;
         struct stat st;
-        int stok = stat(dbPath.fileSystemRepresentation, &st);
-        TGDLog([NSString stringWithFormat:@"sc: db path %@ stat=%s", dbPath,
-            stok == 0 ? "OK" : "MISSING"]);
-        if (stok != 0) return;
+        for (NSString *cand in candidates) {
+            if (stat(cand.fileSystemRepresentation, &st) == 0) { dbPath = cand; break; }
+        }
+        if (!dbPath) {
+            for (NSString *cand in candidates)
+                TGDLog([NSString stringWithFormat:@"sc: MISSING %@", cand]);
+            return;
+        }
+        TGDLog([NSString stringWithFormat:@"sc: db path %@", dbPath]);
         id desc = ((id (*)(id, SEL, id))objc_msgSend)(
             ((id (*)(id, SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), @selector(alloc)),
             @selector(initWithURL:), [NSURL fileURLWithPath:dbPath]);
