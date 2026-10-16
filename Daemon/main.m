@@ -121,16 +121,7 @@ static void TGSyncShortcutDB(void); // fwd — the watcher calls it
 static id s_scDb;
 static id s_scObserver;
 
-static void TGSCLog(NSString *msg) {
-    [NSFileManager.defaultManager createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
-    NSString *line = [NSString stringWithFormat:@"[sc %@] %@\n",
-        [NSDateFormatter new].dateFormat ? @"x" : @"x", msg]; // replaced below
-    NSDateFormatter *df = [NSDateFormatter new];
-    df.dateFormat = @"MM-dd HH:mm:ss";
-    line = [NSString stringWithFormat:@"[sc %@] %@\n", [df stringFromDate:[NSDate date]], msg];
-    FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
-    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
-}
+
 
 @interface TGSCObserver : NSObject
 - (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled;
@@ -138,7 +129,7 @@ static void TGSCLog(NSString *msg) {
 @implementation TGSCObserver
 - (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled {
     // Result sink for phase 2: write to file for SB to consume.
-    TGSCLog([NSString stringWithFormat:@"done: out=%@ err=%@ cancelled=%d",
+    TGDLog([NSString stringWithFormat:@"sc: done out=%@ err=%@ cancelled=%d",
         output ? @"(data)" : @"(null)", error ? error : @"(null)", cancelled]);
 }
 @end
