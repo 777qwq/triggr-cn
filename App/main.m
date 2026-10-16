@@ -63,6 +63,41 @@ static void TGSyncShortcutMap(void) {
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
             dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
             dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+            // Legitimate route first: INVoiceShortcutCenter works inside an App sandbox.
+            Class vscCls = objc_getClass("INVoiceShortcutCenter");
+            Class vcsCls = objc_getClass("INVoiceShortcutCenter");
+            id center = [vscCls == nil ? (vcsCls ?: vscCls) : vscCls valueForKeyPath:@"center"];
+            (void)center;
+            Class centerClass = objc_getClass("INVoiceShortcutCenter");
+            if (centerClass) {
+                id shared = ((id(*)(id,SEL))objc_msgSend)(centerClass, sel_registerName("sharedCenter"));
+                if (!shared) shared = ((id(*)(id,SEL))objc_msgSend)(centerClass, sel_registerName("sharedInstance"));
+                TGAppDiag([NSString stringWithFormat:@"vsc: shared=%@", shared ?: @"nil"]);
+                if (shared) {
+                    void (^block)(NSArray *, NSError *) = ^(NSArray *shortcuts, NSError *lerr) {
+                        TGAppDiag([NSString stringWithFormat:@"vsc: count=%lu err=%@", (unsigned long)shortcuts.count, lerr]);
+                        if (lerr || !shortcuts.count) return;
+                        NSMutableDictionary *map = [NSMutableDictionary dictionary];
+                        for (id vs in shortcuts) {
+                            id uid = ((id(*)(id,SEL))objc_msgSend)(vs, sel_registerName("identifier"));
+                            id sh = ((id(*)(id,SEL))objc_msgSend)(vs, sel_registerName("shortcut"));
+                            // INShortcut: workflow name surfaces via the intent's title or invocation URL; dump one for structure
+                            NSString *name = nil;
+                            id intent = sh ? ((id(*)(id,SEL))objc_msgSend)(sh, sel_registerName("intent")) : nil;
+                            if (intent) name = ((id(*)(id,SEL))objc_msgSend)(intent, sel_registerName("title"));
+                            if (![name isKindOfClass:NSString.class]) name = nil;
+                            if (name && uid) map[name] = [uid isKindOfClass:NSUUID.class] ? [(NSUUID *)uid UUIDString] : uid;
+                        }
+                        if (!map.count && shortcuts.firstObject) {
+                            TGAppDiag([NSString stringWithFormat:@"vsc: first=%@", [shortcuts.firstObject description]]);
+                        }
+                        BOOL ok = [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
+                        TGAppDiag([NSString stringWithFormat:@"vsc: map=%lu write=%d", (unsigned long)map.count, ok]);
+                    };
+                    ((void(*)(id,SEL,void(^)(NSArray*,NSError*)))objc_msgSend)(shared, sel_registerName("getAllVoiceShortcutsWithCompletion:"), block);
+                    return;
+                }
+            }
             Class dbCls = objc_getClass("WFDatabase");
             TGAppDiag(dbCls ? @"sync: dbCls ok" : @"sync: dbCls nil");
             if (!dbCls) return;
