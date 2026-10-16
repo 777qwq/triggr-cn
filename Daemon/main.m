@@ -116,9 +116,8 @@ static NSString *TGRealShortcutsDB(void) {
 }
 
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
-static void TGDLog(NSString *msg); // fwd
+void TGDLog(NSString *msg); // fwd
 
-static void TGDLog(NSString *msg); // fwd — defined with daemon lifecycle
 
 // ===== Shortcut channel v3: run the whole WorkflowKit chain HERE (no sandbox,
 // full DB access) instead of inside SpringBoard. SB only posts the name.
