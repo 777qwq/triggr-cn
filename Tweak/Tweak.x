@@ -743,91 +743,11 @@ static void TGRunAutoTouch(NSString *name) {
 // Dynamic dispatch only — no WorkflowKit/VoiceShortcutClient link dependency.
 
 
-@interface TGShortcutRunObserver : NSObject
-@end
-@implementation TGShortcutRunObserver
-- (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled {
-    // Phase-2 hook: output/error feed the action condition chain (later).
-}
-@end
-
-
-void TGInjectShortcutDB(void);  // TGShortcutDB.c (pure C)
-void TGSpawnDaemon(void);       // below: SB spawns triggrd on demand
-id TGShortcutIdentifierForName(void *name); // same file
-
-// Spawns triggrd on demand: launchd KeepAlive does not resurrect jbroot
-// daemons under roothide (cn2.24 pkill left it dead), so SpringBoard brings
-// it back itself — same posix_spawn path as every other Triggr helper.
-void TGSpawnDaemon(void) {
-    static BOOL tried;
-    if (tried) return; // once per respring; flock in triggrd guards doubles
-    tried = YES;
-    NSString *path = TGJB(@"/usr/libexec/triggrd");
-    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) return;
-    const char *argv[] = {path.fileSystemRepresentation, NULL};
-    pid_t pid = 0;
-    posix_spawn_file_actions_t actions;
-    posix_spawn_file_actions_init(&actions);
-    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
-    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
-    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
-    int error = posix_spawn(&pid, path.fileSystemRepresentation, &actions, NULL, (char *const *)argv, environ);
-    posix_spawn_file_actions_destroy(&actions);
-    if (error == 0) {
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ int st; waitpid(pid, &st, 0); });
-    }
-}
-
-static void TGStartShortcut(NSString *ident) {
-    static id observer;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
-
-    // Widget variant targets com.apple.siri.VoiceShortcuts.xpc which does not
-    // exist on 16.3 (TA-verified full-disk search -> 4097). The SB variant
-    // targets BackgroundShortcutRunner (the real backend, QaQ-confirmed).
-    Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
-                   ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
-    if (!clientCls) return;
-    SEL initSel = @selector(initWithWorkflowIdentifier:);
-    if (![clientCls instancesRespondToSelector:initSel]) return;
-    @try {
-        // NSString, not NSUUID: the identifier goes straight into
-        // WFWorkflowDatabaseRunDescriptor (string-keyed DB lookup, 18.2 decomp).
-        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, ident);
-        if (!client) return;
-        if ([client respondsToSelector:@selector(setDelegate:)])
-            ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), observer);
-        SEL startSel = @selector(start);
-        if ([client respondsToSelector:startSel])
-            ((void (*)(id, SEL))objc_msgSend)(client, startSel);
-    } @catch (NSException *e) {
-    }
-}
-
+// Shortcut channel v3: the daemon runs the whole WorkflowKit chain (it has
+// full DB access — SB's sandbox EPERMs the shortcuts DB, cn2.15). SB only
+// drops the request in the run queue, exactly like shell actions.
 static void TGRunShortcut(NSString *name) {
-    TGInjectShortcutDB(); // no-op unless the daemon refreshed the copy
-    NSString *ident = nil;
-    if ([[NSUUID alloc] initWithUUIDString:name]) {
-        ident = name; // raw UUID in the config
-    } else {
-        ident = TGShortcutIdentifierForName((__bridge void *)name);
-    }
-    if (!ident.length) {
-        // Unknown name: ask triggrd to refresh the copy, retry once shortly.
-        // Covers shortcuts added after the last sync, without opening Settings.
-        notify_post("com.johndie.triggr/shortcut-db-refresh");
-        TGSpawnDaemon();
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            TGInjectShortcutDB();
-            NSString *retry = TGShortcutIdentifierForName((__bridge void *)name);
-            if (retry.length) TGStartShortcut(retry);
-        });
-        return;
-    }
-    TGStartShortcut(ident);
+    TGRunViaDaemon([TGShortcutPrefix stringByAppendingString:name]);
 }
 static void TGUnlockDevice(NSString *password) {
     id mgr = TGShared("SBLockScreenManager");
