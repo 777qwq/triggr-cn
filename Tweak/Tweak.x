@@ -33,38 +33,6 @@ extern char **environ;
 #import "../Shared/TGHardware.h"
 #import "../Shared/TGPaths.h"
 #import "../Shared/TGRelay.h"
-// cn2.57 recon: which client class does Actra use, and what does it pass?
-static void TGSDiag(NSString *line);
-%hook WFMenuBarWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg {
-    TGSDiag([NSString stringWithFormat:@"recon MenuBar arg=%@", arg]);
-    return %orig;
-}
-%end
-%hook WFStingWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg {
-    TGSDiag([NSString stringWithFormat:@"recon Sting arg=%@", arg]);
-    return %orig;
-}
-%end
-%hook WFAccessibilityWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg {
-    TGSDiag([NSString stringWithFormat:@"recon Accessibility arg=%@", arg]);
-    return %orig;
-}
-%end
-%hook WFWidgetWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg {
-    TGSDiag([NSString stringWithFormat:@"recon Widget arg=%@", arg]);
-    return %orig;
-}
-%end
-%hook WFSpringBoardWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg {
-    TGSDiag([NSString stringWithFormat:@"recon SpringBoard arg=%@", arg]);
-    return %orig;
-}
-%end
 
 @interface SBLockScreenManager : NSObject
 + (instancetype)sharedInstance;
@@ -860,29 +828,34 @@ static void TGStartShortcut(NSString *ident) {
 }
 
 static void TGRunShortcut(NSString *name) {
-    TGInjectShortcutDB(); // no-op unless the daemon refreshed the copy
-    id db = ((id(*)(id,SEL))objc_msgSend)((id)objc_getClass("WFDatabase"), sel_registerName("defaultDatabase"));
-    NSString *ident = nil;
-    if ([[NSUUID alloc] initWithUUIDString:name]) {
-        ident = name; // raw UUID in the config
-    } else {
-        ident = TGShortcutIdentifierForName((__bridge void *)name);
+    // v4 final (Actra-proven): WFWidgetWorkflowRunnerClient + UUID, nothing else.
+    // cn2.17's "Widget variant is dead" verdict was wrong — Actra runs it fine.
+    NSDictionary *map = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist"];
+    NSString *ident = map[name];
+    if (![ident isKindOfClass:NSString.class] || !ident.length) {
+        if ([[NSUUID alloc] initWithUUIDString:name]) ident = name;
     }
-    TGSDiag([NSString stringWithFormat:@"run: name=%@ db=%@ ident=%@", name, db ? @"yes" : @"nil", ident ?: @"-"]);
-    if (!ident.length) {
-        // Unknown name: ask triggrd to refresh the copy, retry once shortly.
-        // Covers shortcuts added after the last sync, without opening Settings.
-        notify_post("com.johndie.triggr/shortcut-db-refresh");
-        TGSDiag(@"run: ident miss -> refresh+retry");
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            TGInjectShortcutDB();
-            NSString *retry = TGShortcutIdentifierForName((__bridge void *)name);
-            if (retry.length) TGStartShortcut(retry);
-        });
-        return;
+    TGSDiag([NSString stringWithFormat:@"run: name=%@ ident=%@", name, ident ?: @"-"]);
+    if (!ident.length) { TGSDiag(@"run: no mapping — open Triggr settings to sync"); return; }
+    dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+    dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+    Class clientCls = NSClassFromString(@"WFWidgetWorkflowRunnerClient");
+    if (!clientCls) { TGSDiag(@"run: no Widget client class"); return; }
+    static id observer;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
+    @try {
+        id client = ((id(*)(id,SEL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")),
+            sel_registerName("initWithWorkflowIdentifier:"), ident);
+        if (!client) { TGSDiag(@"run: client init nil"); return; }
+        if ([client respondsToSelector:NSSelectorFromString(@"setDelegate:")])
+            ((void(*)(id,SEL,id))objc_msgSend)(client, NSSelectorFromString(@"setDelegate:"), observer);
+        ((void(*)(id,SEL))objc_msgSend)(client, NSSelectorFromString(@"start"));
+        TGSDiag(@"run: started");
+    } @catch (NSException *e) {
+        TGSDiag([NSString stringWithFormat:@"run: exception %@", e]);
     }
-    TGStartShortcut(ident);
+}
 }
 
 static void TGUnlockDevice(NSString *password) {
