@@ -158,7 +158,6 @@ static void TGRunShortcutInDaemon(NSString *name) {
         // path level: Application->Bundle->containers->/var->/) and do NOT
         // standardize (realpath is wrapped by vroot too).
         NSString *jbr = TGJB(@"/"); // /var/containers/.../.jbroot-XXX/var/jb/
-        NSString *jbBase = [jbr substringToIndex:([jbr length] - @"/var/jb/".length)]; // .../.jbroot-XXX/
         // Multi-candidate: the live DB sits in whichever libvroot view holds
         // the shortcuts data. First one that stats wins.
         NSString *jbBase = [TGJB(@"/") substringToIndex:([TGJB(@"/") length] - @"/var/jb/".length)];
