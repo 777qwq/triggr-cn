@@ -64,7 +64,7 @@ static void TGSyncShortcutMap(void) {
             dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
             dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
             Class dbCls = objc_getClass("WFDatabase");
-            TGAppDiag([NSString stringWithFormat:@"sync: dbCls=%@", dbCls ?: @"nil"]);
+            TGAppDiag(dbCls ? @"sync: dbCls ok" : @"sync: dbCls nil");
             if (!dbCls) return;
             SEL sel0 = sel_registerName("alloc");
             SEL initDB = sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:");
