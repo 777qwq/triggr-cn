@@ -10,6 +10,7 @@
 #import <spawn.h>
 #import <sys/wait.h>
 #import <sys/stat.h>
+#import <fcntl.h>
 #import "../Shared/TGCatalog.h"
 #import "../Shared/TGPaths.h"
 
@@ -81,6 +82,39 @@ static void TGDrainQueue(void) {
     }
 }
 
+// Watches the live database for writes (Shortcuts App commits to its WAL) and
+// syncs on change. Event-driven: zero polling. Re-arms itself if the file is
+// replaced; a 300ms debounce merges bursty WAL commits into one copy.
+static void TGWatchShortcutDB(void) {
+    static dispatch_source_t src;
+    static dispatch_source_t debounce;
+    int fd = open("/var/mobile/Library/Shortcuts/Shortcuts.sqlite", O_RDONLY);
+    if (fd < 0) { // DB may not exist yet; retry on the next refresh poke
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60ull * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{ TGWatchShortcutDB(); });
+        return;
+    }
+    src = dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, fd,
+                                 DISPATCH_VNODE_WRITE | DISPATCH_VNODE_EXTEND | DISPATCH_VNODE_DELETE | DISPATCH_VNODE_RENAME,
+                                 dispatch_get_main_queue());
+    dispatch_source_set_event_handler(src, ^{
+        if (debounce) { dispatch_source_cancel(debounce); debounce = nil; }
+        debounce = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+        dispatch_source_set_timer(debounce, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                                  DISPATCH_TIME_FOREVER, 0);
+        dispatch_source_set_event_handler(debounce, ^{
+            debounce = nil;
+            TGSyncShortcutDB();
+            if (src) { dispatch_source_cancel(src); src = nil; TGWatchShortcutDB(); } // re-arm
+        });
+        dispatch_resume(debounce);
+    });
+    dispatch_source_set_cancel_handler(src, ^{ close(fd); });
+    dispatch_resume(src);
+}
+
+// Copies the shortcuts database into the Triggr dir so SpringBoard (sandboxed
+
 // Copies the shortcuts database into the Triggr dir so SpringBoard (sandboxed
 // out of /var/mobile/Library/Shortcuts, POSIX EPERM on 16.3) can read it.
 // Plain file work: no WorkflowKit in this process, minimal moving parts.
@@ -106,12 +140,8 @@ int main(void) {
         notify_register_dispatch(TGRunRequestNotification, &token, dispatch_get_main_queue(), ^(int t) { TGDrainQueue(); });
         int dbToken;
         notify_register_dispatch(TGShortcutDBRefreshNotification, &dbToken, dispatch_get_main_queue(), ^(int t) { TGSyncShortcutDB(); });
-        // Periodic sync keeps new shortcuts flowing without any user action.
-        dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
-        dispatch_source_set_timer(timer, dispatch_walltime(NULL, 0), 300ull * NSEC_PER_SEC, 30ull * NSEC_PER_SEC);
-        dispatch_source_set_event_handler(timer, ^{ TGSyncShortcutDB(); });
-        dispatch_resume(timer);
         TGSyncShortcutDB();
+        TGWatchShortcutDB();
         TGDrainQueue();
         dispatch_main();
     }
