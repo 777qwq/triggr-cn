@@ -32,6 +32,8 @@ static void TGSDiag(NSString *line);
 - (void)setContext:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SB setContext=%@", arg]); %orig; }
 - (void)start { TGSDiag(@"recon SB start"); %orig; }
 %end
+
+%hook SBHomeHardwareButton
 - (void)initialButtonDown:(id)recognizer {
     if (tgHomeAwaitingTriple) {
         // Third press inside the window: it's a triple.
