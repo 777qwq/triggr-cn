@@ -863,7 +863,7 @@ static void TGRunShortcut(NSString *name) {
         ident, name, (long long)0, (unsigned short)0x2699, nil);
     // Register for the descriptor getter hook (start re-queries the DB and
     // would otherwise fall back to the dead VoiceShortcuts.xpc — cn2.54).
-    if (!s_manualDescriptors) s_manualDescriptors = [NSMapTable mapTableWithStrongToStrongObjects];
+    if (!s_manualDescriptors) s_manualDescriptors = [NSMapTable strongToStrongObjectsMapTable];
     s_pendingDescriptor = desc;
     // SpringBoard subclass (start -> BackgroundShortcutRunner, NOT VoiceShortcuts.xpc)
     SEL cInit = NSSelectorFromString(@"initWithWorkflowIdentifier:");
