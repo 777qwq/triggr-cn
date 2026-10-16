@@ -273,6 +273,18 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         }
         BOOL ok = [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
         PSDiag("panel: map=%lu write=%d", (unsigned long)map.count, ok);
+        // Also refresh the SB-side copy DB (SpringBoard injects it; its own
+        // sandbox EPERMs the live DB — cn2.15). Triggr dir is a real data dir.
+        NSFileManager *fm = NSFileManager.defaultManager;
+        [fm createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
+        for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
+            NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
+            NSString *dst = [@"/var/mobile/Library/Triggr/Shortcuts.sqlite" stringByAppendingString:suffix];
+            if (![fm fileExistsAtPath:src]) continue;
+            [fm removeItemAtPath:dst error:nil];
+            [fm copyItemAtPath:src toPath:dst error:nil];
+        }
+        PSDiag("panel: copy db done");
         if (dfp) fclose(dfp);
     } @catch (NSException *e) {
         FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");

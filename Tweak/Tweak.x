@@ -778,19 +778,6 @@ __attribute__((unused)) static void TGSpawnDaemon(void) {
     }
 }
 
-// v4.2: serve manually-built descriptors from the descriptor getter. start()
-// re-queries the DB (EPERM on SB) and would otherwise fall back to the dead
-// VoiceShortcuts.xpc — same reason Actra hooks setContext:.
-static NSMapTable *s_manualDescriptors;
-static id s_pendingDescriptor;
-%hook WFWorkflowRunnerClient
-- (id)descriptor {
-    id own = [s_manualDescriptors objectForKey:self];
-    if (own) return own;
-    return %orig;
-}
-%end
-
 @interface TGShortcutRunObserver : NSObject
 @end
 @implementation TGShortcutRunObserver
@@ -811,7 +798,7 @@ static void TGSDiag(NSString *line) {
 void TGInjectShortcutDB(void);  // TGShortcutDB.c (pure C)
 id TGShortcutIdentifierForName(void *name); // same file
 
-__attribute__((unused)) static void TGStartShortcut(NSString *ident) {
+static void TGStartShortcut(NSString *ident) {
     static id observer;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
@@ -840,50 +827,29 @@ __attribute__((unused)) static void TGStartShortcut(NSString *ident) {
 }
 
 static void TGRunShortcut(NSString *name) {
-    // v4.2: app-side map (TriggrApp writes name->UUID at launch; no daemon, no
-    // copy DB). Manual WFWorkflowDescriptor bypasses the client's DB lookup.
-    NSDictionary *map = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist"];
-    NSString *ident = map[name];
-    if (![ident isKindOfClass:NSString.class] || !ident.length) {
-        if ([[NSUUID alloc] initWithUUIDString:name]) ident = name; // raw UUID also accepted
+    TGInjectShortcutDB(); // no-op unless the daemon refreshed the copy
+    id db = ((id(*)(id,SEL))objc_msgSend)((id)objc_getClass("WFDatabase"), sel_registerName("defaultDatabase"));
+    NSString *ident = nil;
+    if ([[NSUUID alloc] initWithUUIDString:name]) {
+        ident = name; // raw UUID in the config
+    } else {
+        ident = TGShortcutIdentifierForName((__bridge void *)name);
     }
-    TGSDiag([NSString stringWithFormat:@"run: name=%@ ident=%@", name, ident ?: @"-"]);
-    if (!ident.length) { TGSDiag(@"run: no mapping — open Triggr app to sync"); return; }
-
-    dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
-    dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
-    Class descCls = NSClassFromString(@"WFWorkflowDescriptor");
-    Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient");
-    if (!descCls || !clientCls) { TGSDiag(@"run: no classes"); return; }
-    // WFWorkflowDescriptor: initWithIdentifier:name:color:glyphCharacter:associatedAppBundleIdentifier:
-    SEL dInit = NSSelectorFromString(@"initWithIdentifier:name:color:glyphCharacter:associatedAppBundleIdentifier:");
-    if (![descCls instancesRespondToSelector:dInit]) { TGSDiag(@"run: no descriptor init"); return; }
-    id desc = ((id(*)(id,SEL,id,id,long long,unsigned short,id))objc_msgSend)(
-        ((id(*)(id,SEL))objc_msgSend)(descCls, sel_registerName("alloc")), dInit,
-        ident, name, (long long)0, (unsigned short)0x2699, nil);
-    // Register for the descriptor getter hook (start re-queries the DB and
-    // would otherwise fall back to the dead VoiceShortcuts.xpc — cn2.54).
-    if (!s_manualDescriptors) s_manualDescriptors = [NSMapTable strongToStrongObjectsMapTable];
-    s_pendingDescriptor = desc;
-    // SpringBoard subclass (start -> BackgroundShortcutRunner, NOT VoiceShortcuts.xpc)
-    SEL cInit = NSSelectorFromString(@"initWithWorkflowIdentifier:");
-    id client = ((id(*)(id,SEL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")), cInit, ident);
-    if (!client) { TGSDiag(@"run: client init nil"); return; }
-    [s_manualDescriptors setObject:desc forKey:client]; // hook serves this from descriptor getter
-    static id observer;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
-    SEL delSel = NSSelectorFromString(@"setDelegate:");
-    if ([client respondsToSelector:delSel]) ((void(*)(id,SEL,id))objc_msgSend)(client, delSel, observer);
-    else TGSDiag(@"run: client no setDelegate:");
-    SEL startSel = NSSelectorFromString(@"start");
-    if (![client respondsToSelector:startSel]) { TGSDiag(@"run: no start"); return; }
-    @try {
-        ((void(*)(id,SEL))objc_msgSend)(client, startSel);
-        TGSDiag(@"run: started");
-    } @catch (NSException *e) {
-        TGSDiag([NSString stringWithFormat:@"run: exception %@", e]);
+    TGSDiag([NSString stringWithFormat:@"run: name=%@ db=%@ ident=%@", name, db ? @"yes" : @"nil", ident ?: @"-"]);
+    if (!ident.length) {
+        // Unknown name: ask triggrd to refresh the copy, retry once shortly.
+        // Covers shortcuts added after the last sync, without opening Settings.
+        notify_post("com.johndie.triggr/shortcut-db-refresh");
+        TGSDiag(@"run: ident miss -> refresh+retry");
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            TGInjectShortcutDB();
+            NSString *retry = TGShortcutIdentifierForName((__bridge void *)name);
+            if (retry.length) TGStartShortcut(retry);
+        });
+        return;
     }
+    TGStartShortcut(ident);
 }
 
 static void TGUnlockDevice(NSString *password) {
