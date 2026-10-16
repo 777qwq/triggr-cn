@@ -140,7 +140,7 @@ static void TGRunShortcutInDaemon(NSString *name) {
     @try {
         id desc = ((id (*)(id, SEL, id))objc_msgSend)(
             ((id (*)(id, SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), @selector(alloc)),
-            @selector(initWithURL:), [NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
+            @selector(initWithURL:), [NSURL fileURLWithPath:TGRealShortcutsDB()]);
         ((void (*)(id, SEL, id))objc_msgSend)(desc, @selector(setType:), (id)CFSTR("SQLite"));
         NSError *dbErr = nil;
         id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError *__autoreleasing *))objc_msgSend)([dbCls alloc],
