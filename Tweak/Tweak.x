@@ -798,7 +798,7 @@ static void TGSDiag(NSString *line) {
 void TGInjectShortcutDB(void);  // TGShortcutDB.c (pure C)
 id TGShortcutIdentifierForName(void *name); // same file
 
-static void TGStartShortcut(NSString *ident) {
+__attribute__((unused)) static void TGStartShortcut(NSString *ident) {
     static id observer;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
