@@ -75,9 +75,10 @@ static void TGSyncShortcutMap(void) {
             TGAppDiag(@"sync: store ok");
             ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
             ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
-            __autoreleasing NSError *err = nil;
-            id db = ((id(*)(id,SEL,id,BOOL,BOOL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel0), initDB, store, YES, YES, &err);
-            TGAppDiag([NSString stringWithFormat:@"sync: db=%@ err=%@", db ?: @"nil", err]);
+            void *errp = NULL;
+            id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel0), initDB, store, YES, YES, &errp);
+            NSString *errStr = errp ? ((__bridge NSError *)errp).description : @"(null)";
+            TGAppDiag([NSString stringWithFormat:@"sync: db=%@ err=%@", db ?: @"nil", errStr]);
             if (!db) return;
             id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
             TGAppDiag([NSString stringWithFormat:@"sync: refs=%@ count=%lu", [refs class], (unsigned long)[refs count]]);
