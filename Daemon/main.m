@@ -151,16 +151,21 @@ static void TGRunShortcutInDaemon(NSString *name) {
     if (!dbCls) { TGDLog(@"sc: no WFDatabase"); return; }
     s_scDb = nil;
     @try {
-        // Real-rootfs DB path: a path containing the ".jbroot-XXX" component
-        // escapes libvroot's rewrite (jbrootat honors it as an escape marker),
-        // so walk out of the jbroot and back into the true /var/mobile.
+        // Real-rootfs DB path: libvroot's exemption triggers when the path
+        // STARTS with /var/containers/Bundle/Application/.jbroot-XXX/ (the
+        // marker component is matched mid-resolve against JB_ROOT_PARENT) —
+        // then the rest is taken verbatim, so walk out with FOUR ".." (one per
+        // path level: Application->Bundle->containers->/var->/) and do NOT
+        // standardize (realpath is wrapped by vroot too).
         NSString *jbr = TGJB(@"/"); // /var/containers/.../.jbroot-XXX/var/jb/
         NSString *jbBase = [jbr substringToIndex:([jbr length] - @"/var/jb/".length)]; // .../.jbroot-XXX/
-        NSString *dbPath = [[jbBase stringByAppendingPathComponent:@"../../../var/mobile/Library/Shortcuts/Shortcuts.sqlite"]
-                            stringByStandardizingPath];
+        NSString *dbPath = [jbBase stringByAppendingString:
+            @"../../../../var/mobile/Library/Shortcuts/Shortcuts.sqlite"];
         struct stat st;
+        int stok = stat(dbPath.fileSystemRepresentation, &st);
         TGDLog([NSString stringWithFormat:@"sc: db path %@ stat=%s", dbPath,
-            stat(dbPath.fileSystemRepresentation, &st) == 0 ? "OK" : "MISSING"]);
+            stok == 0 ? "OK" : "MISSING"]);
+        if (stok != 0) return;
         id desc = ((id (*)(id, SEL, id))objc_msgSend)(
             ((id (*)(id, SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), @selector(alloc)),
             @selector(initWithURL:), [NSURL fileURLWithPath:dbPath]);
