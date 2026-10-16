@@ -758,7 +758,7 @@ static void TGRunAutoTouch(NSString *name) {
 // drops the request in the run queue, exactly like shell actions.
 // triggrd is spawned here on demand: launchd KeepAlive does not resurrect
 // jbroot daemons under roothide, and triggrd's flock guards double-spawn.
-static void TGSpawnDaemon(void) {
+__attribute__((unused)) static void TGSpawnDaemon(void) {
     static BOOL tried;
     if (tried) return;
     tried = YES;
