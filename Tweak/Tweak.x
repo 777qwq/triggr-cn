@@ -746,7 +746,30 @@ static void TGRunAutoTouch(NSString *name) {
 // Shortcut channel v3: the daemon runs the whole WorkflowKit chain (it has
 // full DB access — SB's sandbox EPERMs the shortcuts DB, cn2.15). SB only
 // drops the request in the run queue, exactly like shell actions.
+// triggrd is spawned here on demand: launchd KeepAlive does not resurrect
+// jbroot daemons under roothide, and triggrd's flock guards double-spawn.
+static void TGSpawnDaemon(void) {
+    static BOOL tried;
+    if (tried) return;
+    tried = YES;
+    NSString *path = TGJB(@"/usr/libexec/triggrd");
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) return;
+    const char *argv[] = {path.fileSystemRepresentation, NULL};
+    pid_t pid = 0;
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    int error = posix_spawn(&pid, path.fileSystemRepresentation, &actions, NULL, (char *const *)argv, environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (error == 0) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ int st; waitpid(pid, &st, 0); });
+    }
+}
+
 static void TGRunShortcut(NSString *name) {
+    TGSpawnDaemon(); // flock-protected: no-op if already running
     TGRunViaDaemon([TGShortcutPrefix stringByAppendingString:name]);
 }
 static void TGUnlockDevice(NSString *password) {
