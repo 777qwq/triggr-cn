@@ -284,6 +284,23 @@ int main(void) {
         int token;
         notify_register_dispatch(TGRunRequestNotification, &token, dispatch_get_main_queue(), ^(int t) { TGDrainQueue(); });
         TGDLog(@"daemon started (this line = fresh binary running)");
+        {
+            char cwd[PATH_MAX]; getcwd(cwd, sizeof(cwd));
+            TGDLog([NSString stringWithFormat:@"env: cwd=%s jbroot=%s", cwd, jbroot("/")]);
+            for (NSString *p in @[
+                @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
+                @"/rootfs/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
+                TGShortcutDBCopy,
+            ]) {
+                struct stat st;
+                BOOL there = stat(p.fileSystemRepresentation, &st) == 0;
+                TGDLog([NSString stringWithFormat:@"env: stat %@ = %@", p, there ? [NSString stringWithFormat:@"YES %lldB", (long long)st.st_size] : @"NO"]);
+            }
+            CFPreferencesAppSynchronize(CFSTR("com.johndie.triggr"));
+            NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(CFSTR("com.johndie.triggr"),
+                kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+            TGDLog([NSString stringWithFormat:@"env: TGDomain keys=%lu", (unsigned long)keys.count]);
+        }
         int dbToken;
         notify_register_dispatch(TGShortcutDBRefreshNotification, &dbToken, dispatch_get_main_queue(), ^(int t) {
             TGDLog(@"refresh notification received");
