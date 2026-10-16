@@ -72,7 +72,27 @@ static void TGDrainQueue(void) {
     NSFileManager *files = NSFileManager.defaultManager;
     NSArray *names = [[files contentsOfDirectoryAtPath:TGRunQueue error:nil] sortedArrayUsingSelector:@selector(compare:)];
     TGDLog([NSString stringWithFormat:@"drain: %lu file(s) in %@", (unsigned long)names.count, TGRunQueue]);
-    if (!names.count) return;
+    if (!names.count) {
+        // Probe: put a marker file in OUR view of the queue dir, then ask the
+        // kernel where it physically landed (F_GETPATH). If SB's plist (written
+        // to the same logical path) doesn't show up in the listing, the two
+        // views are physically different directories.
+        FILE *fp = fopen([@[TGRunQueue, @"/.probe"] componentsJoinedByString:@""].fileSystemRepresentation, "w");
+        if (fp) {
+            int fd = fileno(fp);
+            char real[PATH_MAX] = {0};
+            fcntl(fd, F_GETPATH, real);
+            fclose(fp);
+            TGDLog([NSString stringWithFormat:@"probe physical path: %s", real]);
+            NSError *e = nil;
+            NSArray *listing = [NSFileManager.defaultManager contentsOfDirectoryAtPath:TGRunQueue error:&e];
+            TGDLog([NSString stringWithFormat:@"probe dir listing (%lu): %@ err=%@",
+                (unsigned long)listing.count, listing, e]);
+        } else {
+            TGDLog(@"probe: cannot create marker file in queue dir");
+        }
+        return;
+    }
     NSSet *allowed = TGAllowedActions();
     for (NSString *name in names) {
         NSString *path = [TGRunQueue stringByAppendingPathComponent:name];
