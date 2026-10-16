@@ -36,19 +36,34 @@ extern char **environ;
 // cn2.57 recon: which client class does Actra use, and what does it pass?
 static void TGSDiag(NSString *line);
 %hook WFMenuBarWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon MenuBar arg=%@", arg]); return %orig; }
+- (id)initWithWorkflowIdentifier:(id)arg {
+    TGSDiag([NSString stringWithFormat:@"recon MenuBar arg=%@", arg]);
+    return %orig;
+}
 %end
 %hook WFStingWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Sting arg=%@", arg]); return %orig; }
+- (id)initWithWorkflowIdentifier:(id)arg {
+    TGSDiag([NSString stringWithFormat:@"recon Sting arg=%@", arg]);
+    return %orig;
+}
 %end
 %hook WFAccessibilityWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Accessibility arg=%@", arg]); return %orig; }
+- (id)initWithWorkflowIdentifier:(id)arg {
+    TGSDiag([NSString stringWithFormat:@"recon Accessibility arg=%@", arg]);
+    return %orig;
+}
 %end
 %hook WFWidgetWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Widget arg=%@", arg]); return %orig; }
+- (id)initWithWorkflowIdentifier:(id)arg {
+    TGSDiag([NSString stringWithFormat:@"recon Widget arg=%@", arg]);
+    return %orig;
+}
 %end
 %hook WFSpringBoardWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SpringBoard arg=%@", arg]); return %orig; }
+- (id)initWithWorkflowIdentifier:(id)arg {
+    TGSDiag([NSString stringWithFormat:@"recon SpringBoard arg=%@", arg]);
+    return %orig;
+}
 %end
 
 @interface SBLockScreenManager : NSObject
