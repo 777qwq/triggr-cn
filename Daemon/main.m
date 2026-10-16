@@ -116,6 +116,8 @@ static NSString *TGRealShortcutsDB(void) {
 
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
 
+static void TGDLog(NSString *msg); // fwd — defined with daemon lifecycle
+
 // ===== Shortcut channel v3: run the whole WorkflowKit chain HERE (no sandbox,
 // full DB access) instead of inside SpringBoard. SB only posts the name.
 static id s_scDb;
@@ -145,7 +147,7 @@ static void TGRunShortcutInDaemon(NSString *name) {
         // Real-rootfs DB path: a path containing the ".jbroot-XXX" component
         // escapes libvroot's rewrite (jbrootat honors it as an escape marker),
         // so walk out of the jbroot and back into the true /var/mobile.
-        NSString *jbr = jbroot("/"); // /var/containers/.../.jbroot-XXX/var/jb/
+        NSString *jbr = TGJB(@"/"); // /var/containers/.../.jbroot-XXX/var/jb/
         NSString *jbBase = [jbr substringToIndex:([jbr length] - @"/var/jb/".length)]; // .../.jbroot-XXX/
         NSString *dbPath = [[jbBase stringByAppendingPathComponent:@"../../../var/mobile/Library/Shortcuts/Shortcuts.sqlite"]
                             stringByStandardizingPath];
