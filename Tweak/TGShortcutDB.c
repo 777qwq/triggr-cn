@@ -25,7 +25,14 @@ static time_t s_lastCopyMtime = 0;
 
 void TGInjectShortcutDB(void) {
     struct stat st;
-    if (stat("/var/mobile/Library/Triggr/Shortcuts.sqlite", &st) != 0) return; // no copy yet
+    if (stat("/var/mobile/Library/Triggr/Shortcuts.sqlite", &st) != 0) {
+        // Copy gone (or never made): poke triggrd to rebuild it, then let the
+        // caller retry. A previously injected connection now points at an
+        // unlinked file and must not be trusted.
+        notify_post("com.johndie.triggr/shortcut-db-refresh");
+        s_lastCopyMtime = 0;
+        return;
+    }
     if (st.st_mtime == s_lastCopyMtime) return; // already injected, up to date
     BOOL hadPrevious = (s_lastCopyMtime != 0);
     s_lastCopyMtime = st.st_mtime;
@@ -59,6 +66,7 @@ void TGInjectShortcutDB(void) {
 // name -> workflow identifier via the injected copy DB. Returns nil when the
 // database is not injected yet or the name is unknown.
 id TGShortcutIdentifierForName(void *name) {
+    if (s_lastCopyMtime == 0) return nil; // no trusted copy injected
     id db = S0((id)objc_getClass("WFDatabase"), "defaultDatabase");
     if (!db) return nil;
     id ref = S1(db, "uniqueVisibleReferenceForWorkflowName:", (id)name);
