@@ -245,20 +245,22 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
         Class dbCls = NSClassFromString(@"WFDatabase");
         if (!dbCls) return;
-        NSURL *url = [NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"];
-        NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc] initWithURL:url];
-        desc.type = @"SQLite";
-        [desc setOption:@YES forKey:@"NSReadOnlyPersistentStoreOption"];
-        NSError *err = nil;
-        id db = [[dbCls alloc] initWithStoreDescription:desc runMigrationsIfNecessary:NO useLockFile:NO error:&err];
+        id url = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
+        id store = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
+        store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
+        if (!store) return;
+        ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
+        ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
+        void *errp = NULL;
+        id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, NO, NO, &errp);
         if (!db) return;
-        NSArray *refs = [db sortedVisibleWorkflowsByName];
+        id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
         NSMutableDictionary *map = [NSMutableDictionary dictionary];
         for (id ref in refs) {
-            NSString *name = [ref name];
-            id ident = [ref identifier];
+            NSString *name = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("name"));
+            id ident = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("identifier"));
             if (![name isKindOfClass:NSString.class] || !ident) continue;
-            id uuid = [ident isKindOfClass:NSUUID.class] ? [(NSUUID *)ident UUIDString] : ident;
+            id uuid = [ident isKindOfClass:NSUUID.class] ? ((id(*)(id,SEL))objc_msgSend)(ident, sel_registerName("UUIDString")) : ident;
             if ([uuid isKindOfClass:NSString.class]) map[name] = uuid;
         }
         if (map.count) {
