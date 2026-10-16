@@ -89,6 +89,17 @@ static void TGDrainQueue(void) {
     }
 }
 
+// Live DB path: roothide maps jbroot processes' view of /var/mobile, so the
+// REAL shortcuts DB lives under the /rootfs prefix there (libroothide's
+// rootfs() does the conversion). Other schemes see the plain path.
+static NSString *TGRealShortcutsDB(void) {
+#ifdef TG_ROOTHIDE
+    return @(rootfs("/var/mobile/Library/Shortcuts/Shortcuts.sqlite"));
+#else
+    return @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite";
+#endif
+}
+
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
 
 // ===== Shortcut channel v3: run the whole WorkflowKit chain HERE (no sandbox,
@@ -188,7 +199,7 @@ static void TGWatchFile(int idx, const char *path) {
     // watched — any of them moving means the database changed.
     static const char *suffixes[3] = {"", "-wal", "-shm"};
     char full[256];
-    snprintf(full, sizeof(full), "/var/mobile/Library/Shortcuts/Shortcuts.sqlite%s", suffixes[idx]);
+    snprintf(full, sizeof(full), "%s%s", TGRealShortcutsDB().fileSystemRepresentation, suffixes[idx]);
     int fd = open(full, O_RDONLY);
     if (fd < 0) return; // e.g. no WAL/shm yet — main file is always there
     dispatch_source_t src = dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, fd,
@@ -223,7 +234,7 @@ static void TGWatchShortcutDB(void) {
     static const char *suffixes[3] = {"", "-wal", "-shm"};
     for (int i = 0; i < 3; i++) {
         char full[256];
-        snprintf(full, sizeof(full), "/var/mobile/Library/Shortcuts/Shortcuts.sqlite%s", suffixes[i]);
+        snprintf(full, sizeof(full), "%s%s", TGRealShortcutsDB().fileSystemRepresentation, suffixes[i]);
         TGWatchFile(i, full);
     }
 }
@@ -238,7 +249,7 @@ static void TGSyncShortcutDB(void) {
     NSFileManager *files = NSFileManager.defaultManager;
     [files createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
     for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
-        NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
+        NSString *src = [TGRealShortcutsDB() stringByAppendingString:suffix];
         NSString *dst = [TGShortcutDBCopy stringByAppendingString:suffix];
         BOOL srcThere = [files fileExistsAtPath:src];
         if (!srcThere) { TGDLog([NSString stringWithFormat:@"sync: src missing%@", suffix]); continue; }
