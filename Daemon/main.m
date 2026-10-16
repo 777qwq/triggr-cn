@@ -116,6 +116,7 @@ static NSString *TGRealShortcutsDB(void) {
 }
 
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
+static void TGDLog(NSString *msg); // fwd
 
 static void TGDLog(NSString *msg); // fwd — defined with daemon lifecycle
 
@@ -194,7 +195,7 @@ static void TGRunShortcutInDaemon(NSString *name) {
 }
 
 // Daemon lifecycle log (own file; SB uses diag.log). mobile user, same dir.
-static void TGDLog(NSString *msg) {
+void TGDLog(NSString *msg) {
     [NSFileManager.defaultManager createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
     NSDateFormatter *df = [NSDateFormatter new];
     df.dateFormat = @"MM-dd HH:mm:ss";
