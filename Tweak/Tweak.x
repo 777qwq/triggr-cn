@@ -740,82 +740,68 @@ static void TGRunAutoTouch(NSString *name) {
 //   16/17 inherit setDelegate: and call didFinishRunningWorkflowWithOutput:error:cancelled:.
 // Dynamic dispatch only — no WorkflowKit/VoiceShortcutClient link dependency.
 
-// cn2.1 test-only diagnostics (file log; removed at release). Device has no Console.
-void TGDiagLog(NSString *msg) {
-    static NSString *path;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        path = @"/var/mobile/Library/Triggr/diag.log";
-        [[NSFileManager defaultManager] createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
-    });
-    NSDateFormatter *df = [NSDateFormatter new];
-    df.dateFormat = @"MM-dd HH:mm:ss";
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", [df stringFromDate:[NSDate date]], msg];
-    FILE *fp = fopen(path.fileSystemRepresentation, "a");
-    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
-}
 
 @interface TGShortcutRunObserver : NSObject
 @end
 @implementation TGShortcutRunObserver
 - (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled {
-    TGDiagLog([NSString stringWithFormat:@"shortcut done: output=%@ err=%@ cancelled=%d", output, error, cancelled]);
+    // Phase-2 hook: output/error feed the action condition chain (later).
 }
 @end
 
 
-void TGInjectShortcutDB(void); // TGShortcutDB.c (MRC-free pure C)
+void TGInjectShortcutDB(void);  // TGShortcutDB.c (pure C)
+id TGShortcutIdentifierForName(void *name); // same file
 
-static void TGRunShortcut(NSString *name) {
-
-// Shortcut channel v2 (Actra-proven architecture): the SB side never
-    // touches the shortcuts database (WFDatabase won't initialize there).
-    // Config value: raw UUID passes through; a name is resolved via the
-    // shortcutUUIDMap the Prefs side builds by manually initializing
-    // WFDatabase over Shortcuts.sqlite. Result delegate logs on 16+.
+static void TGStartShortcut(NSString *ident) {
     static id observer;
     static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        observer = [TGShortcutRunObserver new];
-        dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
-        dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
-        TGInjectShortcutDB();
-    });
-    NSString *ident = name;
-    if (![[NSUUID alloc] initWithUUIDString:name]) {
-        NSDictionary *map = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Triggr/shortcut_map.plist"];
-        NSString *uuid = map[name];
-        if (uuid.length) ident = uuid;
-        else TGDiagLog([NSString stringWithFormat:@"shortcut: no mapping for %@ (map=%@)", name, map ? [NSString stringWithFormat:@"ok %lu", (unsigned long)map.count] : @"nil"]);
-    }
+    dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
 
     // Widget variant targets com.apple.siri.VoiceShortcuts.xpc which does not
     // exist on 16.3 (TA-verified full-disk search -> 4097). The SB variant
     // targets BackgroundShortcutRunner (the real backend, QaQ-confirmed).
     Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
                    ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
-    if (!clientCls) { TGDiagLog(@"shortcut: no runner client class"); return; }
+    if (!clientCls) return;
     SEL initSel = @selector(initWithWorkflowIdentifier:);
-    if (![clientCls instancesRespondToSelector:initSel]) { TGDiagLog(@"shortcut: no init"); return; }
+    if (![clientCls instancesRespondToSelector:initSel]) return;
     @try {
-        // cn2.12: pass NSUUID object for UUID identifiers — the init takes (id)
-        // and may expect NSUUID internally; a raw NSString may become a nil
-        // descriptor server-side (Code=3 "not found" symptom).
-        // NSString, not NSUUID: 18.2 decomp shows the identifier goes straight
-        // into WFWorkflowDatabaseRunDescriptor (string-keyed DB lookup).
+        // NSString, not NSUUID: the identifier goes straight into
+        // WFWorkflowDatabaseRunDescriptor (string-keyed DB lookup, 18.2 decomp).
         id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, ident);
-        if (!client) { TGDiagLog(@"shortcut: init returned nil"); return; }
+        if (!client) return;
         if ([client respondsToSelector:@selector(setDelegate:)])
             ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), observer);
         SEL startSel = @selector(start);
-        if (![client respondsToSelector:startSel]) { TGDiagLog(@"shortcut: no start"); return; }
-        ((void (*)(id, SEL))objc_msgSend)(client, startSel);
-        TGDiagLog([NSString stringWithFormat:@"shortcut started: %@ via %@", ident, NSStringFromClass(clientCls)]);
+        if ([client respondsToSelector:startSel])
+            ((void (*)(id, SEL))objc_msgSend)(client, startSel);
     } @catch (NSException *e) {
-        TGDiagLog([NSString stringWithFormat:@"shortcut exc: %@", e]);
     }
 }
 
+static void TGRunShortcut(NSString *name) {
+    TGInjectShortcutDB(); // no-op unless the daemon refreshed the copy
+    NSString *ident = nil;
+    if ([[NSUUID alloc] initWithUUIDString:name]) {
+        ident = name; // raw UUID in the config
+    } else {
+        ident = TGShortcutIdentifierForName((__bridge void *)name);
+    }
+    if (!ident.length) {
+        // Unknown name: ask triggrd to refresh the copy, retry once shortly.
+        // Covers shortcuts added after the last sync, without opening Settings.
+        notify_post("com.johndie.triggr/shortcut-db-refresh");
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            TGInjectShortcutDB();
+            NSString *retry = TGShortcutIdentifierForName((__bridge void *)name);
+            if (retry.length) TGStartShortcut(retry);
+        });
+        return;
+    }
+    TGStartShortcut(ident);
+}
 static void TGUnlockDevice(NSString *password) {
     id mgr = TGShared("SBLockScreenManager");
     if (!mgr) return;

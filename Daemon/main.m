@@ -81,6 +81,22 @@ static void TGDrainQueue(void) {
     }
 }
 
+// Copies the shortcuts database into the Triggr dir so SpringBoard (sandboxed
+// out of /var/mobile/Library/Shortcuts, POSIX EPERM on 16.3) can read it.
+// Plain file work: no WorkflowKit in this process, minimal moving parts.
+static void TGSyncShortcutDB(void) {
+    NSFileManager *files = NSFileManager.defaultManager;
+    [files createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
+    for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
+        NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
+        NSString *dst = [TGShortcutDBCopy stringByAppendingString:suffix];
+        if (![files fileExistsAtPath:src]) continue;
+        [files removeItemAtPath:dst error:nil];
+        if ([files copyItemAtPath:src toPath:dst error:nil]) chmod(dst.fileSystemRepresentation, 0644);
+    }
+    notify_post(TGShortcutDBReadyNotification);
+}
+
 int main(void) {
     @autoreleasepool {
         // Only the mobile user (SpringBoard) may drop requests here.
@@ -88,6 +104,14 @@ int main(void) {
         chmod(TGRunQueue.fileSystemRepresentation, 0700);
         int token;
         notify_register_dispatch(TGRunRequestNotification, &token, dispatch_get_main_queue(), ^(int t) { TGDrainQueue(); });
+        int dbToken;
+        notify_register_dispatch(TGShortcutDBRefreshNotification, &dbToken, dispatch_get_main_queue(), ^(int t) { TGSyncShortcutDB(); });
+        // Periodic sync keeps new shortcuts flowing without any user action.
+        dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
+        dispatch_source_set_timer(timer, dispatch_walltime(NULL, 0), 300ull * NSEC_PER_SEC, 30ull * NSEC_PER_SEC);
+        dispatch_source_set_event_handler(timer, ^{ TGSyncShortcutDB(); });
+        dispatch_resume(timer);
+        TGSyncShortcutDB();
         TGDrainQueue();
         dispatch_main();
     }

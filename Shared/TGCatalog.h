@@ -538,6 +538,9 @@ static inline NSString *TGAssignmentKey(NSString *mode, NSString *trigger) {
 // extension actions: one request plist per run in this queue, then the notification.
 #define TGRunQueue @"/var/tmp/com.johndie.triggr-run"
 #define TGRunRequestNotification "com.johndie.triggr/run-request"
+#define TGShortcutDBRefreshNotification "com.johndie.triggr/shortcut-db-refresh"
+#define TGShortcutDBReadyNotification "com.johndie.triggr/shortcut-db-ready"
+#define TGShortcutDBCopy @"/var/mobile/Library/Triggr/Shortcuts.sqlite"
 
 static inline NSString *TGExtensionsDirectory(void) {
     for (NSString *path in @[TGJB(@"/Library/Triggr/Extensions"), @"/Library/Triggr/Extensions"])
