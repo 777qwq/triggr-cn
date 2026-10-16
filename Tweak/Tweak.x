@@ -12,7 +12,6 @@
 // which just reports their status bar taps and shakes (see Shared/TGRelay.h).
 
 #import <UIKit/UIKit.h>
-#import <CoreData/CoreData.h>
 
 
 #import <UIKit/UIGestureRecognizerSubclass.h>
@@ -742,7 +741,7 @@ static void TGRunAutoTouch(NSString *name) {
 // Dynamic dispatch only — no WorkflowKit/VoiceShortcutClient link dependency.
 
 // cn2.1 test-only diagnostics (file log; removed at release). Device has no Console.
-static void TGDiagLog(NSString *msg) {
+void TGDiagLog(NSString *msg) {
     static NSString *path;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -766,7 +765,8 @@ static void TGDiagLog(NSString *msg) {
 
 
 static void TGRunShortcut(NSString *name) {
-    // Shortcut channel v2 (Actra-proven architecture): the SB side never
+
+// Shortcut channel v2 (Actra-proven architecture): the SB side never
     // touches the shortcuts database (WFDatabase won't initialize there).
     // Config value: raw UUID passes through; a name is resolved via the
     // shortcutUUIDMap the Prefs side builds by manually initializing
@@ -777,33 +777,7 @@ static void TGRunShortcut(NSString *name) {
         observer = [TGShortcutRunObserver new];
         dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
         dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
-        // SB has no WFDatabase host: the runner's WFWorkflowDatabaseRunDescriptor
-        // resolves the identifier by querying the database IN-PROCESS (18.2 decomp)
-        // and dies with Code=3 when defaultDatabase is nil. Manually init one
-        // (Actra's Prefs-proven recipe) and inject it as the global default.
-        Class dbCls = NSClassFromString(@"WFDatabase");
-        id existing = dbCls ? ((id (*)(id, SEL))objc_msgSend)(dbCls, @selector(defaultDatabase)) : nil;
-        if (!existing && dbCls) {
-            @try {
-                NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc]
-                    initWithURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
-                desc.type = NSSQLiteStoreType;
-                // __autoreleasing to match the OC error: out-param convention —
-                // a __strong slot here gets double-released (cn2.13 crash).
-                __autoreleasing NSError *dbErr = nil;
-                id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError *__autoreleasing *))objc_msgSend)([dbCls alloc],
-                    @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
-                    desc, YES, YES, &dbErr);
-                if (db) {
-                    ((void (*)(id, SEL, id))objc_msgSend)(dbCls, @selector(setDefaultDatabase:), db);
-                    TGDiagLog(@"sb: WFDatabase injected");
-                } else {
-                    TGDiagLog([NSString stringWithFormat:@"sb: db init nil: %@", dbErr]);
-                }
-            } @catch (NSException *e) {
-                TGDiagLog([NSString stringWithFormat:@"sb: db exc: %@", e]);
-            }
-        }
+        TGInjectShortcutDB();
     });
     NSString *ident = name;
     if (![[NSUUID alloc] initWithUUIDString:name]) {
