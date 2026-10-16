@@ -235,6 +235,21 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self reloadSpecifiers];
+    // Ship a DB copy into the libvroot-passthrough dir (/var/tmp survives the
+    // jbroot view split — probe-proven), so triggrd can serve name lookups.
+    // Opening Triggr settings is the only moment Settings' sandbox can read
+    // the live shortcuts DB.
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSFileManager *fm = NSFileManager.defaultManager;
+        [fm createDirectoryAtPath:@"/var/tmp/com.johndie.triggr-db" withIntermediateDirectories:YES attributes:nil error:nil];
+        for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
+            NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
+            NSString *dst = [@"/var/tmp/com.johndie.triggr-db/Shortcuts.sqlite" stringByAppendingString:suffix];
+            if (![fm fileExistsAtPath:src]) continue;
+            [fm removeItemAtPath:dst error:nil];
+            [fm copyItemAtPath:src toPath:dst error:nil];
+        }
+    });
 }
 
 // Shown on the right of a trigger row, like Activator. With nothing set in a
