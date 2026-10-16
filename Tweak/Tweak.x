@@ -778,7 +778,27 @@ __attribute__((unused)) static void TGSpawnDaemon(void) {
     }
 }
 
-@interface TGShortcutRunObserver : NSObject
+// cn2.57 recon: which client class does Actra use, and what does it pass?
+static void TGSDiag(NSString *line);
+%hook WFMenuBarWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon MenuBar arg=%@", arg]); return %orig; }
+%end
+%hook WFStingWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Sting arg=%@", arg]); return %orig; }
+%end
+%hook WFAccessibilityWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Accessibility arg=%@", arg]); return %orig; }
+%end
+%hook WFWidgetWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Widget arg=%@", arg]); return %orig; }
+%end
+%hook WFSpringBoardWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SpringBoard arg=%@", arg]); return %orig; }
+- (void)setContext:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SB setContext=%@", arg]); %orig; }
+- (void)start { TGSDiag(@"recon SB start"); %orig; }
+%end
+
+@interface TGShortcutRunObserver : NSObject : NSObject
 @end
 @implementation TGShortcutRunObserver
 static void TGSDiag(NSString *line) {
