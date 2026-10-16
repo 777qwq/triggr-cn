@@ -28,17 +28,17 @@ void TGInjectShortcutDB(void) {
 
     id url  = S1((id)objc_getClass("NSURL"), "fileURLWithPath:", Str("/var/mobile/Library/Shortcuts/Shortcuts.sqlite"));
     id desc = S1(S0((id)objc_getClass("NSPersistentStoreDescription"), "alloc"), "initWithURL:", url);
-    S1(url, "release");
+    S0(url, "release");
     if (!desc) { TGDiagLog((const void *)CFSTR("sb: desc nil")); return; }
     V1(desc, "setType:", (id)CFSTR("SQLite"));
 
     id err = nil;
     id db = S4(S0(dbCls, "alloc"), "initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:",
                desc, YES, YES, &err);
-    S1(desc, "release");
+    S0(desc, "release");
     if (db) {
         V1(dbCls, "setDefaultDatabase:", db);
-        S1(db, "release"); // setter retained its own
+        S0(db, "release"); // setter retained its own
         TGDiagLog((const void *)CFSTR("sb: WFDatabase injected"));
     } else {
         TGDiagLog(S0(err, "description") ? S0(err, "description") : (id)CFSTR("sb: db init nil (no error)"));
