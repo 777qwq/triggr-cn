@@ -258,7 +258,10 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         void *errp = NULL;
         id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, YES, YES, &errp);
         if (!db) { PSDiag("panel: db nil"); if(dfp) fclose(dfp); return; }
-        id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
+        id result = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
+        id refs = result;
+        if (result && [result respondsToSelector:sel_registerName("descriptors")])
+            refs = ((id(*)(id,SEL))objc_msgSend)(result, sel_registerName("descriptors")); // WFDatabaseResult -> array
         PSDiag("panel: refs count=%lu", (unsigned long)((NSArray *)refs).count);
         NSMutableDictionary *map = [NSMutableDictionary dictionary];
         for (id ref in refs) {
