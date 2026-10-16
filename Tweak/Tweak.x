@@ -842,10 +842,12 @@ static void TGRunShortcut(NSString *name) {
     Class descCls = NSClassFromString(@"WFWorkflowDescriptor");
     Class clientCls = NSClassFromString(@"WFWorkflowRunnerClient");
     if (!descCls || !clientCls) { TGSDiag(@"run: no classes"); return; }
-    id desc = [descCls alloc];
-    SEL identSel = NSSelectorFromString(@"setIdentifier:");
-    if ([desc respondsToSelector:identSel]) ((void(*)(id,SEL,id))objc_msgSend)(desc, identSel, ident);
-    else { TGSDiag(@"run: descriptor no setIdentifier:"); return; }
+    // WFWorkflowDescriptor: initWithIdentifier:name:color:glyphCharacter:associatedAppBundleIdentifier:
+    SEL dInit = NSSelectorFromString(@"initWithIdentifier:name:color:glyphCharacter:associatedAppBundleIdentifier:");
+    if (![descCls instancesRespondToSelector:dInit]) { TGSDiag(@"run: no descriptor init"); return; }
+    id desc = ((id(*)(id,SEL,id,id,long long,unsigned short,id))objc_msgSend)(
+        ((id(*)(id,SEL))objc_msgSend)(descCls, sel_registerName("alloc")), dInit,
+        ident, name, (long long)0, (unsigned short)0x2699, nil);
     id req = [[NSClassFromString(@"WFWorkflowRunRequest") alloc] init];
     id client = ((id(*)(id,SEL,id,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")), sel_registerName("initWithDescriptor:runRequest:"), desc, req);
     if (!client) { TGSDiag(@"run: init nil"); return; }
