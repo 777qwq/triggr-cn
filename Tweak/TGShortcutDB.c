@@ -8,7 +8,7 @@
 #import <objc/message.h>
 #import <dlfcn.h>
 
-extern void TGDiagLog(void *msg); // NSString* by bridge
+extern void TGDiagLog(const void *msg); // NSString* by bridge (linked from Tweak.x)
 
 static id S1(id self, const char *sel, id a) { return ((id(*)(id,SEL,id))objc_msgSend)(self, sel_registerName(sel), a); }
 static id S0(id self, const char *sel) { return ((id(*)(id,SEL))objc_msgSend)(self, sel_registerName(sel)); }
@@ -23,13 +23,13 @@ void TGInjectShortcutDB(void) {
     dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
     dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
     id dbCls = (id)objc_getClass("WFDatabase");
-    if (!dbCls) { TGDiagLog(CFSTR("sb: no WFDatabase")); return; }
-    if (S0(dbCls, "defaultDatabase")) { TGDiagLog(CFSTR("sb: db already present")); return; }
+    if (!dbCls) { TGDiagLog((const void *)CFSTR("sb: no WFDatabase")); return; }
+    if (S0(dbCls, "defaultDatabase")) { TGDiagLog((const void *)CFSTR("sb: db already present")); return; }
 
     id url  = S1((id)objc_getClass("NSURL"), "fileURLWithPath:", Str("/var/mobile/Library/Shortcuts/Shortcuts.sqlite"));
     id desc = S1(S0((id)objc_getClass("NSPersistentStoreDescription"), "alloc"), "initWithURL:", url);
     S1(url, "release");
-    if (!desc) { TGDiagLog(CFSTR("sb: desc nil")); return; }
+    if (!desc) { TGDiagLog((const void *)CFSTR("sb: desc nil")); return; }
     V1(desc, "setType:", (id)CFSTR("SQLite"));
 
     id err = nil;
@@ -39,8 +39,8 @@ void TGInjectShortcutDB(void) {
     if (db) {
         V1(dbCls, "setDefaultDatabase:", db);
         S1(db, "release"); // setter retained its own
-        TGDiagLog(CFSTR("sb: WFDatabase injected"));
+        TGDiagLog((const void *)CFSTR("sb: WFDatabase injected"));
     } else {
-        TGDiagLog(S1(err, "description") ? S1(err, "description") : (id)CFSTR("sb: db init nil (no error)"));
+        TGDiagLog(S0(err, "description") ? S0(err, "description") : (id)CFSTR("sb: db init nil (no error)"));
     }
 }
