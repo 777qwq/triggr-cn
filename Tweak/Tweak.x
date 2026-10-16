@@ -778,26 +778,6 @@ __attribute__((unused)) static void TGSpawnDaemon(void) {
     }
 }
 
-// cn2.57 recon: which client class does Actra use, and what does it pass?
-static void TGSDiag(NSString *line);
-%hook WFMenuBarWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon MenuBar arg=%@", arg]); return %orig; }
-%end
-%hook WFStingWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Sting arg=%@", arg]); return %orig; }
-%end
-%hook WFAccessibilityWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Accessibility arg=%@", arg]); return %orig; }
-%end
-%hook WFWidgetWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Widget arg=%@", arg]); return %orig; }
-%end
-%hook WFSpringBoardWorkflowRunnerClient
-- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SpringBoard arg=%@", arg]); return %orig; }
-- (void)setContext:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SB setContext=%@", arg]); %orig; }
-- (void)start { TGSDiag(@"recon SB start"); %orig; }
-%end
-
 @interface TGShortcutRunObserver : NSObject : NSObject
 @end
 @implementation TGShortcutRunObserver
@@ -1495,6 +1475,26 @@ static BOOL tgHomeAwaitingTriple; // a double press is waiting to see if a third
 static NSUInteger tgHomeGeneration;
 
 %hook SBHomeHardwareButton
+
+// cn2.57 recon: which client class does Actra use, and what does it pass?
+static void TGSDiag(NSString *line);
+%hook WFMenuBarWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon MenuBar arg=%@", arg]); return %orig; }
+%end
+%hook WFStingWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Sting arg=%@", arg]); return %orig; }
+%end
+%hook WFAccessibilityWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Accessibility arg=%@", arg]); return %orig; }
+%end
+%hook WFWidgetWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon Widget arg=%@", arg]); return %orig; }
+%end
+%hook WFSpringBoardWorkflowRunnerClient
+- (id)initWithWorkflowIdentifier:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SpringBoard arg=%@", arg]); return %orig; }
+- (void)setContext:(id)arg { TGSDiag([NSString stringWithFormat:@"recon SB setContext=%@", arg]); %orig; }
+- (void)start { TGSDiag(@"recon SB start"); %orig; }
+%end
 - (void)initialButtonDown:(id)recognizer {
     if (tgHomeAwaitingTriple) {
         // Third press inside the window: it's a triple.
