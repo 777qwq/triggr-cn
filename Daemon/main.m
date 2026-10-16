@@ -286,7 +286,8 @@ int main(void) {
         TGDLog(@"daemon started (this line = fresh binary running)");
         {
             char cwd[PATH_MAX]; getcwd(cwd, sizeof(cwd));
-            TGDLog([NSString stringWithFormat:@"env: cwd=%s jbroot=%s", cwd, jbroot("/")]);
+            NSString *jbr = TGJB(@"/");
+            TGDLog([NSString stringWithFormat:@"env: cwd=%s jbroot=%@", cwd, jbr]);
             for (NSString *p in @[
                 @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
                 @"/rootfs/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
