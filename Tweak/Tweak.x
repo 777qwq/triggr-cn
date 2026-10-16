@@ -285,7 +285,12 @@ static int TGSpawnShell(const char *const argv[], pid_t *pid) {
 
 // Hands a run to triggrd (it checks the action is one of the user's own).
 static void TGRunViaDaemon(NSString *action) {
-    NSString *path = [TGRunQueue stringByAppendingPathComponent:[NSString stringWithFormat:@"%.6f-%u.plist", CFAbsoluteTimeGetCurrent(), arc4random()]];
+    // Write to the jbroot-real queue path: triggrd (a jbroot process) resolves
+    // the same path through its own view — plain /var/tmp is a different dir
+    // in its rewritten view (libvroot), so the request would never land.
+    NSString *queue = TGJB(TGRunQueue);
+    NSString *path = [queue stringByAppendingPathComponent:[NSString stringWithFormat:@"%.6f-%u.plist", CFAbsoluteTimeGetCurrent(), arc4random()]];
+    [[NSFileManager defaultManager] createDirectoryAtPath:queue withIntermediateDirectories:YES attributes:nil error:nil];
     BOOL ok = [@{@"Action": action} writeToFile:path atomically:YES];
     if (ok) notify_post(TGRunRequestNotification);
 }

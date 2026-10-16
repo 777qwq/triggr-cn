@@ -93,15 +93,16 @@ static void TGDrainQueue(void) {
 // REAL shortcuts DB lives under the /rootfs prefix there (libroothide's
 // rootfs() does the conversion). Other schemes see the plain path.
 static NSString *TGRealShortcutsDB(void) {
-    // Runtime probe (build-scheme independent): if the roothide runtime is in
-    // this process, rootfs() maps to the real rootfs view where the live DB
-    // lives; the jbroot-relative view is an empty shell (src missing, cn2.26).
-    const char *(*rootfsFn)(const char *) = (const char *(*)(const char *))dlsym(RTLD_DEFAULT, "rootfs");
-    if (rootfsFn) {
-        const char *real = rootfsFn("/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
-        if (real && access(real, R_OK) == 0) {
-            return [NSString stringWithUTF8String:real];
-        }
+    // jbroot processes see ALL absolute paths rewritten to JBROOT+path (libvroot
+    // jbrootat_alloc), so the live DB is an empty shell at its plain path.
+    // /rootfs is roothide's passthrough link to the real root (bootstrap-made,
+    // with dedicated unwrapping in jbrootat_alloc) — try it first.
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *cand in @[
+        @"/rootfs/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
+        @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
+    ]) {
+        if ([fm fileExistsAtPath:cand]) return cand;
     }
     return @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite";
 }
