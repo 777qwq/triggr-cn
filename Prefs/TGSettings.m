@@ -241,6 +241,7 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
     // name->UUID map. SpringBoard reads the map and builds descriptors by
     // hand — no copy DB, no daemon, no passthrough.
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+    @try {
         FILE *dfp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
         #define PSDiag(fmt, ...) do { if (dfp) { fprintf(dfp, "[ps %f] " fmt "\n", [NSDate timeIntervalSinceReferenceDate], ##__VA_ARGS__); fflush(dfp); } } while(0)
         PSDiag("panel sync start");
@@ -255,7 +256,7 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
         ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
         void *errp = NULL;
-        id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, NO, NO, &errp);
+        id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, YES, YES, &errp);
         if (!db) { PSDiag("panel: db nil"); if(dfp) fclose(dfp); return; }
         id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
         PSDiag("panel: refs count=%lu", (unsigned long)[refs count]);
@@ -270,6 +271,11 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         BOOL ok = [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
         PSDiag("panel: map=%lu write=%d", (unsigned long)map.count, ok);
         if (dfp) fclose(dfp);
+    } @catch (NSException *e) {
+        FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
+        if (fp) { NSString *l = [NSString stringWithFormat:@"[ps] panel exc %@\n", e]; fwrite(l.UTF8String,1,l.length,fp); fclose(fp); }
+    }
+    });
     });
 }
 
