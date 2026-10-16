@@ -42,7 +42,50 @@ static UIViewController *TGMessage(NSString *text) {
 
 @implementation TGAppDelegate
 
+
+// App-side shortcut map: the app (no-sandbox) reads the real Shortcuts DB
+// directly and writes name->UUID into a standalone plist both the app and
+// SpringBoard can see. Replaces the daemon copy/sync channel entirely.
+// Pure-C msgSend style (TGShortcutDB.c lessons: no ARC cast traps).
+#import <objc/runtime.h>
+#import <objc/message.h>
+static void TGSyncShortcutMap(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+            dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+            Class dbCls = objc_getClass("WFDatabase");
+            if (!dbCls) return;
+            SEL sel0 = sel_registerName("alloc");
+            SEL initDB = sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:");
+            id url = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
+            id store = ((id(*)(id,SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
+            store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
+            if (!store) return;
+            ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
+            ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
+            id db = ((id(*)(id,SEL,id,BOOL,BOOL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel0), initDB, store, NO, NO, nil);
+            if (!db) return;
+            id refs = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
+            NSMutableDictionary *map = [NSMutableDictionary dictionary];
+            for (id ref in refs) {
+                NSString *name = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("name"));
+                id ident = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("identifier"));
+                if (![name isKindOfClass:NSString.class] || !ident) continue;
+                id uuid = ident;
+                if ([ident isKindOfClass:NSUUID.class]) uuid = [(NSUUID *)ident UUIDString];
+                if ([uuid isKindOfClass:NSString.class]) map[name] = uuid;
+            }
+            if (map.count) {
+                [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
+            }
+        });
+    });
+}
+
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)options {
+    TGSyncShortcutMap();
     self.window = [[UIWindow alloc] initWithFrame:UIScreen.mainScreen.bounds];
     UIViewController *root = nil;
     NSBundle *bundle = [NSBundle bundleWithPath:TGBundlePath()];
