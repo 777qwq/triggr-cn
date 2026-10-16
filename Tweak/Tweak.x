@@ -764,6 +764,8 @@ void TGDiagLog(NSString *msg) {
 @end
 
 
+void TGInjectShortcutDB(void); // TGShortcutDB.c (MRC-free pure C)
+
 static void TGRunShortcut(NSString *name) {
 
 // Shortcut channel v2 (Actra-proven architecture): the SB side never
