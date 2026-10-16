@@ -847,8 +847,7 @@ static void TGRunShortcut(NSString *name) {
     if ([desc respondsToSelector:identSel]) ((void(*)(id,SEL,id))objc_msgSend)(desc, identSel, ident);
     else { TGSDiag(@"run: descriptor no setIdentifier:"); return; }
     id req = [[NSClassFromString(@"WFWorkflowRunRequest") alloc] init];
-    id client = ((id(*)(id,SEL,id,id))objc_msgSend)(clientCls, sel_registerName("alloc"),
-        sel_registerName("initWithDescriptor:runRequest:"), desc, req);
+    id client = ((id(*)(id,SEL,id,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")), sel_registerName("initWithDescriptor:runRequest:"), desc, req);
     if (!client) { TGSDiag(@"run: init nil"); return; }
     static id observer;
     static dispatch_once_t once;
