@@ -122,21 +122,6 @@ static void TGDrainQueue(void) {
 // Live DB path: roothide maps jbroot processes' view of /var/mobile, so the
 // REAL shortcuts DB lives under the /rootfs prefix there (libroothide's
 // rootfs() does the conversion). Other schemes see the plain path.
-static NSString *TGRealShortcutsDB(void) {
-    // jbroot processes see ALL absolute paths rewritten to JBROOT+path (libvroot
-    // jbrootat_alloc), so the live DB is an empty shell at its plain path.
-    // /rootfs is roothide's passthrough link to the real root (bootstrap-made,
-    // with dedicated unwrapping in jbrootat_alloc) — try it first.
-    NSFileManager *fm = NSFileManager.defaultManager;
-    for (NSString *cand in @[
-        @"/rootfs/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
-        @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
-    ]) {
-        if ([fm fileExistsAtPath:cand]) return cand;
-    }
-    return @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite";
-}
-
 static void TGSyncShortcutDB(void); // fwd — the watcher calls it
 
 
@@ -237,7 +222,7 @@ static void TGWatchFile(int idx, const char *path) {
     // watched — any of them moving means the database changed.
     static const char *suffixes[3] = {"", "-wal", "-shm"};
     char full[256];
-    snprintf(full, sizeof(full), "%s%s", TGRealShortcutsDB().fileSystemRepresentation, suffixes[idx]);
+    snprintf(full, sizeof(full), "/var/tmp/com.johndie.triggr-db/Shortcuts.sqlite%s", suffixes[idx]);
     int fd = open(full, O_RDONLY);
     if (fd < 0) return; // e.g. no WAL/shm yet — main file is always there
     dispatch_source_t src = dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE, fd,
@@ -272,7 +257,7 @@ static void TGWatchShortcutDB(void) {
     static const char *suffixes[3] = {"", "-wal", "-shm"};
     for (int i = 0; i < 3; i++) {
         char full[256];
-        snprintf(full, sizeof(full), "%s%s", TGRealShortcutsDB().fileSystemRepresentation, suffixes[i]);
+        snprintf(full, sizeof(full), "/var/tmp/com.johndie.triggr-db/Shortcuts.sqlite%s", suffixes[i]);
         TGWatchFile(i, full);
     }
 }
@@ -287,7 +272,7 @@ static void TGSyncShortcutDB(void) {
     NSFileManager *files = NSFileManager.defaultManager;
     [files createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
     for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
-        NSString *src = [TGRealShortcutsDB() stringByAppendingString:suffix];
+        NSString *src = [@"/var/tmp/com.johndie.triggr-db/Shortcuts.sqlite" stringByAppendingString:suffix];
         NSString *dst = [TGShortcutDBCopy stringByAppendingString:suffix];
         BOOL srcThere = [files fileExistsAtPath:src];
         if (!srcThere) { TGDLog([NSString stringWithFormat:@"sync: src missing%@", suffix]); continue; }

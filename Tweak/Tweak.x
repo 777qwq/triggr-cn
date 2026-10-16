@@ -288,7 +288,7 @@ static void TGRunViaDaemon(NSString *action) {
     // Write to the jbroot-real queue path: triggrd (a jbroot process) resolves
     // the same path through its own view — plain /var/tmp is a different dir
     // in its rewritten view (libvroot), so the request would never land.
-    NSString *queue = TGJB(TGRunQueue);
+    NSString *queue = TGRunQueue; // /var/tmp passes through libvroot on both sides (probe-proven)
     NSString *path = [queue stringByAppendingPathComponent:[NSString stringWithFormat:@"%.6f-%u.plist", CFAbsoluteTimeGetCurrent(), arc4random()]];
     [[NSFileManager defaultManager] createDirectoryAtPath:queue withIntermediateDirectories:YES attributes:nil error:nil];
     BOOL ok = [@{@"Action": action} writeToFile:path atomically:YES];
