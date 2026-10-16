@@ -4,6 +4,7 @@ for p in /var/jb/Applications/TriggrApp.app /Applications/TriggrApp.app; do
 	[ -d "$p" ] && uicache -p "$p" >/dev/null 2>&1
 done
 # (Re)start triggrd, which runs commands where SpringBoard can't (iOS 18).
-launchctl unload /var/jb/Library/LaunchDaemons/com.johndie.triggrd.plist 2>/dev/null
-launchctl load /var/jb/Library/LaunchDaemons/com.johndie.triggrd.plist 2>/dev/null
+# launchctl load/unload with /var/jb paths is a no-op under roothide (daemon
+# kept running OLD builds); pkill + KeepAlive=true is scheme-proof.
+pkill -x triggrd 2>/dev/null
 exit 0
