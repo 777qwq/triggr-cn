@@ -148,22 +148,31 @@ static void TGRunShortcutInDaemon(NSString *name) {
     dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
     dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
     Class dbCls = NSClassFromString(@"WFDatabase");
-    if (!dbCls) { TGSCLog(@"no WFDatabase"); return; }
-    // Fresh database per run: the Shortcuts App may have changed things since.
+    if (!dbCls) { TGDLog(@"sc: no WFDatabase"); return; }
     s_scDb = nil;
     @try {
+        // Real-rootfs DB path: a path containing the ".jbroot-XXX" component
+        // escapes libvroot's rewrite (jbrootat honors it as an escape marker),
+        // so walk out of the jbroot and back into the true /var/mobile.
+        NSString *jbr = jbroot("/"); // /var/containers/.../.jbroot-XXX/var/jb/
+        NSString *jbBase = [jbr substringToIndex:([jbr length] - @"/var/jb/".length)]; // .../.jbroot-XXX/
+        NSString *dbPath = [[jbBase stringByAppendingPathComponent:@"../../../var/mobile/Library/Shortcuts/Shortcuts.sqlite"]
+                            stringByStandardizingPath];
+        struct stat st;
+        TGDLog([NSString stringWithFormat:@"sc: db path %@ stat=%s", dbPath,
+            stat(dbPath.fileSystemRepresentation, &st) == 0 ? "OK" : "MISSING"]);
         id desc = ((id (*)(id, SEL, id))objc_msgSend)(
             ((id (*)(id, SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), @selector(alloc)),
-            @selector(initWithURL:), [NSURL fileURLWithPath:TGRealShortcutsDB()]);
+            @selector(initWithURL:), [NSURL fileURLWithPath:dbPath]);
         ((void (*)(id, SEL, id))objc_msgSend)(desc, @selector(setType:), (id)CFSTR("SQLite"));
         NSError *dbErr = nil;
         id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError *__autoreleasing *))objc_msgSend)([dbCls alloc],
             @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
             desc, YES, YES, &dbErr);
-        if (!db) { TGSCLog([NSString stringWithFormat:@"db init nil: %@", dbErr]); return; }
+        if (!db) { TGDLog([NSString stringWithFormat:@"sc: db init nil: %@", dbErr]); return; }
         s_scDb = db;
         id list = ((id (*)(id, SEL))objc_msgSend)(db, @selector(sortedVisibleWorkflowsByName));
-        if (![list respondsToSelector:@selector(descriptors)]) { TGSCLog(@"no descriptors"); return; }
+        if (![list respondsToSelector:@selector(descriptors)]) { TGDLog(@"sc: no descriptors"); return; }
         NSArray *arr = ((id (*)(id, SEL))objc_msgSend)(list, @selector(descriptors));
         NSString *ident = nil;
         for (id ref in arr) {
@@ -173,20 +182,20 @@ static void TGRunShortcutInDaemon(NSString *name) {
                 break;
             }
         }
-        if (!ident.length) { TGSCLog([NSString stringWithFormat:@"not found: %@", name]); return; }
-        TGSCLog([NSString stringWithFormat:@"resolved: %@ -> %@", name, ident]);
+        if (!ident.length) { TGDLog([NSString stringWithFormat:@"sc: not found: %@", name]); return; }
+        TGDLog([NSString stringWithFormat:@"sc: resolved %@ -> %@", name, ident]);
         Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
                        ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
-        if (!clientCls) { TGSCLog(@"no client class"); return; }
+        if (!clientCls) { TGDLog(@"sc: no client class"); return; }
         id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc],
             @selector(initWithWorkflowIdentifier:), ident);
-        if (!client) { TGSCLog(@"client init nil"); return; }
+        if (!client) { TGDLog(@"sc: client init nil"); return; }
         if ([client respondsToSelector:@selector(setDelegate:)])
             ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), s_scObserver);
         ((void (*)(id, SEL))objc_msgSend)(client, @selector(start));
-        TGSCLog([NSString stringWithFormat:@"started via %@", NSStringFromClass(clientCls)]);
+        TGDLog([NSString stringWithFormat:@"sc: started via %@", NSStringFromClass(clientCls)]);
     } @catch (NSException *e) {
-        TGSCLog([NSString stringWithFormat:@"exc: %@", e]);
+        TGDLog([NSString stringWithFormat:@"sc: exc: %@", e]);
     }
 }
 
