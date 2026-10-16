@@ -76,7 +76,14 @@ static void TGDrainQueue(void) {
         NSDictionary *request = [NSDictionary dictionaryWithContentsOfFile:path];
         [files removeItemAtPath:path error:nil];
         NSString *action = request[@"Action"];
-        if (![action isKindOfClass:NSString.class] || (![action hasPrefix:TGShellPrefix] && ![action hasPrefix:TGExtensionPrefix])) continue;
+        if (![action isKindOfClass:NSString.class] || (![action hasPrefix:TGShellPrefix] && ![action hasPrefix:TGExtensionPrefix] && ![action hasPrefix:TGShortcutPrefix])) continue;
+        // shortcut: runs the WorkflowKit chain in-process; the queue dir is
+        // 0700 mobile-only, which is the whole gate for it (no prefs check —
+        // the daemon's CFPreferences view of TGDomain is a jbroot shell).
+        if ([action hasPrefix:TGShortcutPrefix]) {
+            TGPerform(action);
+            continue;
+        }
         if ([allowed containsObject:action]) {
             TGPerform(action);
             continue;
