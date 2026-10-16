@@ -31,7 +31,7 @@ void TGInjectShortcutDB(void) {
     id url  = S1((id)objc_getClass("NSURL"), "fileURLWithPath:", Str("/var/mobile/Library/Triggr/Shortcuts.sqlite"));
     id desc = S1(S0((id)objc_getClass("NSPersistentStoreDescription"), "alloc"), "initWithURL:", url);
     // NSReadOnlyPersistentStoreOption = YES
-    S4(desc, "setOption:forKey:", (id)kCFBooleanTrue, (id)CFSTR("NSReadOnlyPersistentStoreOption"));
+    ((void(*)(id,SEL,id,id))objc_msgSend)(desc, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, (id)CFSTR("NSReadOnlyPersistentStoreOption"));
     S0(url, "release");
     if (!desc) { TGDiagLog((const void *)CFSTR("sb: desc nil")); return; }
     V1(desc, "setType:", (id)CFSTR("SQLite"));
