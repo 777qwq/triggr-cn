@@ -11,6 +11,7 @@
 #import <sys/wait.h>
 #import <sys/stat.h>
 #import <fcntl.h>
+#import <objc/message.h>
 #import "../Shared/TGCatalog.h"
 #import "../Shared/TGPaths.h"
 
@@ -45,6 +46,8 @@ static void TGRun(const char *const argv[]) {
     }
     posix_spawn_file_actions_destroy(&actions);
 }
+
+static void TGRunShortcutInDaemon(NSString *name); // fwd — defined below with the WK chain
 
 static void TGPerform(NSString *action) {
     if ([action hasPrefix:TGShortcutPrefix]) {
@@ -124,9 +127,10 @@ static void TGRunShortcutInDaemon(NSString *name) {
     // Fresh database per run: the Shortcuts App may have changed things since.
     s_scDb = nil;
     @try {
-        NSPersistentStoreDescription *desc = [[NSPersistentStoreDescription alloc]
-            initWithURL:[NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]];
-        desc.type = NSSQLiteStoreType;
+        id desc = ((id (*)(id, SEL, id))objc_msgSend)(
+            ((id (*)(id, SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), @selector(alloc)),
+            @selector(initWithURL:), [NSURL fileURLWithPath:@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite"]);
+        ((void (*)(id, SEL, id))objc_msgSend)(desc, @selector(setType:), (id)CFSTR("SQLite"));
         NSError *dbErr = nil;
         id db = ((id (*)(id, SEL, id, BOOL, BOOL, NSError *__autoreleasing *))objc_msgSend)([dbCls alloc],
             @selector(initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:),
