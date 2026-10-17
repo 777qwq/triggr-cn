@@ -438,6 +438,10 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
         if ([fm fileExistsAtPath:s]) [fm copyItemAtPath:s toPath:d error:&cperr];
     }
     CNLog(@"shortcut db: src=%d err=%@", [fm fileExistsAtPath:src], cperr);
+    for (NSString *dir in @[@"/var/mobile/Library/Shortcuts", @"/var/jb/var/mobile/Library/Shortcuts"]) {
+        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
+        CNLog(@"shortcut dir %@ → %@", dir, files ?: @"nil");
+    }
     const char *paths[] = { dst.fileSystemRepresentation, src.fileSystemRepresentation, NULL };
     for (int i = 0; paths[i]; i++) {
         sqlite3 *db = NULL;
