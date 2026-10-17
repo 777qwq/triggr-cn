@@ -389,15 +389,21 @@ static void TriggrExtInit(void) {
                 notify_register_dispatch("cn.triggr.backswipe", &tok2, dispatch_get_main_queue(), ^(int t) {
                     @try {
                         UIViewController *vc = nil;
-                        for (UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
-                            if ([sc isKindOfClass:[UIWindowScene class]]) {
-                                for (UIWindow *w in [(UIWindowScene *)sc windows]) {
-                                    if (w.isKeyWindow) {
-                                        vc = w.rootViewController;
-                                        while (vc.presentedViewController) vc = vc.presentedViewController;
-                                    }
-                                }
+                        NSArray *windows = nil;
+                        if (@available(iOS 13.0, *)) {
+                            NSMutableArray *ws = [NSMutableArray array];
+                            for (__kindof UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+                                if ([sc isKindOfClass:[UIWindowScene class]]) [ws addObjectsFromArray:[(UIWindowScene *)sc windows]];
                             }
+                            windows = ws;
+                        } else {
+                            windows = UIApplication.sharedApplication.windows;
+                        }
+                        for (UIWindow *w in windows) {
+                            if (!w.isKeyWindow) continue;
+                            UIViewController *r = w.rootViewController;
+                            while (r.presentedViewController) r = r.presentedViewController;
+                            vc = r;
                         }
                         if (vc.navigationController && vc.navigationController.viewControllers.count > 1) {
                             [vc.navigationController popViewControllerAnimated:YES];
