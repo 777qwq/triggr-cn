@@ -37,7 +37,7 @@ static NSString *MojibakeRepair(NSString *s) {
 }
 
 static NSString *L10nXform(NSString *s) {
-    if (s.length == 0 || s.length > 96) return s;
+    if (s.length == 0 || s.length > 720) return s;
     NSString *r = MojibakeRepair(s);
     if (r) s = r;
     NSDictionary *m = L10n();
@@ -98,6 +98,12 @@ static NSString *L10nXform(NSString *s) {
 }
 - (void)addAction:(UIAlertAction *)action {
     %orig;
+}
+%end
+
+%hook UIBarButtonItem
+- (void)setTitle:(NSString *)title {
+    %orig(L10nXform(title));
 }
 %end
 

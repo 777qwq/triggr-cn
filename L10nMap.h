@@ -8,6 +8,7 @@ static NSDictionary<NSString *, NSString *> *L10nPrefixes(void) {
     static NSDictionary *m;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ m = @{
+        @"Default: ": @"默认：",
 
         @"Notification from ": @"来自 ",
         @"Brightness Down ": @"亮度 −",
@@ -662,6 +663,18 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"inside apps": @"应用内",
     @"the slider": @"滑块",
     @"there": @"该位置",
+    @"Back": @"返回",
+    @"Lock": @"锁定",
+    @"Power Off Slider": @"关机滑块",
+    @"STATUS BAR": @"状态栏",
+    @"LOCK SCREEN": @"锁定屏幕",
+    @"BUTTONS": @"按键",
+    @"Replace Button Actions is on (Options): an assigned press runs instead of the button's own action. Unassigned presses work as usual. On Face ID devices an assigned Double or Triple Press replaces Wallet / Apple Pay or the Accessibility Shortcut; unassigned, they work as usual.": @"「取代按键动作」开启时（选项）：已指派的按压会取代按键自身动作；未指派的照常工作。Face ID 设备上，已指派的双击/三击会取代钱包 / Apple Pay 或辅助功能快捷键；未指派则照常。",
+    @"Experimental on Face ID iPhones, so off by default: a tap at the top can also start pulling down Control Center or Notification Center. Double Tap and Hold always work.": @"Face ID iPhone 上为实验功能，默认关闭：顶部轻点可能与下拉控制中心/通知中心冲突。双击和长按始终可用。",
+    @"Apps, URLs and Shortcuts can't open over the Lock Screen, so they always wait until you unlock. With this on, shell commands wait too (when a passcode is set). Other actions run straight away.": @"App、URL 和快捷指令无法在锁定屏幕上打开，因此总是等到解锁后执行。开启此项后，shell 命令也会等待（设有密码时）。其他动作立即执行。",
+    @"On: an assigned press runs instead of the button's own action (going Home, the volume step, locking, muting...). To keep that too, add the matching action, like Sleep for the side button. Off: everything runs alongside the buttons and the mute switch. Waking, Emergency SOS and force restart always work as usual.": @"开启：已指派的按压取代按键自身动作（回主屏幕、音量步进、锁定、静音…）。若两者都要，添加对应动作即可（如侧边键的灭屏）。关闭：所有动作与按键、静音拨片并行。唤醒、紧急 SOS 和强制重启始终照常。",
+    @"Lets other tweaks and the triggr command run your triggers, menus and built-in actions (never shell commands, URLs or apps directly). Any app could ask, so leave it off unless you use it. \"triggr list\" shows the ids.": @"允许其他插件和 triggr 命令运行你的触发器、菜单和内置动作（绝不直接执行 shell 命令、URL 或 App）。任何 App 都可能请求，不用就保持关闭。\"triggr list\" 可查看 id。",
+    @"Runs at this time on the selected days. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.": @"在所选日期的此时间运行。手机睡眠时 iOS 可能推迟定时器；晚点超过 5 分钟则跳过。",
     };
 }
 
