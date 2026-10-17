@@ -436,7 +436,7 @@ static void TriggrExtInit(void) {
 #import <objc/runtime.h>
 #import <string.h>
 
-static void CNRegisterShortcutsFromDB(void);
+void CNRegisterShortcutsFromDB(void);
 static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     NSMutableArray *names = [NSMutableArray array];
     NSFileManager *fm = NSFileManager.defaultManager;
@@ -502,7 +502,7 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     return names;
 }
 
-static void CNRegisterShortcutsFromDB(void) {
+void CNRegisterShortcutsFromDB(void) {
     dispatch_async(dispatch_get_main_queue(), ^{
         Class triggrCls = objc_getClass("TGTriggr");
         Class infoCls = objc_getClass("TGActionInfo");
