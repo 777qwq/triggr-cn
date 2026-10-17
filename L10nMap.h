@@ -9,7 +9,6 @@ static NSDictionary<NSString *, NSString *> *L10nPrefixes(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{ m = @{
         @"Default: ": @"默认：",
-
         @"Notification from ": @"来自 ",
         @"Brightness Down ": @"亮度 −",
         @"Brightness Up ": @"亮度 +",
@@ -19,7 +18,6 @@ static NSDictionary<NSString *, NSString *> *L10nPrefixes(void) {
         @"Anywhere: ": @"任意位置：",
         @"Command: ": @"命令：",
         @"Message: ": @"显示文字：",
-        @"Default: ": @"默认：",
         @"Opened ": @"打开了 ",
         @"Toggle ": @"切换",
         @"Menu: ": @"菜单：",
@@ -31,7 +29,9 @@ static NSDictionary<NSString *, NSString *> *L10nPrefixes(void) {
 }
 
 static NSDictionary<NSString *, NSString *> *L10nMap(void) {
-    return @{
+    static NSDictionary *m;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ m = @{
     @"Accessibility Shortcut": @"辅助功能快捷键",
     @"Action Button": @"动作按钮",
     @"Add Anyway": @"仍要添加",
@@ -454,7 +454,7 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"Any app that shows in Now Playing: Music, Spotify, YouTube, podcasts, Crest… Song Changed runs once per new song, including the first one after a pause. Changes caused by Triggr's own media actions are ignored for a second, so assignments can't loop.": @"任何出现在“正在播放”里的应用：音乐、Spotify、YouTube、播客等。切歌每首新歌运行一次，含暂停后的第一首；Triggr 自身媒体动作引起的变化 1 秒内忽略，避免指派自我循环。",
     @"Anywhere": @"任意位置",
     @"Anywhere runs %@ for this trigger. Actions picked here replace it %@; leave this empty to keep Anywhere's.": @"任意位置会为该触发器运行%@。此处选择的动作将在%@取代它；留空则沿用任意位置的指派。",
-    @"Apps, URLs and Shortcuts can't open over the Lock Screen, so they always wait until you unlock. With this on, shell commands wait too (when a passcode is set). Other actions run straight away.": @"应用、URL 和快捷指令无法在锁屏界面上打开，因此它们总会等到解锁后才执行。开启后，shell 命令也会等解锁（设置了密码时）。其他动作照常立即执行。",
+    @"Apps, URLs and Shortcuts can't open over the Lock Screen, so they always wait until you unlock. With this on, shell commands wait too (when a passcode is set). Other actions run straight away.": @"App、URL 和快捷指令无法在锁定屏幕上打开，因此总是等到解锁后执行。开启此项后，shell 命令也会等待（设有密码时）。其他动作立即执行。",
     @"Assign": @"指派",
     @"Assigned": @"已指派",
     @"Assignments made here only work %@, where they replace Anywhere's for the same trigger. Everywhere else, Anywhere's still apply.": @"此处指派仅在%@生效，并对同一触发器取代任意位置的指派；其他位置仍沿用任意位置的指派。",
@@ -488,14 +488,14 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"Choose where it should work, then a trigger and what it runs. Most assignments belong in Anywhere.": @"先选生效位置，再选触发器和执行内容。大多数指派放在任意位置即可。",
     @"Clear": @"清除",
     @"Clears every assignment, menu and setting, and turns off Allow API (Replace Button Actions goes back on). Saved profiles are kept.": @"清除所有指派、菜单和设置，并关闭允许 API（替换按键动作恢复开启）。已保存的配置会保留。",
-    @"Connected to \\“%@\\”": @"连接到「%@」",
+    @"Connected to \\\\“%@\\\\”": @"连接到「%@」",
     @"Cover": @"遮挡",
     @"Custom": @"自定义",
     @"Device name, as shown in Settings → Bluetooth": @"设备名称，与设置 → 蓝牙中显示的一致",
-    @"Disconnected from \\“%@\\”": @"从「%@」断开",
+    @"Disconnected from \\\\“%@\\\\”": @"从「%@」断开",
     @"Enabled": @"启用",
     @"Every assignment, menu and setting is cleared. Saved profiles are kept.": @"所有指派、菜单和设置都会被清除。已保存的配置会保留。",
-    @"Experimental on Face ID iPhones, so off by default: a tap at the top can also start pulling down Control Center or Notification Center. Double Tap and Hold always work.": @"在 Face ID 机型上属实验性，默认关闭：顶部轻点也可能触发下拉控制中心/通知中心。双击和长按始终有效。",
+    @"Experimental on Face ID iPhones, so off by default: a tap at the top can also start pulling down Control Center or Notification Center. Double Tap and Hold always work.": @"Face ID iPhone 上为实验功能，默认关闭：顶部轻点可能与下拉控制中心/通知中心冲突。双击和长按始终可用。",
     @"Export Current Setup…": @"导出当前设置…",
     @"Export makes a file you can send with AirDrop, Messages or Files. Import replaces your current setup after showing what it contains.": @"导出生成一个文件，可用隔空投送、信息或「文件」发送。导入会先展示内容，再替换当前设置。",
     @"Flashlight": @"手电筒",
@@ -513,9 +513,9 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"If Left Double Tap (or Double Tap) is also assigned, single taps wait a moment to see if a second follows.": @"若「左侧双击」（或「双击」）也有指派，单击会稍作等待以判断是否为双击。",
     @"If Right Double Tap (or Double Tap) is also assigned, single taps wait a moment to see if a second follows.": @"若「右侧双击」（或「双击」）也有指派，单击会稍作等待以判断是否为双击。",
     @"Import Setup…": @"导入设置…",
-    @"Joined \\“%@\\”": @"加入 Wi-Fi「%@」",
-    @"Left \\“%@\\”": @"离开 Wi-Fi「%@」",
-    @"Lets other tweaks and the triggr command run your triggers, menus and built-in actions (never shell commands, URLs or apps directly). Any app could ask, so leave it off unless you use it. \\\"triggr list\\\" shows the ids.": @"允许其他插件和 triggr 命令运行你的触发器、菜单与内置动作（不会直接执行 shell 命令、URL 或打开应用）。任何应用都可能发起请求，不用就保持关闭。“triggr list”可查看 ID。",
+    @"Joined \\\\“%@\\\\”": @"加入 Wi-Fi「%@」",
+    @"Left \\\\“%@\\\\”": @"离开 Wi-Fi「%@」",
+    @"Lets other tweaks and the triggr command run your triggers, menus and built-in actions (never shell commands, URLs or apps directly). Any app could ask, so leave it off unless you use it. \\\\\\\"triggr list\\\\\\\" shows the ids.": @"允许其他插件和 triggr 命令运行你的触发器、菜单与内置动作（不会直接执行 shell 命令、URL 或打开应用）。任何应用都可能发起请求，不用就保持关闭。“triggr list”可查看 ID。",
     @"Levels": @"调节",
     @"Light Double Tap is touching the sensor twice without clicking. iOS doesn't report single taps or holds while unlocked. Finger Rest and Match only work on the Lock Screen and run alongside unlocking.": @"轻点两下是指不按下而轻触传感器两次。解锁状态下 iOS 不上报单次轻触和长按。手指停留与指纹匹配仅在锁屏界面生效，并与解锁并行。",
     @"Lock": @"锁定",
@@ -587,7 +587,7 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"Runs alongside the switch, which still mutes.": @"与拨片并行执行，拨片仍会静音。",
     @"Runs alongside the switch, which still unmutes.": @"与拨片并行执行，拨片仍会取消静音。",
     @"Runs alongside the volume change.": @"与音量调节并行执行。",
-    @"Runs at this time on the selected days. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.": @"在所选星期的该时间运行。iOS 可能在睡眠时推迟定时；若延误超过 5 分钟则跳过。",
+    @"Runs at this time on the selected days. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.": @"在所选日期的此时间运行。手机睡眠时 iOS 可能推迟定时器；晚点超过 5 分钟则跳过。",
     @"Runs at this time while Triggr is running. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.": @"在设备运行 Triggr 期间于此时间触发。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。",
     @"Runs at this time. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.": @"在此时间运行。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。",
     @"Runs instead of Reachability (the light double tap). To keep it, add Reachability.": @"取代单手模式（即轻点两下）。若想保留它，请添加「单手模式」。",
@@ -655,27 +655,22 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"Weekends": @"周末",
     @"With Replace on, the switch's position and the ringer can differ until you flip it back.": @"开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。",
     @"Works on the Home Screen, Lock Screen and inside apps. A single tap still scrolls to the top. Hold is half a second. Left and Right are each half of the status bar: when one is assigned, it runs instead of plain Tap, Double Tap or Hold on that side. Swipe Left and Right are a quick sideways swipe along the bar; swiping down still opens Notification Center or Control Center.": @"主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。",
-    @"\\n\\nIt includes the Wi-Fi network and Bluetooth device names used in your events.": @"\\n\\n其中包含你的事件所用的 Wi-Fi 网络和蓝牙设备名称。",
-    @"\\n\\nIt includes your shell commands; check they don't contain anything private.": @"\\n\\n其中包含你的 shell 命令，请确认不含隐私内容。",
-    @"\\n\\nThis replaces your current setup. Save it as a profile first if you want to keep it.": @"\\n\\n这将替换你当前的设置。如需保留，请先存为配置。",
-    @"\\n\\nThis setup runs shell commands on your device. Only import setups from people you trust.": @"\\n\\n该设置会在你的设备上运行 shell 命令。只导入来源可信的设置。",
+    @"\\\\n\\\\nIt includes the Wi-Fi network and Bluetooth device names used in your events.": @"\\\\n\\\\n其中包含你的事件所用的 Wi-Fi 网络和蓝牙设备名称。",
+    @"\\\\n\\\\nIt includes your shell commands; check they don't contain anything private.": @"\\\\n\\\\n其中包含你的 shell 命令，请确认不含隐私内容。",
+    @"\\\\n\\\\nThis replaces your current setup. Save it as a profile first if you want to keep it.": @"\\\\n\\\\n这将替换你当前的设置。如需保留，请先存为配置。",
+    @"\\\\n\\\\nThis setup runs shell commands on your device. Only import setups from people you trust.": @"\\\\n\\\\n该设置会在你的设备上运行 shell 命令。只导入来源可信的设置。",
     @"everywhere": @"所有位置",
     @"inside apps": @"应用内",
     @"the slider": @"滑块",
     @"there": @"该位置",
     @"Back": @"返回",
-    @"Lock": @"锁定",
-    @"Power Off Slider": @"关机滑块",
     @"STATUS BAR": @"状态栏",
     @"LOCK SCREEN": @"锁定屏幕",
     @"BUTTONS": @"按键",
     @"Replace Button Actions is on (Options): an assigned press runs instead of the button's own action. Unassigned presses work as usual. On Face ID devices an assigned Double or Triple Press replaces Wallet / Apple Pay or the Accessibility Shortcut; unassigned, they work as usual.": @"「取代按键动作」开启时（选项）：已指派的按压会取代按键自身动作；未指派的照常工作。Face ID 设备上，已指派的双击/三击会取代钱包 / Apple Pay 或辅助功能快捷键；未指派则照常。",
-    @"Experimental on Face ID iPhones, so off by default: a tap at the top can also start pulling down Control Center or Notification Center. Double Tap and Hold always work.": @"Face ID iPhone 上为实验功能，默认关闭：顶部轻点可能与下拉控制中心/通知中心冲突。双击和长按始终可用。",
-    @"Apps, URLs and Shortcuts can't open over the Lock Screen, so they always wait until you unlock. With this on, shell commands wait too (when a passcode is set). Other actions run straight away.": @"App、URL 和快捷指令无法在锁定屏幕上打开，因此总是等到解锁后执行。开启此项后，shell 命令也会等待（设有密码时）。其他动作立即执行。",
     @"On: an assigned press runs instead of the button's own action (going Home, the volume step, locking, muting...). To keep that too, add the matching action, like Sleep for the side button. Off: everything runs alongside the buttons and the mute switch. Waking, Emergency SOS and force restart always work as usual.": @"开启：已指派的按压取代按键自身动作（回主屏幕、音量步进、锁定、静音…）。若两者都要，添加对应动作即可（如侧边键的灭屏）。关闭：所有动作与按键、静音拨片并行。唤醒、紧急 SOS 和强制重启始终照常。",
-    @"Lets other tweaks and the triggr command run your triggers, menus and built-in actions (never shell commands, URLs or apps directly). Any app could ask, so leave it off unless you use it. \"triggr list\" shows the ids.": @"允许其他插件和 triggr 命令运行你的触发器、菜单和内置动作（绝不直接执行 shell 命令、URL 或 App）。任何 App 都可能请求，不用就保持关闭。\"triggr list\" 可查看 id。",
-    @"Runs at this time on the selected days. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.": @"在所选日期的此时间运行。手机睡眠时 iOS 可能推迟定时器；晚点超过 5 分钟则跳过。",
+    @"Lets other tweaks and the triggr command run your triggers, menus and built-in actions (never shell commands, URLs or apps directly). Any app could ask, so leave it off unless you use it. \\\"triggr list\\\" shows the ids.": @"允许其他插件和 triggr 命令运行你的触发器、菜单和内置动作（绝不直接执行 shell 命令、URL 或 App）。任何 App 都可能请求，不用就保持关闭。\\\"triggr list\\\" 可查看 id。",
     };
+    });
+    return m;
 }
-
-#endif
