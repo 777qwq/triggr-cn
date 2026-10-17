@@ -548,3 +548,80 @@ static void CNRegister(void) {
     }
 }
 
+
+// ===== Relay 返回上级（严格按 cn2 定稿复用清单第 21 条）=====
+// Relay 挂左边缘 UIScreenEdgePanGestureRecognizer（UIWindow didMoveToWindow+associated 防重复）
+// + hook _UINavigationInteractiveTransition gestureRecognizerShouldBegin:（禁边缘返回的 App 强制放行）
+// + medium 触觉；cn.back 动作=通知→pop（标准滑动动画）
+static char kCNRelayKey;
+
+static void CNPopTopNav(void) {
+    UIViewController *vc = nil;
+    NSArray *windows = nil;
+    if (@available(iOS 13.0, *)) {
+        NSMutableArray *ws = [NSMutableArray array];
+        for (__kindof UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+            if ([sc isKindOfClass:[UIWindowScene class]]) [ws addObjectsFromArray:[(UIWindowScene *)sc windows]];
+        }
+        windows = ws;
+    } else {
+        windows = UIApplication.sharedApplication.windows;
+    }
+    for (UIWindow *w in windows) {
+        if (!w.isKeyWindow) continue;
+        UIViewController *r = w.rootViewController;
+        while (r.presentedViewController) r = r.presentedViewController;
+        for (int guard = 0; guard < 8; guard++) {
+            if ([r isKindOfClass:NSClassFromString(@"UITabBarController")])
+                r = [(UITabBarController *)r selectedViewController] ?: r;
+            if ([r isKindOfClass:[UINavigationController class]]) { r = [(UINavigationController *)r topViewController]; break; }
+            if (r.presentedViewController) { r = r.presentedViewController; continue; }
+            if (r.navigationController && r.navigationController != r) { r = r.navigationController.topViewController ?: r; break; }
+            break;
+        }
+        if (vc == nil) vc = r;
+    }
+    if (vc.navigationController && vc.navigationController.viewControllers.count > 1) {
+        [vc.navigationController popViewControllerAnimated:YES];
+    }
+}
+
+%group RelayBack
+%hook UIWindow
+- (void)didMoveToWindow {
+    %orig;
+    NSNumber *attached = objc_getAssociatedObject(self, &kCNRelayKey);
+    if (![attached boolValue]) {
+        objc_setAssociatedObject(self, &kCNRelayKey, @YES, OBJC_ASSOCIATION_RETAIN);
+        UIScreenEdgePanGestureRecognizer *g = [[UIScreenEdgePanGestureRecognizer alloc] initWithTarget:self action:@selector(cnRelayEdge:)];
+        g.edges = UIRectEdgeLeft;
+        [self addGestureRecognizer:g];
+    }
+}
+%new
+- (void)cnRelayEdge:(UIScreenEdgePanGestureRecognizer *)g {
+    if (g.state == UIGestureRecognizerStateBegan) {
+        UIImpactFeedbackGenerator *h = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+        [h impactOccurred];
+        CNPopTopNav();
+    }
+}
+%end
+
+%hook _UINavigationInteractiveTransition
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    %orig;
+    return YES; // 强制放行：禁边缘返回的 App 也允许左缘 pop
+}
+%end
+%end
+
+%ctor {
+    %init(_ungrouped);
+    %init(RelayBack);
+    // 动作半边：cn.back 通知 → pop（SB 发，App 收）
+    int tokCN = -1;
+    notify_register_dispatch("cn.triggr.backswipe", &tokCN, dispatch_get_main_queue(), ^(int t) {
+        CNPopTopNav();
+    });
+}
