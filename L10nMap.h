@@ -689,6 +689,20 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"Status Bar Tap Left": @"状态栏左半点按",
     @"Status Bar Tap Right": @"状态栏右半点按",
     @"Status Bar Tap Middle": @"状态栏中点按",
+    @"Add Condition...": @"添加条件…",
+    @"Add Condition…": @"添加条件…",
+    @"Only run if...": @"仅在以下情况运行…",
+    @"Only run if…": @"仅在以下情况运行…",
+    @"SELECTED": @"已选",
+    @"ONLY IF": @"仅当",
+    @"ACTIONS": @"动作",
+    @"Run these actions only in some situations: on a Wi-Fi network, while charging, between times, and more.": @"这些动作只在特定情况下运行：连着 Wi-Fi、充电中、限定时间段等。",
+    @"Mute": @"已静音",
+    @"Unmute": @"响铃",
+    @"Mute / Unmute": @"已静音/响铃",
+    @"Replace Button Actions is on (Options): an assigned press runs instead of the button's own action. Unassigned presses work as usual. With Replace on, the switch's position and the ringer can differ until you flip it back.": @"「取代按键动作」开启时（选项）：已指派的按压取代拨片自身动作；未指派照常。开启取代后，拨片位置和实际铃声状态可能暂时不一致，拨回去即恢复。",
+    @"Replace Button Actions is on (Options): an assigned press runs instead of the button's own action. Unassigned presses work as usual. Press the side button and a volume button together. Up Hold and Down Hold are holding both for half a second; they run alongside iOS, so keep holding and Siri and Emergency SOS appear as usual.": @"「取代按键动作」开启时（选项）：已指派的按压取代按键自身动作；未指派照常。侧键和音量键同时按下。上键/下键长按=同时按住半秒；与 iOS 并行，继续按住仍会唤出 Siri 和紧急 SOS。",
+    @"Replace Button Actions is on (Options): an assigned press runs instead of the button's own action. Unassigned presses work as usual. Up, then Down (and the reverse) are two quick presses; they always run alongside, and the volume ends where it started.": @"「取代按键动作」开启时（选项）：已指派的按压取代按键自身动作；未指派照常。上键后下键（及反向）=快速连按两次；始终与 iOS 并行，音量最终回到起点。",
     };
     });
     return m;
