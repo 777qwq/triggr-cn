@@ -9,7 +9,6 @@
 #import <AltList/ATLApplicationListMultiSelectionController.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <dlfcn.h>
-#import <CoreData/CoreData.h>
 #import <notify.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import <objc/runtime.h>
@@ -236,61 +235,6 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
     [self reloadSpecifiers];
-    // Actra-style app-side config: Settings has no sandbox, so opening this
-    // panel is the moment to read the live shortcuts DB and write a
-    // name->UUID map. SpringBoard reads the map and builds descriptors by
-    // hand — no copy DB, no daemon, no passthrough.
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-    @try {
-        FILE *dfp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
-        #define PSDiag(fmt, ...) do { if (dfp) { fprintf(dfp, "[ps %f] " fmt "\n", [NSDate timeIntervalSinceReferenceDate], ##__VA_ARGS__); fflush(dfp); } } while(0)
-        PSDiag("panel sync start");
-        dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
-        dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
-        Class dbCls = NSClassFromString(@"WFDatabase");
-        if (!dbCls) { PSDiag("panel: no dbCls"); if(dfp) fclose(dfp); return; }
-        id url = ((id(*)(id,SEL,id))objc_msgSend)(objc_getClass("NSURL"), sel_registerName("fileURLWithPath:"), @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite");
-        id store = ((id(*)(id,SEL))objc_msgSend)(objc_getClass("NSPersistentStoreDescription"), sel_registerName("alloc"));
-        store = ((id(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("initWithURL:"), url);
-        if (!store) { PSDiag("panel: store nil"); if(dfp) fclose(dfp); return; }
-        ((void(*)(id,SEL,id))objc_msgSend)(store, sel_registerName("setType:"), @"SQLite");
-        ((void(*)(id,SEL,id,id))objc_msgSend)(store, sel_registerName("setOption:forKey:"), (id)kCFBooleanTrue, @"NSReadOnlyPersistentStoreOption");
-        void *errp = NULL;
-        id db = ((id(*)(id,SEL,id,BOOL,BOOL,void**))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(dbCls, sel_registerName("alloc")), sel_registerName("initWithStoreDescription:runMigrationsIfNecessary:useLockFile:error:"), store, YES, YES, &errp);
-        if (!db) { PSDiag("panel: db nil"); if(dfp) fclose(dfp); return; }
-        id result = ((id(*)(id,SEL))objc_msgSend)(db, sel_registerName("sortedVisibleWorkflowsByName"));
-        id refs = result;
-        if (result && [result respondsToSelector:sel_registerName("descriptors")])
-            refs = ((id(*)(id,SEL))objc_msgSend)(result, sel_registerName("descriptors")); // WFDatabaseResult -> array
-        PSDiag("panel: refs count=%lu", (unsigned long)((NSArray *)refs).count);
-        NSMutableDictionary *map = [NSMutableDictionary dictionary];
-        for (id ref in refs) {
-            NSString *name = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("name"));
-            id ident = ((id(*)(id,SEL))objc_msgSend)(ref, sel_registerName("identifier"));
-            if (![name isKindOfClass:NSString.class] || !ident) continue;
-            id uuid = [ident isKindOfClass:NSUUID.class] ? ((id(*)(id,SEL))objc_msgSend)(ident, sel_registerName("UUIDString")) : ident;
-            if ([uuid isKindOfClass:NSString.class]) map[name] = uuid;
-        }
-        BOOL ok = [map writeToFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist" atomically:YES];
-        PSDiag("panel: map=%lu write=%d", (unsigned long)map.count, ok);
-        // Also refresh the SB-side copy DB (SpringBoard injects it; its own
-        // sandbox EPERMs the live DB — cn2.15). Triggr dir is a real data dir.
-        NSFileManager *fm = NSFileManager.defaultManager;
-        [fm createDirectoryAtPath:@"/var/mobile/Library/Triggr" withIntermediateDirectories:YES attributes:nil error:nil];
-        for (NSString *suffix in @[@"", @"-wal", @"-shm"]) {
-            NSString *src = [@"/var/mobile/Library/Shortcuts/Shortcuts.sqlite" stringByAppendingString:suffix];
-            NSString *dst = [@"/var/mobile/Library/Triggr/Shortcuts.sqlite" stringByAppendingString:suffix];
-            if (![fm fileExistsAtPath:src]) continue;
-            [fm removeItemAtPath:dst error:nil];
-            [fm copyItemAtPath:src toPath:dst error:nil];
-        }
-        PSDiag("panel: copy db done");
-        if (dfp) fclose(dfp);
-    } @catch (NSException *e) {
-        FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
-        if (fp) { NSString *l = [NSString stringWithFormat:@"[ps] panel exc %@\n", e]; fwrite(l.UTF8String,1,l.length,fp); fclose(fp); }
-    }
-    });
 }
 
 // Shown on the right of a trigger row, like Activator. With nothing set in a
