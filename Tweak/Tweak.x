@@ -1013,6 +1013,17 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 if (!dry) ((void (*)(id, SEL, long long, id, id))objc_msgSend)(springBoard, sel, 0, nil, nil);
                 return YES;
             },
+            // cn2.60: WeChat/Alipay QR scanners. weixin://scanqrcode only lands
+            // on the Discover tab (TA-verified dead end); weixin://dl/scan is
+            // WeChat's deep link straight into the scanner view.
+            @"system.wxscan": ^BOOL(BOOL dry) {
+                if (!dry) TGOpenURL(@"weixin://dl/scan");
+                return YES;
+            },
+            @"system.aliscan": ^BOOL(BOOL dry) {
+                if (!dry) TGOpenURL(@"alipays://platformapi/startapp?saId=10000007");
+                return YES;
+            },
             @"media.playpause": ^BOOL(BOOL dry) {
                 id media = TGShared("SBMediaController");
                 SEL sel = @selector(togglePlayPauseForEventSource:);

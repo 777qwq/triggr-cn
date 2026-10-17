@@ -133,7 +133,7 @@ static const TGGroup TGTriggerGroups[] = {
 static const TGItem TGSystemActions[] = {
     {"system.home", "回到主屏幕"}, {"system.switcher", "App 切换器"},
     {"system.lastapp", "上一个应用"}, {"system.quitapp", "退出当前应用"},
-    {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"},
+    {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"}, {"system.wxscan", "微信扫一扫"}, {"system.aliscan", "支付宝扫一扫"},
     {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.back", "返回上级"}, {"system.dismisssiri", "关闭Siri"}, {"system.screenshot", "截屏"},
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
     {"system.vibrate", "振动"}, {"system.nothing", "无操作"},
