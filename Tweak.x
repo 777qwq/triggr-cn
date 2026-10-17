@@ -508,31 +508,12 @@ static void CNRegister(void) {
 
     // 返回上级（cn1.7 路线：AutoTouch Touch 类合成边缘左滑；无则 triggrd 通知兜底）
     reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
-        dispatch_async(dispatch_get_main_queue(), ^{
+        // ⚠️ EventSimulate 有内部锁，主线程同步调用会死锁（cn1.10 实锤教训）。
+        // 整个合成放后台队列；无锁的 _WKTouchEventGenerator(IOHID) 优先。
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             @try {
                 // Engine discovered on-device: EventSimulate (AutoTouch/ATTweak) —
                 // init / touchDown:atX:andY: / touchMove:atX:andY: / touchUp:atX:andY:.
-                Class es = objc_getClass("EventSimulate");
-                if (es && [es instancesRespondToSelector:@selector(touchDown:atX:andY:)]) {
-                    id sim = [[es alloc] init];
-                    if (sim) {
-                        CGRect scr = [UIScreen mainScreen].bounds;
-                        double y = scr.size.height / 2;
-                        double x0 = 2.0, x1 = scr.size.width * 0.45;
-                        void (*down)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                        void (*move)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                        void (*up)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                        CNLog(@"back: EventSimulate swipe");
-                        down(sim, @selector(touchDown:atX:andY:), 2, x0, y);
-                        int steps = 12;
-                        for (int i = 1; i <= steps; i++) {
-                            move(sim, @selector(touchMove:atX:andY:), 2, x0 + (x1-x0)*i/steps, y);
-                            usleep(16000);
-                        }
-                        up(sim, @selector(touchUp:atX:andY:), 2, x1, y);
-                        return;
-                    }
-                }
                 // Fallback: WebKit's IOHID generator (present in SB via WebKit).
                 Class wk = objc_getClass("_WKTouchEventGenerator");
                 if (wk && [wk instancesRespondToSelector:@selector(touchDownAtPoints:touchCount:)]) {
@@ -557,6 +538,27 @@ static void CNRegister(void) {
                         m2(gen, move2, pts, steps+1, 0.18);
                         void (*u2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
                         u2(gen, up2, @[pts[steps]], 1);
+                        return;
+                    }
+                }
+                Class es = objc_getClass("EventSimulate");
+                if (es && [es instancesRespondToSelector:@selector(touchDown:atX:andY:)]) {
+                    id sim = [[es alloc] init];
+                    if (sim) {
+                        CGRect scr = [UIScreen mainScreen].bounds;
+                        double y = scr.size.height / 2;
+                        double x0 = 2.0, x1 = scr.size.width * 0.45;
+                        void (*down)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                        void (*move)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                        void (*up)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                        CNLog(@"back: EventSimulate swipe");
+                        down(sim, @selector(touchDown:atX:andY:), 2, x0, y);
+                        int steps = 12;
+                        for (int i = 1; i <= steps; i++) {
+                            move(sim, @selector(touchMove:atX:andY:), 2, x0 + (x1-x0)*i/steps, y);
+                            usleep(16000);
+                        }
+                        up(sim, @selector(touchUp:atX:andY:), 2, x1, y);
                         return;
                     }
                 }
