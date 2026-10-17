@@ -370,7 +370,7 @@ static void TriggrExtInit(void) {
         @try {
             if ([NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) fclose(fopen("/var/mobile/Library/Triggr/cn_ext.log", "w")); // fresh per boot
             Class tg = objc_getClass("TGTriggr");
-            CNLog(@"ctor: cn1.36 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            CNLog(@"ctor: cn1.37 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
             // Relay pop half: in apps, listen for the back notify and pop nav.
@@ -451,10 +451,18 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
         if ([fm fileExistsAtPath:s]) [fm copyItemAtPath:s toPath:d error:&cperr];
     }
     CNLog(@"shortcut db: src=%d err=%@", [fm fileExistsAtPath:src], cperr);
-    for (NSString *dir in @[@"/var/mobile/Library/Shortcuts"]) {
-        NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
-        CNLog(@"shortcut dir %@ → %@", dir, files ?: @"nil");
+    // 校准：SB 对 /var/mobile/Library 的可见性
+    NSError *derr = nil;
+    NSArray *libDirs = [fm contentsOfDirectoryAtPath:@"/var/mobile/Library" error:&derr];
+    CNLog(@"library dir readable=%@ count=%lu err=%@", libDirs ? @"YES" : @"NO", (unsigned long)libDirs.count, derr);
+    if (libDirs) {
+        NSMutableArray *hits = [NSMutableArray array];
+        for (NSString *d in libDirs) if ([d localizedCaseInsensitiveContainsString:@"shortcut"]) [hits addObject:d];
+        CNLog(@"shortcut-like dirs: %@", hits);
     }
+    CNLog(@"preferences dir exists=%d", [fm fileExistsAtPath:@"/var/mobile/Library/Preferences"]);
+    NSArray *files = [fm contentsOfDirectoryAtPath:@"/var/mobile/Library/Shortcuts" error:&derr];
+    CNLog(@"shortcut dir → %@ err=%@", files ?: @"nil", derr);
     for (NSString *g in [fm contentsOfDirectoryAtPath:@"/private/var/mobile/Containers/Shared/AppGroup" error:nil]) {
         NSString *base = [@"/private/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:g];
         NSDictionary *md = [NSDictionary dictionaryWithContentsOfFile:[base stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"]];
