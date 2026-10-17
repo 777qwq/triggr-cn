@@ -70,6 +70,12 @@ static NSString *L10nXform(NSString *s) {
 
 %hook UILabel
 - (void)setText:(NSString *)text {
+    if ([NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"] && text.length > 1 && text.length < 64) {
+        static NSRegularExpression *probe;
+        static dispatch_once_t onceP;
+        dispatch_once(&onceP, ^{ probe = [[NSRegularExpression alloc] initWithPattern:@"^(Volume|Spotlight|Screen|Power|Lock|Siri|Mute|Ringer|Wallet|Camera|Flashlight|Keep)" options:0 error:nil]; });
+        if ([probe firstMatchInString:text options:0 range:NSMakeRange(0, text.length)]) CNLog(@"banner probe UILabel(%@): %@", self.class, text);
+    }
     %orig(L10nXform(text));
 }
 - (void)setAttributedText:(NSAttributedString *)text {
@@ -438,9 +444,22 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
         if ([fm fileExistsAtPath:s]) [fm copyItemAtPath:s toPath:d error:&cperr];
     }
     CNLog(@"shortcut db: src=%d err=%@", [fm fileExistsAtPath:src], cperr);
-    for (NSString *dir in @[@"/var/mobile/Library/Shortcuts", @"/var/jb/var/mobile/Library/Shortcuts"]) {
+    for (NSString *dir in @[@"/var/mobile/Library/Shortcuts"]) {
         NSArray *files = [fm contentsOfDirectoryAtPath:dir error:nil];
         CNLog(@"shortcut dir %@ → %@", dir, files ?: @"nil");
+    }
+    for (NSString *g in [fm contentsOfDirectoryAtPath:@"/private/var/mobile/Containers/Shared/AppGroup" error:nil]) {
+        NSString *base = [@"/private/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:g];
+        NSDictionary *md = [NSDictionary dictionaryWithContentsOfFile:[base stringByAppendingPathComponent:@".com.apple.mobile_container_manager.metadata.plist"]];
+        if ([[md objectForKey:@"MCMMetadataIdentifier"] isEqualToString:@"group.com.apple.shortcuts"]) {
+            CNLog(@"shortcuts appgroup found: %@", g);
+            NSString *db = [base stringByAppendingPathComponent:@"Shortcuts.sqlite"];
+            if ([fm fileExistsAtPath:db]) {
+                [fm removeItemAtPath:dst error:nil];
+                NSError *e2 = nil; [fm copyItemAtPath:db toPath:dst error:&e2];
+                CNLog(@"shortcuts appgroup db copy: %@", e2 ?: @"ok");
+            }
+        }
     }
     const char *paths[] = { dst.fileSystemRepresentation, src.fileSystemRepresentation, NULL };
     for (int i = 0; paths[i]; i++) {
@@ -625,35 +644,109 @@ static void CNRegister(void) {
 %end
 %end
 
-static void CNPopTopNav(void) {
-    UIViewController *vc = nil;
-    NSArray *windows = nil;
-    if (@available(iOS 13.0, *)) {
-        NSMutableArray *ws = [NSMutableArray array];
-        for (__kindof UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
-            if ([sc isKindOfClass:[UIWindowScene class]]) [ws addObjectsFromArray:[(UIWindowScene *)sc windows]];
+// ---- 返回上级：系统原生返回（辅助功能逃逸）+ 递归 pop 兜底 ----
+static IMP CNVCBaseEscapeImp(void) {
+    static IMP imp;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ imp = class_getMethodImplementation([UIViewController class], @selector(accessibilityPerformEscape)); });
+    return imp;
+}
+
+// 深度优先找第一个“真实现了”逃逸的元素（跳过 UIViewController 基类默认实现）
+static BOOL CNEscapeSearch(UIViewController *vc, int depth) {
+    if (!vc || depth > 12) return NO;
+    if (vc.presentedViewController && CNEscapeSearch(vc.presentedViewController, depth+1)) return YES;
+    SEL sel = @selector(accessibilityPerformEscape);
+    if ([vc respondsToSelector:sel] && class_getMethodImplementation([vc class], sel) != CNVCBaseEscapeImp()) {
+        BOOL r = ((BOOL (*)(id, SEL))objc_msgSend)(vc, sel);
+        if (r) return YES;
+    }
+    for (UIViewController *child in vc.childViewControllers)
+        if (CNEscapeSearch(child, depth+1)) return YES;
+    return NO;
+}
+
+static BOOL CNBackSearch(UIViewController *vc, int depth) {
+    if (!vc || depth > 12) return NO;
+    if (vc.presentedViewController && CNBackSearch(vc.presentedViewController, depth+1)) return YES;
+    for (UIViewController *child in vc.childViewControllers)
+        if (CNBackSearch(child, depth+1)) return YES;
+    UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
+    if (nav && nav.viewControllers.count > 1 && nav.topViewController == vc) {
+        [nav popViewControllerAnimated:YES]; // 标准滑动动画（假 pan 驱动过渡被系统无视，cn1.48 实证）
+        return YES;
+    }
+    if (vc.presentingViewController && vc == vc.presentedViewController) {
+        [vc dismissViewControllerAnimated:YES completion:nil];
+        return YES;
+    }
+    return NO;
+}
+
+// 全树扫描：任意可见且可弹的导航栈（严格遍历失败后的宽容路径）
+static UINavigationController *CNPoppableNav(UIViewController *vc, int depth) {
+    if (!vc || depth > 12) return nil;
+    if (vc.presentedViewController) {
+        UINavigationController *n = CNPoppableNav(vc.presentedViewController, depth+1);
+        if (n) return n;
+    }
+    for (UIViewController *child in vc.childViewControllers) {
+        UINavigationController *n = CNPoppableNav(child, depth+1);
+        if (n) return n;
+    }
+    UINavigationController *nav = [vc isKindOfClass:[UINavigationController class]] ? (UINavigationController *)vc : vc.navigationController;
+    if (nav && nav.viewControllers.count > 1 && nav.topViewController.viewIfLoaded.window && nav.topViewController == vc)
+        return nav;
+    if (nav && nav.viewControllers.count > 1 && nav.topViewController.viewIfLoaded.window)
+        return nav;
+    return nil;
+}
+
+static void CNRelayDoBack(void) {
+    // 第一优先：系统原生返回（逃逸元素搜索）
+    BOOL done = NO;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        if (ws.activationState != UISceneActivationStateForegroundActive) continue;
+        for (UIWindow *w in ws.windows) {
+            if (!w.isKeyWindow || !w.rootViewController) continue;
+            if (CNEscapeSearch(w.rootViewController, 0)) { done = YES; break; }
         }
-        windows = ws;
-    } else {
-        windows = UIApplication.sharedApplication.windows;
+        if (done) break;
     }
-    for (UIWindow *w in windows) {
-        if (!w.isKeyWindow) continue;
-        UIViewController *r = w.rootViewController;
-        while (r.presentedViewController) r = r.presentedViewController;
-        for (int guard = 0; guard < 8; guard++) {
-            if ([r isKindOfClass:NSClassFromString(@"UITabBarController")])
-                r = [(UITabBarController *)r selectedViewController] ?: r;
-            if ([r isKindOfClass:[UINavigationController class]]) { r = [(UINavigationController *)r topViewController]; break; }
-            if (r.presentedViewController) { r = r.presentedViewController; continue; }
-            if (r.navigationController && r.navigationController != r) { r = r.navigationController.topViewController ?: r; break; }
-            break;
+    if (done) return;
+    // 兜底：递归 pop 标准导航栈
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        UIWindowScene *ws = (UIWindowScene *)scene;
+        if (ws.activationState != UISceneActivationStateForegroundActive) continue;
+        for (UIWindow *w in ws.windows) {
+            if (!w.isKeyWindow || !w.rootViewController) continue;
+            if (CNBackSearch(w.rootViewController, 0)) { done = YES; break; }
         }
-        if (vc == nil) vc = r;
+        if (done) break;
     }
-    if (vc.navigationController && vc.navigationController.viewControllers.count > 1) {
-        [vc.navigationController popViewControllerAnimated:YES];
+    // 兜底二：全树扫描宽容路径
+    if (!done) {
+        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+            UIWindowScene *ws = (UIWindowScene *)scene;
+            if (ws.activationState != UISceneActivationStateForegroundActive) continue;
+            for (UIWindow *w in ws.windows) {
+                if (!w.rootViewController) continue;
+                UINavigationController *nav = CNPoppableNav(w.rootViewController, 0);
+                if (nav) {
+                    [nav popViewControllerAnimated:YES];
+                    done = YES;
+                    break;
+                }
+            }
+            if (done) break;
+        }
     }
+    if (done) notify_post("cn.triggr.back.ack"); // 主流水线已处理，告知 Tweak 免 Lua 兜底
+}
 }
 
 %ctor {
