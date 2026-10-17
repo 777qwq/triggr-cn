@@ -670,6 +670,20 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"Replace Button Actions is on (Options): an assigned press runs instead of the button's own action. Unassigned presses work as usual. On Face ID devices an assigned Double or Triple Press replaces Wallet / Apple Pay or the Accessibility Shortcut; unassigned, they work as usual.": @"「取代按键动作」开启时（选项）：已指派的按压会取代按键自身动作；未指派的照常工作。Face ID 设备上，已指派的双击/三击会取代钱包 / Apple Pay 或辅助功能快捷键；未指派则照常。",
     @"On: an assigned press runs instead of the button's own action (going Home, the volume step, locking, muting...). To keep that too, add the matching action, like Sleep for the side button. Off: everything runs alongside the buttons and the mute switch. Waking, Emergency SOS and force restart always work as usual.": @"开启：已指派的按压取代按键自身动作（回主屏幕、音量步进、锁定、静音…）。若两者都要，添加对应动作即可（如侧边键的灭屏）。关闭：所有动作与按键、静音拨片并行。唤醒、紧急 SOS 和强制重启始终照常。",
     @"Lets other tweaks and the triggr command run your triggers, menus and built-in actions (never shell commands, URLs or apps directly). Any app could ask, so leave it off unless you use it. \\\"triggr list\\\" shows the ids.": @"允许其他插件和 triggr 命令运行你的触发器、菜单和内置动作（绝不直接执行 shell 命令、URL 或 App）。任何 App 都可能请求，不用就保持关闭。\\\"triggr list\\\" 可查看 id。",
+    @"Volume Buttons Up Press": @"音量键上按",
+    @"Volume Buttons Down Press": @"音量键下按",
+    @"Volume Buttons Up Hold": @"音量键上长按",
+    @"Volume Buttons Down Hold": @"音量键下长按",
+    @"Volume Buttons Up Press (experimental)": @"音量键上按（实验）",
+    @"Screen Edges Slide In from Left": @"屏幕边缘自左侧滑入",
+    @"Screen Edges Slide In from Right": @"屏幕边缘自右侧滑入",
+    @"Screen Edges Two-Finger Slide In from Left": @"屏幕边缘双指自左侧滑入",
+    @"Screen Edges Two-Finger Slide In from Right": @"屏幕边缘双指自右侧滑入",
+    @"Screen Edges Swipe Up from Bottom Left": @"屏幕边缘左下上滑",
+    @"Screen Edges Swipe Up from Bottom Middle": @"屏幕边缘中下上滑",
+    @"Screen Edges Swipe Up from Bottom Right": @"屏幕边缘右下上滑",
+    @"ANYWHERE": @"任意位置",
+    @"Slide in from the very edge of the screen, over apps, on the Home Screen and the Lock Screen. One-finger Slide In from Left takes the place of the swipe back many apps use; the two-finger versions (as in Activator) leave it alone. Swipe Up from Bottom uses the left, middle or right third of the bottom edge; while one is assigned, that part of the edge no longer opens Control Center or goes Home (portrait only).": @"从屏幕最边缘滑入，横跨 App、主屏幕和锁定屏幕。单指自左侧滑入会接管多数 App 的返回滑动；双指版本（如 Activator）不接管。自底部上滑使用底边左、中、右三分之一；只要指派了其中一个，对应那部分底边就不再打开控制中心或回主屏幕（仅竖屏）。",
     };
     });
     return m;
