@@ -5,6 +5,7 @@ TriggrL10n_FILES = Tweak.x
 TriggrL10n_CFLAGS = -fobjc-arc
 ARCHS = arm64 arm64e
 TriggrL10n_FRAMEWORKS = UIKit
+TriggrL10n_LDFLAGS = -lsqlite3
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 

@@ -349,6 +349,38 @@ static void TriggrExtInit(void) {
     });
 }
 
+#pragma mark - shortcut names from Shortcuts.sqlite (read-only)
+
+#import <sqlite3.h>
+#import <notify.h>
+
+static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
+    NSMutableArray *names = [NSMutableArray array];
+    const char *paths[] = {
+        "/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
+        "/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
+        NULL
+    };
+    for (int i = 0; paths[i]; i++) {
+        sqlite3 *db = NULL;
+        if (sqlite3_open_v2(paths[i], &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { if (db) sqlite3_close(db); continue; }
+        sqlite3_stmt *st = NULL;
+        if (sqlite3_prepare_v2(db, "SELECT ZNAME FROM ZSHORTCUT WHERE ZNAME IS NOT NULL ORDER BY ZNAME", -1, &st, NULL) == SQLITE_OK) {
+            while (sqlite3_step(st) == SQLITE_ROW) {
+                const unsigned char *txt = sqlite3_column_text(st, 0);
+                if (txt) {
+                    NSString *n = @( (const char *)txt );
+                    if (n.length && ![names containsObject:n] && names.count < 60) [names addObject:n];
+                }
+            }
+            sqlite3_finalize(st);
+        }
+        sqlite3_close(db);
+        if (names.count) break;
+    }
+    return names;
+}
+
 #pragma mark - Registration (BegoneCIA contract)
 
 static void CNRegister(void) {
@@ -397,10 +429,43 @@ static void CNRegister(void) {
         }
     });
 
+    // 返回上级（cn1.7 路线：AutoTouch Touch 类合成边缘左滑；无则 triggrd 通知兜底）
+    reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            Class touch = objc_getClass("Touch");
+            if (touch) {
+                CGRect scr = [UIScreen mainScreen].bounds;
+                double scale = [UIScreen mainScreen].scale;
+                double y = scr.size.height / 2;
+                double x0 = 1.0, x1 = scr.size.width * 0.45;
+                void (*down)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                void (*move)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                void (*up)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                // Touch class takes pixel coords (点数×scale, cn 实测结论)
+                down(touch, @selector(touchDown:x:y:), 2, x0*scale, y*scale);
+                int steps = 8;
+                for (int i = 1; i <= steps; i++) {
+                    move(touch, @selector(touchMove:x:y:), 2, (x0 + (x1-x0)*i/steps)*scale, y*scale);
+                    usleep(16000);
+                }
+                up(touch, @selector(touchUp:x:y:), 2, x1*scale, y*scale);
+            } else {
+                notify_post("cn.triggr.backswipe");
+            }
+        });
+    });
+
     // 修正版内置动作（1.x 验证实现；2.0 闭源内部同款在 iOS16 有 bug）
     reg(@"cn.volumeup", @"音量增（补丁）", @"speaker.wave.2", ^void(id ctx) { CNVolumeStep(YES); });
     reg(@"cn.voldown", @"音量减（补丁）", @"speaker.wave.1", ^void(id ctx) { CNVolumeStep(NO); });
     reg(@"cn.screenrecord", @"屏幕录制（补丁）", @"record.circle", ^void(id ctx) { CNScreenRecord(); });
+
+    // 快捷指令（自动枚举 Shortcuts.sqlite，SpringCuts 后台执行）
+    for (NSString *n in CNShortcutNamesFromDB()) {
+        reg([@"cn.shortcut." stringByAppendingString:n], [@"快捷指令：" stringByAppendingString:n], @"square.on.square.intersection.dashed", ^void(id ctx) {
+            CNRunShortcut(n);
+        });
+    }
 
     // 快捷指令（配置文件驱动：/var/mobile/Library/Triggr/cn_shortcuts.plist 名字数组）
     NSArray *shortcuts = [NSArray arrayWithContentsOfFile:@"/var/mobile/Library/Triggr/cn_shortcuts.plist"];
