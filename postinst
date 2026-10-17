@@ -1,0 +1,6 @@
+#!/bin/bash
+# Expose the dylib to Triggr's own extension loader (/Library/Triggr/Extensions).
+if [ -d /var/jb ]; then JB=/var/jb; else JB=""; fi
+mkdir -p "$JB/Library/Triggr/Extensions"
+cp -f "$JB/Library/MobileSubstrate/DynamicLibraries/TriggrL10n.dylib" "$JB/Library/Triggr/Extensions/TriggrL10n.dylib" 2>/dev/null || true
+exit 0
