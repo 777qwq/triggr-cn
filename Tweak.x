@@ -705,7 +705,8 @@ static UINavigationController *CNPoppableNav(UIViewController *vc, int depth) {
 static void CNRelayDoBack(void) {
     // 第一优先：系统原生返回（逃逸元素搜索）
     BOOL done = NO;
-    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+    if (@available(iOS 13.0, *)) {
+    for (__kindof UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
         if (![scene isKindOfClass:[UIWindowScene class]]) continue;
         UIWindowScene *ws = (UIWindowScene *)scene;
         if (ws.activationState != UISceneActivationStateForegroundActive) continue;
@@ -744,6 +745,7 @@ static void CNRelayDoBack(void) {
             }
             if (done) break;
         }
+    }
     }
     if (done) notify_post("cn.triggr.back.ack"); // 主流水线已处理，告知 Tweak 免 Lua 兜底
 }
