@@ -514,8 +514,8 @@ static void CNRegister(void) {
 
     // 返回上级（cn1.7 路线：AutoTouch Touch 类合成边缘左滑；无则 triggrd 通知兜底）
     reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
-        CNLog(@"back: post official relay notify");
-        notify_post("com.johndie.triggr/back"); // 2.0 自带 TriggrRelay 全 App 处理（三段式：逃逸/递归 pop/全树兜底）
+        CNLog(@"back: post notify (own relay pop)");
+        notify_post("cn.triggr.backswipe");
     });
 
     // 修正版内置动作（1.x 验证实现；2.0 闭源内部同款在 iOS16 有 bug）
@@ -564,7 +564,44 @@ static void CNRegister(void) {
 %end
 %end
 
+static void CNPopTopNav(void) {
+    UIViewController *vc = nil;
+    NSArray *windows = nil;
+    if (@available(iOS 13.0, *)) {
+        NSMutableArray *ws = [NSMutableArray array];
+        for (__kindof UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+            if ([sc isKindOfClass:[UIWindowScene class]]) [ws addObjectsFromArray:[(UIWindowScene *)sc windows]];
+        }
+        windows = ws;
+    } else {
+        windows = UIApplication.sharedApplication.windows;
+    }
+    for (UIWindow *w in windows) {
+        if (!w.isKeyWindow) continue;
+        UIViewController *r = w.rootViewController;
+        while (r.presentedViewController) r = r.presentedViewController;
+        for (int guard = 0; guard < 8; guard++) {
+            if ([r isKindOfClass:NSClassFromString(@"UITabBarController")])
+                r = [(UITabBarController *)r selectedViewController] ?: r;
+            if ([r isKindOfClass:[UINavigationController class]]) { r = [(UINavigationController *)r topViewController]; break; }
+            if (r.presentedViewController) { r = r.presentedViewController; continue; }
+            if (r.navigationController && r.navigationController != r) { r = r.navigationController.topViewController ?: r; break; }
+            break;
+        }
+        if (vc == nil) vc = r;
+    }
+    if (vc.navigationController && vc.navigationController.viewControllers.count > 1) {
+        [vc.navigationController popViewControllerAnimated:YES];
+    }
+}
+
 %ctor {
     %init(_ungrouped);
     %init(EdgeBack);
+    if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) {
+        int tokCN = -1;
+        notify_register_dispatch("cn.triggr.backswipe", &tokCN, dispatch_get_main_queue(), ^(int t) {
+            CNPopTopNav();
+        });
+    }
 }
