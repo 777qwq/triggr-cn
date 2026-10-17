@@ -337,9 +337,12 @@ static void CNRegister(void); // fwd (constructor moved with helpers)
 
 // ===== libtriggr Extensions-dir contract (host dlopens this dylib) =====
 static id CNHost = nil;
+static NSMutableArray<id> *CNRegistered = nil;
 BOOL TGLibCanRun(void) { return YES; }
 void TGLibSetHost(id host) { CNHost = host; }
-NSArray *TGLibTriggers(void) { return nil; }
+// Host dlsym's THIS symbol on the extension dylib; must hand back the
+// registered action objects, not nil (nil broke the whole chain -> "失效").
+NSArray *TGLibTriggers(void) { return CNRegistered; }
 
 
 __attribute__((constructor))
@@ -440,6 +443,8 @@ static void CNRegister(void) {
         if (symbol && [ai respondsToSelector:@selector(setSymbolName:)]) [ai performSelector:@selector(setSymbolName:) withObject:symbol];
         if (![shared respondsToSelector:@selector(registerAction:handler:)]) { CNLog(@"reg fail: host lacks registerAction:handler:"); return; }
         [shared performSelector:@selector(registerAction:handler:) withObject:ai withObject:handler];
+        if (!CNRegistered) CNRegistered = [NSMutableArray new];
+        [CNRegistered addObject:ai];
         } @catch (NSException *e) { CNLog(@"reg exception %@: %@", ident, e); }
     };
 
