@@ -356,11 +356,17 @@ static void TriggrExtInit(void) {
 
 static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     NSMutableArray *names = [NSMutableArray array];
-    const char *paths[] = {
-        "/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
-        "/var/jb/var/mobile/Library/Shortcuts/Shortcuts.sqlite",
-        NULL
-    };
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *src = @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite";
+    NSString *dst = @"/var/mobile/Library/Triggr/sc.db";
+    // cn2.17 pattern: SB cannot reliably read the live WAL DB; copy + wal/shm first.
+    for (NSString *ext in @[@"", @"-wal", @"-shm"]) {
+        NSString *s = [src stringByAppendingString:ext];
+        NSString *d = [dst stringByAppendingString:ext];
+        [fm removeItemAtPath:d error:nil];
+        if ([fm fileExistsAtPath:s]) [fm copyItemAtPath:s toPath:d error:nil];
+    }
+    const char *paths[] = { dst.fileSystemRepresentation, src.fileSystemRepresentation, NULL };
     for (int i = 0; paths[i]; i++) {
         sqlite3 *db = NULL;
         if (sqlite3_open_v2(paths[i], &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { if (db) sqlite3_close(db); continue; }
@@ -374,10 +380,13 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
                 }
             }
             sqlite3_finalize(st);
+        } else {
+            CNLog(@"shortcut db: prepare failed on %s: %s", paths[i], sqlite3_errmsg(db));
         }
         sqlite3_close(db);
         if (names.count) break;
     }
+    CNLog(@"shortcut db: %u names", (unsigned)names.count);
     return names;
 }
 
@@ -454,6 +463,24 @@ static void CNRegister(void) {
             }
         });
     });
+
+    // 密码解锁（Passcode from /var/mobile/Library/Triggr/cn_passcode 纯文本）
+    {
+        NSString *pw = [NSString stringWithContentsOfFile:@"/var/mobile/Library/Triggr/cn_passcode" encoding:NSUTF8StringEncoding error:nil];
+        pw = [pw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (pw.length) {
+            reg(@"cn.unlock", @"密码解锁", @"lock.open", ^void(id ctx) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    id mgr = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("SBLockScreenManager"), @selector(sharedInstance));
+                    if (!mgr) return;
+                    if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
+                        ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
+                    if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)])
+                        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), pw, YES);
+                });
+            });
+        } else CNLog(@"unlock: no passcode file, not registered");
+    }
 
     // 修正版内置动作（1.x 验证实现；2.0 闭源内部同款在 iOS16 有 bug）
     reg(@"cn.volumeup", @"音量增（补丁）", @"speaker.wave.2", ^void(id ctx) { CNVolumeStep(YES); });
