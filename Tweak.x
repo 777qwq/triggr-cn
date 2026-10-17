@@ -563,3 +563,8 @@ static void CNRegister(void) {
 }
 %end
 %end
+
+%ctor {
+    %init(_ungrouped);
+    %init(EdgeBack);
+}
