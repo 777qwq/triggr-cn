@@ -524,21 +524,21 @@ static void CNRegister(void) {
                         CGRect scr = [UIScreen mainScreen].bounds;
                         double y = scr.size.height / 2;
                         double x0 = 2.0, x1 = scr.size.width * 0.45;
-                        NSMutableArray *pts = [NSMutableArray array];
+                        // ⚠️ API takes CGPoint* C arrays — NSArray here = SEGV (cn1.19 实锤)
                         int steps = 12;
+                        CGPoint pts[13];
                         for (int i = 0; i <= steps; i++) {
-                            double xx = x0 + (x1-x0)*i/steps;
-                            [pts addObject:@[@(xx), @(y)]];
+                            pts[i] = CGPointMake(x0 + (x1-x0)*i/steps, y);
                         }
-                        void (*d2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
-                        void (*m2)(id,SEL,NSArray *,int,double) = (void (*)(id,SEL,NSArray *,int,double))objc_msgSend;
-                        void (*u2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
+                        void (*d2)(id,SEL,CGPoint *,unsigned long) = (void (*)(id,SEL,CGPoint *,unsigned long))objc_msgSend;
+                        void (*m2)(id,SEL,CGPoint *,unsigned long,double) = (void (*)(id,SEL,CGPoint *,unsigned long,double))objc_msgSend;
+                        void (*u2)(id,SEL,CGPoint *,unsigned long) = (void (*)(id,SEL,CGPoint *,unsigned long))objc_msgSend;
                         CNLog(@"back: wk down");
-                        d2(gen, @selector(touchDownAtPoints:touchCount:), @[pts[0]], 1);
+                        d2(gen, @selector(touchDownAtPoints:touchCount:), &pts[0], 1);
                         CNLog(@"back: wk move");
                         m2(gen, @selector(moveToPoints:touchCount:duration:), pts, steps+1, 0.18);
                         CNLog(@"back: wk up");
-                        u2(gen, @selector(liftUpAtPoints:touchCount:), @[pts[steps]], 1);
+                        u2(gen, @selector(liftUpAtPoints:touchCount:), &pts[steps], 1);
                         CNLog(@"back: wk done");
                         return;
                     }
