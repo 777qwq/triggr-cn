@@ -427,7 +427,6 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
         sqlite3 *db = NULL;
         if (sqlite3_open_v2(paths[i], &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { if (db) sqlite3_close(db); continue; }
         sqlite3_stmt *st = NULL;
-        BOOL loggedTables = NO;
         sqlite3_stmt *tt = NULL;
         if (sqlite3_prepare_v2(db, "SELECT name FROM sqlite_master WHERE type='table'", -1, &tt, NULL) == SQLITE_OK) {
             NSMutableArray *tn = [NSMutableArray array];
@@ -437,7 +436,6 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
             }
             sqlite3_finalize(tt);
             CNLog(@"shortcut db tables: %@", tn);
-            loggedTables = YES;
         }
         if (sqlite3_prepare_v2(db, "SELECT ZNAME FROM ZSHORTCUT WHERE ZNAME IS NOT NULL ORDER BY ZNAME", -1, &st, NULL) == SQLITE_OK) {
             while (sqlite3_step(st) == SQLITE_ROW) {
