@@ -1107,8 +1107,6 @@ static BOOL TGOpenApp(NSString *identifier, BOOL dryRun) {
 // registers its own at runtime, Info.plist has none), static ones under info.
 // Dispatch is SBIconView's class method, SpringBoard main thread only.
 // Search one snapshot of the app's shortcut items (dynamic first, then static).
-// Always appends a quickact.log line — WeChat registers its items dynamically
-// and the pool grows while the app runs, so the log doubles as live evidence.
 static id TGQuickActionSearch(id app, NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints) {
     NSMutableArray *pool = [NSMutableArray array];
     SEL dynSel = NSSelectorFromString(@"dynamicApplicationShortcutItems");
@@ -1150,14 +1148,6 @@ static id TGQuickActionSearch(id app, NSString *bundle, NSString *exactType, NSA
             if (found) break;
         }
     }
-    NSMutableString *dump = [NSMutableString stringWithFormat:@"[qa %f] %@ pool=%lu found=%d\n", [NSDate timeIntervalSinceReferenceDate], bundle, (unsigned long)pool.count, found != nil];
-    for (id item in pool) {
-        NSString *ti = [item respondsToSelector:titleSel] ? [item localizedTitle] : nil;
-        NSString *ty = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
-        [dump appendFormat:@"  title=%@ type=%@\n", [ti isKindOfClass:NSString.class] ? ti : @"?", [ty isKindOfClass:NSString.class] ? ty : @"?"];
-    }
-    FILE *qfp = fopen("/var/mobile/Library/Triggr/quickact.log", "a");
-    if (qfp) { fwrite(dump.UTF8String, 1, dump.length, qfp); fclose(qfp); }
     return found;
 }
 
