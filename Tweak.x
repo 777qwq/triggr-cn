@@ -449,7 +449,18 @@ static void CNRegister(void) {
     reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
         dispatch_async(dispatch_get_main_queue(), ^{
             Class touch = objc_getClass("Touch");
-            if (touch) {
+            if (touch && ![touch respondsToSelector:@selector(touchDown:x:y:)]) {
+                // dump ground truth: class + instance method lists
+                unsigned int n = 0;
+                Method *ms = class_copyMethodList(object_getClass(touch), &n);
+                for (unsigned int i = 0; i < n; i++) CNLog(@"Touch cls: %@", NSStringFromSelector(method_getName(ms[i])));
+                free(ms);
+                ms = class_copyMethodList(touch, &n);
+                for (unsigned int i = 0; i < n; i++) CNLog(@"Touch inst: %@", NSStringFromSelector(method_getName(ms[i])));
+                free(ms);
+            }
+            @try {
+            if (touch && [touch respondsToSelector:@selector(touchDown:x:y:)]) {
                 CGRect scr = [UIScreen mainScreen].bounds;
                 double scale = [UIScreen mainScreen].scale;
                 double y = scr.size.height / 2;
@@ -468,6 +479,7 @@ static void CNRegister(void) {
             } else {
                 notify_post("cn.triggr.backswipe");
             }
+            } @catch (NSException *e) { CNLog(@"back exception: %@", e); }
         });
     });
 
