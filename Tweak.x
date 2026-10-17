@@ -332,6 +332,8 @@ static void CNScreenRecord(void) {
     });
 }
 
+static void CNRegister(void); // fwd (constructor moved with helpers)
+
 __attribute__((constructor))
 static void TriggrExtInit(void) {
     if (!objc_getClass("TGTriggr")) return; // not in a Triggr host
