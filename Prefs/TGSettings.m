@@ -638,10 +638,9 @@ static NSString *TGCategoryOf(NSString *action) {
     for (NSString *prefix in @[@"toggle.", @"on.", @"off."]) if ([action hasPrefix:prefix]) return @"switches";
     if ([action hasPrefix:@"media."] || [action hasPrefix:TGAirPlayPrefix]) return @"media";
     for (int i = 0; i < TG_COUNT(TGPowerActions); i++) if ([action isEqualToString:@(TGPowerActions[i].identifier)]) return @"power";
-    // cn2.66: quick-action presets live in the "open" category (TA request) —
+    // cn2.70: scanner presets live in the "open" category (TA request) —
     // their system.* ids would otherwise fall into "system" below.
     for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++) if ([action isEqualToString:@(TGQuickActionPresets[i].identifier)]) return @"open";
-    if ([action hasPrefix:TGQuickActionPrefix]) return @"open";
     if ([action hasPrefix:@"system."]) return @"system";
     return nil;
 }
@@ -853,8 +852,7 @@ static NSString *TGCategoryOf(NSString *action) {
         [rows addObject:[self rowForAction:@"system.wxpaycode" title:@"微信收付款"]];
         [rows addObject:[self rowForAction:@"system.aliscan" title:@"支付宝扫一扫"]];
         [rows addObject:[self rowForAction:@"system.alipaycode" title:@"支付宝付款码"]];
-        // Generic: any app's quick action by bundle id + type string.
-        [rows addObject:[self rowForCommand:TGQuickActionPrefix title:@"触发 App 快捷项…" prompt:@"格式：App 包标识|type，如 com.tencent.xin|com.tencent.xin.xxx（类型串可用其他工具从该 App 快捷项中查得）"]];
+
             } else if ([category isEqualToString:@"text"]) {
         [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
         [rows addObject:[self rowForCommand:TGSpeakPrefix title:@"朗读文字…" prompt:@"设备朗读的文字"]];

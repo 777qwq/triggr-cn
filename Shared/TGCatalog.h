@@ -138,7 +138,7 @@ static const TGItem TGSystemActions[] = {
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
     {"system.vibrate", "振动"}, {"system.nothing", "无操作"},
 };
-// cn2.63: quick-action presets resolved at SB runtime (dynamic items first).
+// cn2.70: scanner presets — pure URL actions (official widget / 3dtouch routes).
 // Not part of TGActionGroups: they surface as preset rows in the "open" category.
 static const TGItem TGQuickActionPresets[] = {
     {"system.wxscan", "微信扫一扫"}, {"system.wxpaycode", "微信收付款"},
@@ -302,7 +302,6 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
 #define TGAutotouchPrefix @"autotouch:" // AutoTouch script name (without .lua)
 #define TGUnlockPrefix @"unlock:" // device passcode (stored in the action id, like shell commands)
 #define TGURLPrefix @"url:"
-#define TGQuickActionPrefix @"quickapp:"
 #define TGShellPrefix @"shell:"
 #define TGAppPrefix @"app:"
 #define TGPausePrefix @"pause:" // "pause:<seconds>" between actions in a list
@@ -652,7 +651,6 @@ static inline NSString *TGActionTitle(NSString *action) {
     }
     for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++)
         if ([action isEqualToString:@(TGQuickActionPresets[i].identifier)]) return @(TGQuickActionPresets[i].title);
-    if ([action hasPrefix:TGQuickActionPrefix]) return [@"快捷项：" stringByAppendingString:[action substringFromIndex:TGQuickActionPrefix.length]];
     for (int g = 0; g < TG_COUNT(TGActionGroups); g++)
         for (int i = 0; i < TGActionGroups[g].count; i++)
             if ([action isEqualToString:@(TGActionGroups[g].items[i].identifier)]) return @(TGActionGroups[g].items[i].title);

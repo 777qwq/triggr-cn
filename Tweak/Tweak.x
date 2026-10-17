@@ -902,8 +902,6 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 
 
 
-static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints);
-
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -1102,107 +1100,12 @@ static BOOL TGOpenApp(NSString *identifier, BOOL dryRun) {
     return YES;
 }
 
-// cn2.63: activate an app's home-screen quick action from SpringBoard.
-// SquidGesture/TypeX channel: dynamic items live on SBApplication (WeChat
-// registers its own at runtime, Info.plist has none), static ones under info.
-// Dispatch is SBIconView's class method, SpringBoard main thread only.
-// Search one snapshot of the app's shortcut items (dynamic first, then static).
-static id TGQuickActionSearch(id app, NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints) {
-    NSMutableArray *pool = [NSMutableArray array];
-    SEL dynSel = NSSelectorFromString(@"dynamicApplicationShortcutItems");
-    if ([app respondsToSelector:dynSel]) {
-        id v = ((id (*)(id, SEL))objc_msgSend)(app, dynSel);
-        if ([v isKindOfClass:NSArray.class]) [pool addObjectsFromArray:v];
-    }
-    id info = [app respondsToSelector:@selector(info)] ? ((id (*)(id, SEL))objc_msgSend)(app, @selector(info)) : nil;
-    if ([info isKindOfClass:NSDictionary.class]) {
-        id st = info[@"staticApplicationShortcutItems"];
-        if ([st isKindOfClass:NSArray.class]) [pool addObjectsFromArray:st];
-    }
-    SEL statSel = NSSelectorFromString(@"staticApplicationShortcutItems");
-    if ([app respondsToSelector:statSel]) {
-        id v = ((id (*)(id, SEL))objc_msgSend)(app, statSel);
-        if ([v isKindOfClass:NSArray.class]) [pool addObjectsFromArray:v];
-    }
-    SEL typeSel = @selector(type);
-    SEL titleSel = @selector(localizedTitle);
-    id found = nil;
-    if (exactType.length) {
-        for (id item in pool) {
-            NSString *type = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
-            if ([type isKindOfClass:NSString.class] && [type isEqualToString:exactType]) { found = item; break; }
-        }
-    } else {
-        for (id item in pool) {
-            NSString *title = [item respondsToSelector:titleSel] ? [item localizedTitle] : nil;
-            if (![title isKindOfClass:NSString.class]) title = nil;
-            if (title) for (NSString *want in titles)
-                if ([title rangeOfString:want options:NSCaseInsensitiveSearch].location != NSNotFound) { found = item; break; }
-            if (found) break;
-        }
-        if (!found) for (id item in pool) {
-            NSString *type = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
-            if (![type isKindOfClass:NSString.class]) continue;
-            for (NSString *hint in typeHints)
-                if ([type rangeOfString:hint options:NSCaseInsensitiveSearch].location != NSNotFound) { found = item; break; }
-            if (found) break;
-        }
-    }
-    return found;
-}
-
-static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints) {
-    id controller = TGShared("SBApplicationController");
-    if (![controller respondsToSelector:@selector(applicationWithBundleIdentifier:)]) return NO;
-    id app = ((id (*)(id, SEL, id))objc_msgSend)(controller, @selector(applicationWithBundleIdentifier:), bundle);
-    if (!app) return NO;
-    id found = TGQuickActionSearch(app, bundle, exactType, titles, typeHints);
-    if (found) {
-        Class iconView = NSClassFromString(@"SBIconView");
-        SEL activate = @selector(activateShortcut:withBundleIdentifier:forIconView:);
-        if (!iconView || ![iconView respondsToSelector:activate]) return NO;
-        dispatch_async(dispatch_get_main_queue(), ^{
-            ((void (*)(id, SEL, id, id, id))objc_msgSend)(iconView, activate, found, bundle, nil);
-        });
-        return YES;
-    }
-    // cn2.66: the pool only grows while the app runs (WeChat idle = a single
-    // 扫一扫 item). Bring the app forward and re-check a few times — the new
-    // items land on SBApplication's dynamic list shortly after launch.
-    SEL openSel = @selector(openApplicationWithBundleID:);
-    id workspace = TGShared("SBMainWorkspace");
-    if (workspace && [workspace respondsToSelector:openSel])
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-            ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, openSel, bundle);
-        });
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        for (int attempt = 0; attempt < 5; attempt++) {
-            [NSThread sleepForTimeInterval:1.5];
-            id app2 = ((id (*)(id, SEL, id))objc_msgSend)(controller, @selector(applicationWithBundleIdentifier:), bundle);
-            if (!app2) continue;
-            id hit = TGQuickActionSearch(app2, bundle, exactType, titles, typeHints);
-            if (hit) {
-                Class iconView2 = NSClassFromString(@"SBIconView");
-                SEL activate2 = @selector(activateShortcut:withBundleIdentifier:forIconView:);
-                if (iconView2 && [iconView2 respondsToSelector:activate2]) {
-                    dispatch_async(dispatch_get_main_queue(), ^{
-                        ((void (*)(id, SEL, id, id, id))objc_msgSend)(iconView2, activate2, hit, bundle, nil);
-                    });
-                }
-                break;
-            }
-        }
-    });
-    return YES;
-}
-
 static BOOL TGCanPerform(NSString *action) {
     if (action.length == 0) return NO;
     if ([action hasPrefix:TGPausePrefix]) return YES;
     if ([action hasPrefix:TGMenuPrefix]) return tgMenuNames[[action substringFromIndex:TGMenuPrefix.length]] != nil;
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
-    if ([action hasPrefix:TGQuickActionPrefix]) return YES;
     if ([action hasPrefix:TGAutotouchPrefix]) return NSClassFromString(@"PlayingManager") != nil;
     if ([action hasPrefix:TGUnlockPrefix]) return YES;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
@@ -1231,15 +1134,7 @@ static void TGPerform(NSString *action) {
             TGRunShell([action substringFromIndex:TGShellPrefix.length]);
         } else if ([action hasPrefix:TGExtensionPrefix]) {
             TGRunExtension(action);
-        } else if ([action hasPrefix:TGQuickActionPrefix]) {
-            NSString *spec = [action substringFromIndex:TGQuickActionPrefix.length];
-            NSRange bar = [spec rangeOfString:@"|"];
-            if (bar.location != NSNotFound && bar.location > 0 && bar.location + 1 < spec.length) {
-                NSString *bundle = [spec substringToIndex:bar.location];
-                NSString *type = [spec substringFromIndex:bar.location + 1];
-                if (bundle.length && type.length) TGActivateQuickAction(bundle, type, nil, nil);
-            }
-        } else if ([action hasPrefix:TGAppPrefix]) {
+ else if ([action hasPrefix:TGAppPrefix]) {
             TGOpenApp([action substringFromIndex:TGAppPrefix.length], NO);
         } else if ([action hasPrefix:TGMenuPrefix]) {
             TGShowMenu([action substringFromIndex:TGMenuPrefix.length]);
