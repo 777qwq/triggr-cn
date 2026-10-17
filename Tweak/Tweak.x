@@ -1020,7 +1020,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"扫一扫", @"Scan"], @[@"scan"]);
             },
             @"system.wxpaycode": ^BOOL(BOOL dry) {
-                return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"付款码", @"收付款", @"Pay"], @[@"pay"]);
+                return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"收款码", @"收付款", @"付款码", @"收款", @"Pay"], @[@"pay", @"collection"]);
             },
             @"system.aliscan": ^BOOL(BOOL dry) {
                 if (!dry) TGOpenURL(@"alipay3dtouch://platformapi/startapp?appId=10000007&showOthers=YES&sourceId=3dtouch");
@@ -1098,11 +1098,10 @@ static BOOL TGOpenApp(NSString *identifier, BOOL dryRun) {
 // SquidGesture/TypeX channel: dynamic items live on SBApplication (WeChat
 // registers its own at runtime, Info.plist has none), static ones under info.
 // Dispatch is SBIconView's class method, SpringBoard main thread only.
-static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints) {
-    id controller = TGShared("SBApplicationController");
-    if (![controller respondsToSelector:@selector(applicationWithBundleIdentifier:)]) return NO;
-    id app = ((id (*)(id, SEL, id))objc_msgSend)(controller, @selector(applicationWithBundleIdentifier:), bundle);
-    if (!app) return NO;
+// Search one snapshot of the app's shortcut items (dynamic first, then static).
+// Always appends a quickact.log line — WeChat registers its items dynamically
+// and the pool grows while the app runs, so the log doubles as live evidence.
+static id TGQuickActionSearch(id app, NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints) {
     NSMutableArray *pool = [NSMutableArray array];
     SEL dynSel = NSSelectorFromString(@"dynamicApplicationShortcutItems");
     if ([app respondsToSelector:dynSel]) {
@@ -1143,24 +1142,58 @@ static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray
             if (found) break;
         }
     }
-    if (!found) {
-        // cn2.65 diag: dump the actual pool so the user can send the real
-        // titles/types when title matching misses (wxpaycode dead report).
-        NSMutableString *dump = [NSMutableString stringWithFormat:@"[qa %f] %@ pool=%lu\n", [NSDate timeIntervalSinceReferenceDate], bundle, (unsigned long)pool.count];
-        for (id item in pool) {
-            NSString *ti = [item respondsToSelector:titleSel] ? [item localizedTitle] : nil;
-            NSString *ty = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
-            [dump appendFormat:@"  title=%@ type=%@\n", [ti isKindOfClass:NSString.class] ? ti : @"?", [ty isKindOfClass:NSString.class] ? ty : @"?"];
-        }
-        FILE *qfp = fopen("/var/mobile/Library/Triggr/quickact.log", "a");
-        if (qfp) { fwrite(dump.UTF8String, 1, dump.length, qfp); fclose(qfp); }
-        return NO;
+    NSMutableString *dump = [NSMutableString stringWithFormat:@"[qa %f] %@ pool=%lu found=%d\n", [NSDate timeIntervalSinceReferenceDate], bundle, (unsigned long)pool.count, found != nil];
+    for (id item in pool) {
+        NSString *ti = [item respondsToSelector:titleSel] ? [item localizedTitle] : nil;
+        NSString *ty = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
+        [dump appendFormat:@"  title=%@ type=%@\n", [ti isKindOfClass:NSString.class] ? ti : @"?", [ty isKindOfClass:NSString.class] ? ty : @"?"];
     }
-    Class iconView = NSClassFromString(@"SBIconView");
-    SEL activate = @selector(activateShortcut:withBundleIdentifier:forIconView:);
-    if (!iconView || ![iconView respondsToSelector:activate]) return NO;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        ((void (*)(id, SEL, id, id, id))objc_msgSend)(iconView, activate, found, bundle, nil);
+    FILE *qfp = fopen("/var/mobile/Library/Triggr/quickact.log", "a");
+    if (qfp) { fwrite(dump.UTF8String, 1, dump.length, qfp); fclose(qfp); }
+    return found;
+}
+
+static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints) {
+    id controller = TGShared("SBApplicationController");
+    if (![controller respondsToSelector:@selector(applicationWithBundleIdentifier:)]) return NO;
+    id app = ((id (*)(id, SEL, id))objc_msgSend)(controller, @selector(applicationWithBundleIdentifier:), bundle);
+    if (!app) return NO;
+    id found = TGQuickActionSearch(app, bundle, exactType, titles, typeHints);
+    if (found) {
+        Class iconView = NSClassFromString(@"SBIconView");
+        SEL activate = @selector(activateShortcut:withBundleIdentifier:forIconView:);
+        if (!iconView || ![iconView respondsToSelector:activate]) return NO;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            ((void (*)(id, SEL, id, id, id))objc_msgSend)(iconView, activate, found, bundle, nil);
+        });
+        return YES;
+    }
+    // cn2.66: the pool only grows while the app runs (WeChat idle = a single
+    // 扫一扫 item). Bring the app forward and re-check a few times — the new
+    // items land on SBApplication's dynamic list shortly after launch.
+    SEL openSel = @selector(openApplicationWithBundleID:);
+    id workspace = TGShared("SBMainWorkspace");
+    if (workspace && [workspace respondsToSelector:openSel])
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            ((BOOL (*)(id, SEL, id))objc_msgSend)(workspace, openSel, bundle);
+        });
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        for (int attempt = 0; attempt < 5; attempt++) {
+            [NSThread sleepForTimeInterval:1.5];
+            id app2 = ((id (*)(id, SEL, id))objc_msgSend)(controller, @selector(applicationWithBundleIdentifier:), bundle);
+            if (!app2) continue;
+            id hit = TGQuickActionSearch(app2, bundle, exactType, titles, typeHints);
+            if (hit) {
+                Class iconView2 = NSClassFromString(@"SBIconView");
+                SEL activate2 = @selector(activateShortcut:withBundleIdentifier:forIconView:);
+                if (iconView2 && [iconView2 respondsToSelector:activate2]) {
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        ((void (*)(id, SEL, id, id, id))objc_msgSend)(iconView2, activate2, hit, bundle, nil);
+                    });
+                }
+                break;
+            }
+        }
     });
     return YES;
 }

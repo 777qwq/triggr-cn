@@ -638,6 +638,10 @@ static NSString *TGCategoryOf(NSString *action) {
     for (NSString *prefix in @[@"toggle.", @"on.", @"off."]) if ([action hasPrefix:prefix]) return @"switches";
     if ([action hasPrefix:@"media."] || [action hasPrefix:TGAirPlayPrefix]) return @"media";
     for (int i = 0; i < TG_COUNT(TGPowerActions); i++) if ([action isEqualToString:@(TGPowerActions[i].identifier)]) return @"power";
+    // cn2.66: quick-action presets live in the "open" category (TA request) —
+    // their system.* ids would otherwise fall into "system" below.
+    for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++) if ([action isEqualToString:@(TGQuickActionPresets[i].identifier)]) return @"open";
+    if ([action hasPrefix:TGQuickActionPrefix]) return @"open";
     if ([action hasPrefix:@"system."]) return @"system";
     return nil;
 }
