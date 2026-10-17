@@ -516,33 +516,6 @@ static void CNRegister(void) {
                 // Engine discovered on-device: EventSimulate (AutoTouch/ATTweak) —
                 // init / touchDown:atX:andY: / touchMove:atX:andY: / touchUp:atX:andY:.
                 // Fallback: WebKit's IOHID generator (present in SB via WebKit).
-                Class wk = objc_getClass("_WKTouchEventGenerator");
-                if (wk && [wk instancesRespondToSelector:@selector(touchDownAtPoints:touchCount:)]) {
-                    id gen = [[wk alloc] init];
-                    if (gen) {
-                        CGRect scr = [UIScreen mainScreen].bounds;
-                        double y = scr.size.height / 2;
-                        double x0 = 2.0, x1 = scr.size.width * 0.45;
-                        NSMutableArray *pts = [NSMutableArray array];
-                        int steps = 12;
-                        for (int i = 0; i <= steps; i++) {
-                            double xx = x0 + (x1-x0)*i/steps;
-                            [pts addObject:@[@(xx), @(y)]];
-                        }
-                        SEL down2 = @selector(touchDownAtPoints:touchCount:);
-                        SEL move2 = @selector(moveToPoints:touchCount:duration:);
-                        SEL up2 = @selector(liftUpAtPoints:touchCount:);
-                        void (*d2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
-                        void (*m2)(id,SEL,NSArray *,int,double) = (void (*)(id,SEL,NSArray *,int,double))objc_msgSend;
-                        CNLog(@"back: WKTouchgen swipe");
-                        d2(gen, down2, @[pts[0]], 1);
-                        m2(gen, move2, pts, steps+1, 0.18);
-                        void (*u2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
-                        u2(gen, up2, @[pts[steps]], 1);
-                        return;
-                    }
-                }
-                Class wk = objc_getClass("_WKTouchEventGenerator");
                 if (wk && [wk instancesRespondToSelector:@selector(touchDownAtPoints:touchCount:)]) {
                     id gen = [[wk alloc] init];
                     CNLog(@"back: gen=%@ cls=%@", gen, wk);
