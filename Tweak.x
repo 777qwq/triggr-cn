@@ -9,6 +9,7 @@
 #import "L10nMap.h"
 
 static void CNLog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1,2);
+void CNRegisterShortcutsFromDB(void);
 
 static NSDictionary<NSString *, NSString *> *L10n(void) {
     static NSDictionary *map;
@@ -436,7 +437,6 @@ static void TriggrExtInit(void) {
 #import <objc/runtime.h>
 #import <string.h>
 
-void CNRegisterShortcutsFromDB(void);
 static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     NSMutableArray *names = [NSMutableArray array];
     NSFileManager *fm = NSFileManager.defaultManager;
