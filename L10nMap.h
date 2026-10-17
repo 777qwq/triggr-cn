@@ -355,6 +355,7 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"on the Lock Screen": @"在锁屏",
     @"opening Siri": @"打开 Siri",
     @"Focus": @"专注模式",
+    @"Siri": @"唤醒Siri",
     @"Spotlight": @"聚焦搜索",
     @"Spotlight Search": @"聚焦搜索",
     @"Wake Screen": @"点亮屏幕",
