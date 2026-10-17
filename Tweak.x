@@ -340,11 +340,11 @@ static void TriggrExtInit(void) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         @try {
             Class tg = objc_getClass("TGTriggr");
-            CNLog("ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            CNLog(@"ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
             if (!tg) return; // not in a Triggr host
             CNRegister();
-            CNLog("ctor: CNRegister completed");
-        } @catch (NSException *e) { CNLog("ctor exception: %@", e); }
+            CNLog(@"ctor: CNRegister completed");
+        } @catch (NSException *e) { CNLog(@"ctor exception: %@", e); }
     });
 }
 
@@ -358,7 +358,7 @@ static void CNRegister(void) {
     if (!shared) return;
 
     void (^reg)(NSString *, NSString *, NSString *, void (^)(id)) = ^(NSString *ident, NSString *title, NSString *symbol, void (^handler)(id)) {
-        CNLog("reg: %@", ident);
+        CNLog(@"reg: %@", ident);
         id ai = [[infoCls alloc] performSelector:@selector(initWithIdentifier:) withObject:ident];
         if (!ai) return;
         [ai performSelector:@selector(setTitle:) withObject:title];
