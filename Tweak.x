@@ -576,7 +576,7 @@ static void CNRegister(void) {
     reg(@"cn.shortcut", @"快捷指令…", @"square.on.square.intersection.dashed", ^void(id ctx) {
         dispatch_async(dispatch_get_main_queue(), ^{
             UIAlertController *a = [UIAlertController alertControllerWithTitle:@"快捷指令" message:@"输入要后台执行的快捷指令名称" preferredStyle:UIAlertControllerStyleAlert];
-            [a addTextField:^(UITextField *tf) {}];
+            ((void (*)(id, SEL, id))objc_msgSend)(a, @selector(addTextFieldWithConfigurationHandler:), ^void(UITextField *tf) {});
             [a addAction:[UIAlertAction actionWithTitle:@"运行" style:UIAlertActionStyleDefault handler:^(UIAlertAction *act) {
                 NSString *name = a.textFields.firstObject.text ?: @"";
                 if (!name.length) return;
@@ -599,7 +599,7 @@ static void CNRegister(void) {
                             id task = [[taskCls alloc] init];
                             [task performSelector:@selector(setLaunchPath:) withObject:bin];
                             [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
-                            [task launch];
+                            ((void (*)(id, SEL))objc_msgSend)(task, @selector(launch));
                         }
                     } @catch (NSException *e) { }
                 });
