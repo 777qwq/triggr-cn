@@ -24,7 +24,9 @@ static NSString *MojibakeRepair(NSString *s) {
     static NSCharacterSet *sus;
     static dispatch_once_t once0;
     dispatch_once(&once0, ^{
-        sus = [NSCharacterSet characterSetWithCharactersInString:@"\u0080-\u00FF"];
+        NSMutableCharacterSet *mc = [NSMutableCharacterSet characterSet];
+        [mc addCharactersInRange:NSMakeRange(0x80, 0x80)]; // 0x80-0xFF
+        sus = mc;
     });
     if ([s rangeOfCharacterFromSet:sus].location == NSNotFound) return nil;
     NSData *bytes = [s dataUsingEncoding:NSMacOSRomanStringEncoding];
@@ -54,11 +56,11 @@ static NSString *L10nXform(NSString *s) {
     if ([s hasPrefix:@"Home Screen "]) return [NSString stringWithFormat:@"主屏幕 %@", [s substringFromIndex:12]];
     if ([s hasPrefix:@"Icon "]) return [NSString stringWithFormat:@"图标 %@", [s substringFromIndex:5]];
     // "Between HH:MM and HH:MM" (formatted scheduled range).
-    NSRange r = [s rangeOfString:@"Between " options:NSAnchoredSearch];
-    NSRange r2 = [s rangeOfString:@" and "];
-    if (r.location == 0 && r2.location != NSNotFound && s.length == 22) {
+    NSRange br = [s rangeOfString:@"Between " options:NSAnchoredSearch];
+    NSRange br2 = [s rangeOfString:@" and "];
+    if (br.location == 0 && br2.location != NSNotFound && s.length == 22) {
         NSString *a = [s substringWithRange:NSMakeRange(8, 5)];
-        NSString *b = [s substringWithRange:NSMakeRange(r2.location + 5, 5)];
+        NSString *b = [s substringWithRange:NSMakeRange(br2.location + 5, 5)];
         return [NSString stringWithFormat:@"%@ 至 %@", a, b];
     }
     return s;
