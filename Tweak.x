@@ -4,6 +4,7 @@
 // Covers Settings (Preferences), TriggrApp, and SpringBoard UI (banners/menus).
 
 #import <UIKit/UIKit.h>
+#import <notify.h>
 #import <dlfcn.h>
 #import "L10nMap.h"
 

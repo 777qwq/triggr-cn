@@ -684,6 +684,12 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     @"Screen Edges Swipe Up from Bottom Right": @"屏幕边缘右下上滑",
     @"ANYWHERE": @"任意位置",
     @"Slide in from the very edge of the screen, over apps, on the Home Screen and the Lock Screen. One-finger Slide In from Left takes the place of the swipe back many apps use; the two-finger versions (as in Activator) leave it alone. Swipe Up from Bottom uses the left, middle or right third of the bottom edge; while one is assigned, that part of the edge no longer opens Control Center or goes Home (portrait only).": @"从屏幕最边缘滑入，横跨 App、主屏幕和锁定屏幕。单指自左侧滑入会接管多数 App 的返回滑动；双指版本（如 Activator）不接管。自底部上滑使用底边左、中、右三分之一；只要指派了其中一个，对应那部分底边就不再打开控制中心或回主屏幕（仅竖屏）。",
+    @"Status Bar Hold": @"状态栏长按",
+    @"Status Bar Tap": @"状态栏点按",
+    @"Status Bar Tap Left": @"状态栏左半点按",
+    @"Status Bar Tap Right": @"状态栏右半点按",
+    @"Status Bar Tap Middle": @"状态栏中点按",
+    @"Shake Device": @"摇晃设备",
     };
     });
     return m;
