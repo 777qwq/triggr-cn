@@ -841,12 +841,15 @@ static NSString *TGCategoryOf(NSString *action) {
         [rows addObject:[self rowForCommand:TGSettingsPrefix title:@"打开设置页…" prompt:nil]];
         [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
         [rows addObject:[self rowForCommand:TGURLPrefix title:@"打开 URL…" prompt:@"任意 URL 或 URL scheme，如 https://…、tel:…、music://"]];
-        // cn2.61: preset scanner actions (open category per TA request).
-        // WeChat: dl/scan = deep link into scanner view; warm-start (WeChat in
-        // background) is the untested variant after the cold-start rejection.
-        // Alipay: documented pay-app scheme, saId=10000007 = 扫一扫.
+        // cn2.62: preset scanner actions (open category per TA request).
+        // WeChat: dl/scan placeholder — SquidGesture has no weixin:// at all, it
+        // triggers WeChat's home-screen quick action via
+        // activateShortcut:withBundleIdentifier:forIconView: (obfuscated type);
+        // pending WeChat Info.plist ShortcutItems evidence.
+        // Alipay: 3dtouch-only scheme recovered from SquidGesture — scan + pay code.
         [rows addObject:[self rowForAction:@"url:weixin://dl/scan" title:@"微信扫一扫"]];
-        [rows addObject:[self rowForAction:@"url:alipays://platformapi/startapp?saId=10000007" title:@"支付宝扫一扫"]];
+        [rows addObject:[self rowForAction:@"url:alipay3dtouch://platformapi/startapp?appId=10000007&showOthers=YES&sourceId=3dtouch" title:@"支付宝扫一扫"]];
+        [rows addObject:[self rowForAction:@"url:alipay3dtouch://platformapi/startapp?appId=20000056&src=3dtouch" title:@"支付宝付款码"]];
             } else if ([category isEqualToString:@"text"]) {
         [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
         [rows addObject:[self rowForCommand:TGSpeakPrefix title:@"朗读文字…" prompt:@"设备朗读的文字"]];
