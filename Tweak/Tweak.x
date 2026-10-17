@@ -370,7 +370,7 @@ static void TriggrExtInit(void) {
         @try {
             if ([NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) fclose(fopen("/var/mobile/Library/Triggr/cn_ext.log", "w")); // fresh per boot
             Class tg = objc_getClass("TGTriggr");
-            CNLog(@"ctor: cn1.37 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            CNLog(@"ctor: cn1.38 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
             // Relay pop half: in apps, listen for the back notify and pop nav.

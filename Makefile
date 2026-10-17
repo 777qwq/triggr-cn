@@ -1,14 +1,9 @@
+export ARCHS = arm64 arm64e
+export TARGET = iphone:clang:latest:15.0
+
 include $(THEOS)/makefiles/common.mk
 
-TWEAK_NAME = TriggrL10n
-TriggrL10n_FILES = Tweak.x
-TriggrL10n_CFLAGS = -fobjc-arc
-ARCHS = arm64 arm64e
-TriggrL10n_FRAMEWORKS = UIKit
-TriggrL10n_LDFLAGS = -lsqlite3
+SUBPROJECTS += Tweak
+SUBPROJECTS += ShortcutsHelper
 
-include $(THEOS_MAKE_PATH)/tweak.mk
-
-internal-after-stage::
-	@mkdir -p $(THEOS_STAGING_DIR)/Library/Triggr/Extensions
-	@cp $(THEOS_OBJ_DIR)/TriggrL10n.dylib $(THEOS_STAGING_DIR)/Library/Triggr/Extensions/TriggrL10n.dylib 2>/dev/null || true
+include $(THEOS_MAKE_PATH)/aggregate.mk
