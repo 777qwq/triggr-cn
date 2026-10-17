@@ -352,6 +352,10 @@ static void TriggrExtInit(void) {
         @try {
             Class tg = objc_getClass("TGTriggr");
             CNLog(@"ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            Dl_info selfInfo;
+            NSString *selfPath = nil;
+            if (dladdr((void *)TriggrExtInit, &selfInfo) && selfInfo.dli_fname) selfPath = @(selfInfo.dli_fname);
+            BOOL fromExtensions = selfPath && [selfPath containsString:@"/Triggr/Extensions/"];
             // Self-install into Triggr's Extensions dir (host contract needs it there).
             {
                 Dl_info di;
@@ -375,6 +379,13 @@ static void TriggrExtInit(void) {
                 }
             }
             if (!tg) return; // not in a Triggr host
+            if (selfPath && !fromExtensions) {
+                NSString *extCopy = [selfPath stringByReplacingOccurrencesOfString:@"/Library/MobileSubstrate/DynamicLibraries/" withString:@"/Library/Triggr/Extensions/"];
+                if ([NSFileManager.defaultManager fileExistsAtPath:extCopy]) {
+                    CNLog(@"ctor: extensions copy exists, deferring registration to it");
+                    return;
+                }
+            }
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
         } @catch (NSException *e) { CNLog(@"ctor exception: %@", e); }
