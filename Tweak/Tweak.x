@@ -1122,7 +1122,7 @@ static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray
     id found = nil;
     if (exactType.length) {
         for (id item in pool) {
-            NSString *type = [item respondsToSelector:typeSel] ? [item type] : nil;
+            NSString *type = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
             if ([type isKindOfClass:NSString.class] && [type isEqualToString:exactType]) { found = item; break; }
         }
     } else {
@@ -1134,7 +1134,7 @@ static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray
             if (found) break;
         }
         if (!found) for (id item in pool) {
-            NSString *type = [item respondsToSelector:typeSel] ? [item type] : nil;
+            NSString *type = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
             if (![type isKindOfClass:NSString.class]) continue;
             for (NSString *hint in typeHints)
                 if ([type rangeOfString:hint options:NSCaseInsensitiveSearch].location != NSNotFound) { found = item; break; }
@@ -1150,6 +1150,8 @@ static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray
     });
     return YES;
 }
+
+static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints);
 
 static BOOL TGCanPerform(NSString *action) {
     if (action.length == 0) return NO;
