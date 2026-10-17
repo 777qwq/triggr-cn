@@ -6,7 +6,11 @@
       "tabname": "简介",
       "views": [
         { "class": "DepictionSubheaderView", "title": "Triggr 2.0 汉化补丁" },
-        { "class": "DepictionMarkdownView", "markdown": "为 **Triggr 2.0**（官方 RootHide/无根构建）提供中文显示层。\n\n独立插件，hook 显示层精确替换——不修改 Triggr 本体任何文件，与 1.5.0+cn2.x、2.0 官方原版均可共存，卸载即恢复原样。\n\n- 覆盖 2.0 全量 UI 短语（含 If/Otherwise、Action Button、Snapper 3、CopyLog 等新词）\n- 格式串变换（时间区间、主屏幕图标等动态文案）\n- 术语对齐 cn 系定名：聚焦搜索 / 唤醒 Siri / 返回上级" },
+        { "class": "DepictionMarkdownView", "markdown": "为 **Triggr 2.0**（官方 RootHide/无根构建）提供中文显示层。\n\n独立插件，hook 显示层精确替换——不修改 Triggr 本体任何文件，与 1.5.0+cn2.x、2.0 官方原版均可共存，卸载即恢复原样。\n\n- 覆盖 2.0 全量 UI 短语（含 If/Otherwise、Action Button、Snapper 3、CopyLog 等新词）
+- **内置动作**（Other Tweaks 分组）：微信扫一扫/收付款、支付宝扫一扫/付款码、关闭Siri
+- **快捷指令动作**：编辑 `/var/mobile/Library/Triggr/cn_shortcuts.plist`（数组，元素为快捷指令名），注销后自动注册为「快捷指令：xxx」动作，SpringCuts 后台执行不弹前台
+- **AutoTouch 动作**：自动枚举脚本目录，注册为「AutoTouch：脚本名」
+- jbroot `%s` MacRoman 乱码显示层自动还原\n- 格式串变换（时间区间、主屏幕图标等动态文案）\n- 术语对齐 cn 系定名：聚焦搜索 / 唤醒 Siri / 返回上级" },
         { "class": "DepictionSeparatorView" },
         { "class": "DepictionSubheaderView", "title": "安装顺序" },
         { "class": "DepictionMarkdownView", "markdown": "1. 先装 **Triggr 2.0 官方原版**\n2. 再装本补丁\n3. 注销（udid 击）" }
