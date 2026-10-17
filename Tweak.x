@@ -109,6 +109,16 @@ static NSString *L10nXform(NSString *s) {
 }
 %end
 
+%hook CATextLayer
+- (void)setString:(id)string {
+    if ([string isKindOfClass:[NSString class]]) {
+        NSString *x = L10nXform(string);
+        if (x != string) { %orig(x); return; }
+    }
+    %orig;
+}
+%end
+
 %hook UIAlertAction
 - (void)setTitle:(NSString *)title {
     %orig(L10nXform(title));
@@ -422,12 +432,14 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     NSString *src = @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite";
     NSString *dst = @"/var/mobile/Library/Triggr/sc.db";
     // cn2.17 pattern: SB cannot reliably read the live WAL DB; copy + wal/shm first.
+    NSError *cperr = nil;
     for (NSString *ext in @[@"", @"-wal", @"-shm"]) {
         NSString *s = [src stringByAppendingString:ext];
         NSString *d = [dst stringByAppendingString:ext];
         [fm removeItemAtPath:d error:nil];
-        if ([fm fileExistsAtPath:s]) [fm copyItemAtPath:s toPath:d error:nil];
+        if ([fm fileExistsAtPath:s]) [fm copyItemAtPath:s toPath:d error:&cperr];
     }
+    CNLog(@"shortcut db: src=%d err=%@", [fm fileExistsAtPath:src], cperr);
     const char *paths[] = { dst.fileSystemRepresentation, src.fileSystemRepresentation, NULL };
     for (int i = 0; paths[i]; i++) {
         sqlite3 *db = NULL;
@@ -522,6 +534,31 @@ static void CNRegister(void) {
     reg(@"cn.volumeup", @"音量增（补丁）", @"speaker.wave.2", ^void(id ctx) { CNVolumeStep(YES); });
     reg(@"cn.voldown", @"音量减（补丁）", @"speaker.wave.1", ^void(id ctx) { CNVolumeStep(NO); });
     reg(@"cn.screenrecord", @"屏幕录制（补丁）", @"record.circle", ^void(id ctx) { CNScreenRecord(); });
+
+    // 密码解锁（/var/mobile/Library/Triggr/cn_passcode 纯文本）
+    {
+        NSString *pw = [NSString stringWithContentsOfFile:@"/var/mobile/Library/Triggr/cn_passcode" encoding:NSUTF8StringEncoding error:nil];
+        pw = [pw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        reg(@"cn.unlock.nopw", @"密码解锁（未配置）", @"lock.open", ^void(id ctx) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                UIAlertController *a = [UIAlertController alertControllerWithTitle:@"Triggr 补丁" message:@"请将锁屏密码写入 /var/mobile/Library/Triggr/cn_passcode（纯文本），注销后生效。" preferredStyle:UIAlertControllerStyleAlert];
+                [a addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+                [UIApplication.sharedApplication.keyWindow.rootViewController presentViewController:a animated:YES completion:nil];
+            });
+        });
+        if (pw.length) {
+            reg(@"cn.unlock", @"密码解锁", @"lock.open", ^void(id ctx) {
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    id mgr = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("SBLockScreenManager"), @selector(sharedInstance));
+                    if (!mgr) return;
+                    if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
+                        ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
+                    if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)])
+                        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), pw, YES);
+                });
+            });
+        } else CNLog(@"unlock: no passcode file");
+    }
 
     // 快捷指令（自动枚举 Shortcuts.sqlite，SpringCuts 后台执行）
     for (NSString *n in CNShortcutNamesFromDB()) {
