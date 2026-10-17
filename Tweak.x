@@ -15,8 +15,29 @@ static NSDictionary<NSString *, NSString *> *L10n(void) {
     return map;
 }
 
+// Undo the jbroot "%s MacRoman" mojibake: the original UTF-8 bytes were
+// mis-decoded as MacRoman; re-encode as MacRoman to recover the bytes, then
+// decode as UTF-8. Rewrites only on clean recovery (valid UTF-8, differs).
+static NSString *MojibakeRepair(NSString *s) {
+    if (s.length < 2 || s.length > 128) return nil;
+    // Heuristic gate: mojibake always shows MacRoman high-range artifacts.
+    static NSCharacterSet *sus;
+    static dispatch_once_t once0;
+    dispatch_once(&once0, ^{
+        sus = [NSCharacterSet characterSetWithCharactersInString:@"\u0080-\u00FF"];
+    });
+    if ([s rangeOfCharacterFromSet:sus].location == NSNotFound) return nil;
+    NSData *bytes = [s dataUsingEncoding:NSMacOSRomanStringEncoding];
+    if (!bytes || bytes.length < 2) return nil;
+    NSString *fixed = [[NSString alloc] initWithData:bytes encoding:NSUTF8StringEncoding];
+    if (!fixed || [fixed isEqualToString:s]) return nil;
+    return fixed;
+}
+
 static NSString *L10nXform(NSString *s) {
     if (s.length == 0 || s.length > 96) return s;
+    NSString *r = MojibakeRepair(s);
+    if (r) s = r;
     NSDictionary *m = L10n();
     NSString *hit = m[s];
     if (hit) return hit;
