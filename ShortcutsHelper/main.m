@@ -21,7 +21,8 @@ int main(int argc, char **argv) {
         }
         [fm createDirectoryAtPath:[dst stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
         chmod(dst.fileSystemRepresentation, 0644);
-        if ([fm fileExistsAtPath:[dst stringByAppendingString:@"-wal"]]) chmod((dst stringByAppendingString:@"-wal").fileSystemRepresentation, 0644);
+        NSString *walf = [dst stringByAppendingString:@"-wal"];
+        if ([fm fileExistsAtPath:walf]) chmod(walf.fileSystemRepresentation, 0644);
         return ok ? 0 : 1;
     }
 }
