@@ -1020,7 +1020,7 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"扫一扫", @"Scan"], @[@"scan"]);
             },
             @"system.wxpaycode": ^BOOL(BOOL dry) {
-                return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"收款码", @"收付款", @"付款码", @"收款", @"Pay"], @[@"pay", @"collection"]);
+                return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"收付款", @"Pay"], @[@"pay"]);
             },
             @"system.aliscan": ^BOOL(BOOL dry) {
                 if (!dry) TGOpenURL(@"alipay3dtouch://platformapi/startapp?appId=10000007&showOthers=YES&sourceId=3dtouch");

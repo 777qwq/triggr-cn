@@ -850,7 +850,7 @@ static NSString *TGCategoryOf(NSString *action) {
         // TypeX-proven channel — activateShortcut:withBundleIdentifier:forIconView:.
         // Alipay: 3dtouch-only scheme recovered from SquidGesture — scan + pay code.
         [rows addObject:[self rowForAction:@"system.wxscan" title:@"微信扫一扫"]];
-        [rows addObject:[self rowForAction:@"system.wxpaycode" title:@"微信付款码"]];
+        [rows addObject:[self rowForAction:@"system.wxpaycode" title:@"微信收付款"]];
         [rows addObject:[self rowForAction:@"system.aliscan" title:@"支付宝扫一扫"]];
         [rows addObject:[self rowForAction:@"system.alipaycode" title:@"支付宝付款码"]];
         // Generic: any app's quick action by bundle id + type string.

@@ -141,7 +141,7 @@ static const TGItem TGSystemActions[] = {
 // cn2.63: quick-action presets resolved at SB runtime (dynamic items first).
 // Not part of TGActionGroups: they surface as preset rows in the "open" category.
 static const TGItem TGQuickActionPresets[] = {
-    {"system.wxscan", "微信扫一扫"}, {"system.wxpaycode", "微信付款码"},
+    {"system.wxscan", "微信扫一扫"}, {"system.wxpaycode", "微信收付款"},
     {"system.aliscan", "支付宝扫一扫"}, {"system.alipaycode", "支付宝付款码"},
 };
 static const TGItem TGPowerActions[] = {
