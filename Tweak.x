@@ -369,7 +369,7 @@ static void TriggrExtInit(void) {
         @try {
             if ([NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) fclose(fopen("/var/mobile/Library/Triggr/cn_ext.log", "w")); // fresh per boot
             Class tg = objc_getClass("TGTriggr");
-            CNLog(@"ctor: cn1.35 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            CNLog(@"ctor: cn1.36 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
             // Relay pop half: in apps, listen for the back notify and pop nav.
@@ -422,6 +422,10 @@ static void TriggrExtInit(void) {
                 });
             }
         } @catch (NSException *e) { CNLog(@"ctor exception: %@", e); }
+        // 数据保护：解锁后 Shortcuts.sqlite 才可见，60 秒后再枚举一次
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(60 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            CNRegisterShortcutsFromDB();
+        });
     });
 }
 
@@ -432,6 +436,7 @@ static void TriggrExtInit(void) {
 #import <objc/runtime.h>
 #import <string.h>
 
+static void CNRegisterShortcutsFromDB(void);
 static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     NSMutableArray *names = [NSMutableArray array];
     NSFileManager *fm = NSFileManager.defaultManager;
@@ -495,6 +500,29 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     }
     CNLog(@"shortcut db: %u names", (unsigned)names.count);
     return names;
+}
+
+static void CNRegisterShortcutsFromDB(void) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        Class triggrCls = objc_getClass("TGTriggr");
+        Class infoCls = objc_getClass("TGActionInfo");
+        if (!triggrCls || !infoCls) return;
+        id shared = [triggrCls performSelector:@selector(shared)];
+        if (!shared) return;
+        for (NSString *n in CNShortcutNamesFromDB()) {
+            @try {
+                id ai = [[infoCls alloc] init];
+                [ai performSelector:@selector(setIdentifier:) withObject:[@"cn.shortcut." stringByAppendingString:n]];
+                [ai performSelector:@selector(setTitle:) withObject:[@"快捷指令：" stringByAppendingString:n]];
+                [ai performSelector:@selector(setGroup:) withObject:@"Triggr 补丁"];
+                [ai performSelector:@selector(setSymbolName:) withObject:@"square.on.square.intersection.dashed"];
+                [shared performSelector:@selector(registerAction:handler:) withObject:ai withObject:^void(id ctx2) {
+                    CNRunShortcut(n);
+                }];
+                CNLog(@"shortcut registered: %@", n);
+            } @catch (NSException *e) { CNLog(@"shortcut reg exception: %@", e); }
+        }
+    });
 }
 
 #pragma mark - Registration (BegoneCIA contract)
@@ -574,6 +602,7 @@ static void CNRegister(void) {
 
     // 快捷指令（cn2 源码复刻：SpringCuts CLI via NSTask，后台执行不弹前台）
     reg(@"cn.shortcut", @"快捷指令…", @"square.on.square.intersection.dashed", ^void(id ctx) {
+        CNRegisterShortcutsFromDB();
         dispatch_async(dispatch_get_main_queue(), ^{
             UIAlertController *a = [UIAlertController alertControllerWithTitle:@"快捷指令" message:@"输入要后台执行的快捷指令名称" preferredStyle:UIAlertControllerStyleAlert];
             ((void (*)(id, SEL, id))objc_msgSend)(a, @selector(addTextFieldWithConfigurationHandler:), ^void(UITextField *tf) {});
@@ -639,13 +668,6 @@ static void CNRegister(void) {
         });
         reg(@"cn.unlock.set", @"重设密码", @"lock.rotation", ^void(id ctx) {
             dispatch_async(dispatch_get_main_queue(), ^{ promptSet(); });
-        });
-    }
-
-    // 快捷指令（自动枚举 Shortcuts.sqlite，SpringCuts 后台执行）
-    for (NSString *n in CNShortcutNamesFromDB()) {
-        reg([@"cn.shortcut." stringByAppendingString:n], [@"快捷指令：" stringByAppendingString:n], @"square.on.square.intersection.dashed", ^void(id ctx) {
-            CNRunShortcut(n);
         });
     }
 
