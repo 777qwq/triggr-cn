@@ -111,11 +111,9 @@ static NSString *L10nXform(NSString *s) {
 
 %hook CATextLayer
 - (void)setString:(id)string {
-    if ([string isKindOfClass:[NSString class]]) {
-        NSString *x = L10nXform(string);
-        if (x != string) { %orig(x); return; }
-    }
-    %orig;
+    id x = string;
+    if ([string isKindOfClass:[NSString class]]) x = L10nXform(string);
+    %orig(x);
 }
 %end
 
