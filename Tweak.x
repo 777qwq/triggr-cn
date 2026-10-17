@@ -383,6 +383,30 @@ static void TriggrExtInit(void) {
 
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
+            // Relay pop half: in apps, listen for the back notify and pop nav.
+            if (![NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) {
+                int tok2 = -1;
+                notify_register_dispatch("cn.triggr.backswipe", &tok2, dispatch_get_main_queue(), ^(int t) {
+                    @try {
+                        UIViewController *vc = nil;
+                        for (UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+                            if ([sc isKindOfClass:[UIWindowScene class]]) {
+                                for (UIWindow *w in [(UIWindowScene *)sc windows]) {
+                                    if (w.isKeyWindow) {
+                                        vc = w.rootViewController;
+                                        while (vc.presentedViewController) vc = vc.presentedViewController;
+                                    }
+                                }
+                            }
+                        }
+                        if (vc.navigationController && vc.navigationController.viewControllers.count > 1) {
+                            [vc.navigationController popViewControllerAnimated:YES];
+                            CNLog(@"relay: popped");
+                        } else CNLog(@"relay: nothing to pop");
+                    } @catch (NSException *e2) { CNLog(@"relay exception: %@", e2); }
+                });
+                CNLog(@"relay: listener armed");
+            }
             // touch-engine discovery (返回上级 needs a real synthesizer in SB)
             {
                 unsigned int nc = 0;
@@ -509,65 +533,9 @@ static void CNRegister(void) {
 
     // 返回上级（cn1.7 路线：AutoTouch Touch 类合成边缘左滑；无则 triggrd 通知兜底）
     reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
-        CNLog(@"back triggered, ctx=%@ main=%d", ctx, [NSThread isMainThread]);
-        // ⚠️ 双线程雷区：EventSimulate 主线程死锁（cn1.10）；_WKTouchEventGenerator
-        // 后台线程无 WTF::RunLoop 必 SEGV（cn1.20 崩溃栈实锤）。WKTouchgen 必须主线程
-        // （内部异步回调，不阻塞主线程，无 EventSimulate 的锁）。
-        dispatch_async(dispatch_get_main_queue(), ^{
-            @try {
-                // Engine discovered on-device: EventSimulate (AutoTouch/ATTweak) —
-                // init / touchDown:atX:andY: / touchMove:atX:andY: / touchUp:atX:andY:.
-                // Fallback: WebKit's IOHID generator (present in SB via WebKit).
-                Class wk = objc_getClass("_WKTouchEventGenerator");
-                if (wk && [wk instancesRespondToSelector:@selector(touchDownAtPoints:touchCount:)]) {
-                    id gen = [[wk alloc] init];
-                    CNLog(@"back: gen=%@ cls=%@", gen, wk);
-                    if (gen) {
-                        CGRect scr = [UIScreen mainScreen].bounds;
-                        double y = scr.size.height / 2;
-                        double x0 = 2.0, x1 = scr.size.width * 0.45;
-                        // ⚠️ API takes CGPoint* C arrays — NSArray here = SEGV (cn1.19 实锤)
-                        int steps = 12;
-                        CGPoint pts[13];
-                        for (int i = 0; i <= steps; i++) {
-                            pts[i] = CGPointMake(x0 + (x1-x0)*i/steps, y);
-                        }
-                        void (*d2)(id,SEL,CGPoint *,unsigned long) = (void (*)(id,SEL,CGPoint *,unsigned long))objc_msgSend;
-                        void (*m2)(id,SEL,CGPoint *,unsigned long,double) = (void (*)(id,SEL,CGPoint *,unsigned long,double))objc_msgSend;
-                        void (*u2)(id,SEL,CGPoint *,unsigned long) = (void (*)(id,SEL,CGPoint *,unsigned long))objc_msgSend;
-                        CNLog(@"back: wk down");
-                        d2(gen, @selector(touchDownAtPoints:touchCount:), &pts[0], 1);
-                        CNLog(@"back: wk move");
-                        m2(gen, @selector(moveToPoints:touchCount:duration:), pts, steps+1, 0.18);
-                        CNLog(@"back: wk up");
-                        u2(gen, @selector(liftUpAtPoints:touchCount:), &pts[steps], 1);
-                        CNLog(@"back: wk done");
-                        return;
-                    }
-                }
-                CNLog(@"back: no engine available");
-                notify_post("cn.triggr.backswipe");
-            } @catch (NSException *e) { CNLog(@"back exception: %@", e); }
-        });
+        CNLog(@"back: post notify (Relay pop in apps)");
+        notify_post("cn.triggr.backswipe");
     });
-
-    // 密码解锁（Passcode from /var/mobile/Library/Triggr/cn_passcode 纯文本）
-    {
-        NSString *pw = [NSString stringWithContentsOfFile:@"/var/mobile/Library/Triggr/cn_passcode" encoding:NSUTF8StringEncoding error:nil];
-        pw = [pw stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-        if (pw.length) {
-            reg(@"cn.unlock", @"密码解锁", @"lock.open", ^void(id ctx) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    id mgr = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("SBLockScreenManager"), @selector(sharedInstance));
-                    if (!mgr) return;
-                    if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
-                        ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
-                    if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)])
-                        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), pw, YES);
-                });
-            });
-        } else CNLog(@"unlock: no passcode file, not registered");
-    }
 
     // 修正版内置动作（1.x 验证实现；2.0 闭源内部同款在 iOS16 有 bug）
     reg(@"cn.volumeup", @"音量增（补丁）", @"speaker.wave.2", ^void(id ctx) { CNVolumeStep(YES); });
