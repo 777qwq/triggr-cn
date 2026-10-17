@@ -337,11 +337,9 @@ static void CNRegister(void); // fwd (constructor moved with helpers)
 
 // ===== libtriggr Extensions-dir contract (host dlopens this dylib) =====
 static id CNHost = nil;
-extern "C" {
 BOOL TGLibCanRun(void) { return YES; }
 void TGLibSetHost(id host) { CNHost = host; }
 NSArray *TGLibTriggers(void) { return nil; }
-}
 
 
 __attribute__((constructor))
