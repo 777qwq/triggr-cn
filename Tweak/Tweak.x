@@ -1017,7 +1017,11 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             },
             // cn2.63: quick-action presets (open-category rows, TA request).
             @"system.wxscan": ^BOOL(BOOL dry) {
-                return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"扫一扫", @"Scan"], @[@"scan"]);
+                // cn2.69: weixin://widget/scan = official widget route (same
+                // family as widget/pay) — designed for cold invocation from the
+                // widget, more stable than depending on dynamic quick items.
+                if (!dry) TGOpenURL(@"weixin://widget/scan");
+                return YES;
             },
             @"system.wxpaycode": ^BOOL(BOOL dry) {
                 // cn2.68: weixin://widget/pay = the official widget route for
