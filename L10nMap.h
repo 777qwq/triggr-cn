@@ -674,3 +674,5 @@ static NSDictionary<NSString *, NSString *> *L10nMap(void) {
     });
     return m;
 }
+
+#endif /* L10nMap_h */
