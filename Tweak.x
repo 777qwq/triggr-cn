@@ -8,6 +8,8 @@
 #import <dlfcn.h>
 #import "L10nMap.h"
 
+static void CNLog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1,2);
+
 static NSDictionary<NSString *, NSString *> *L10n(void) {
     static NSDictionary *map;
     static dispatch_once_t once;
@@ -303,7 +305,7 @@ static void CNRunAutoTouch(NSString *name) {
 #pragma mark - diagnostics
 
 static void CNLog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1,2);
-static void CNLog(NSString *fmt, ...) {
+void CNLog(NSString *fmt, ...) {
     static BOOL disabled = NO;
     if (disabled) return;
     va_list ap; va_start(ap, fmt);
@@ -756,7 +758,7 @@ static void CNRelayDoBack(void) {
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) {
         int tokCN = -1;
         notify_register_dispatch("cn.triggr.backswipe", &tokCN, dispatch_get_main_queue(), ^(int t) {
-            CNPopTopNav();
+            CNRelayDoBack();
         });
     }
 }
