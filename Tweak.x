@@ -747,7 +747,6 @@ static void CNRelayDoBack(void) {
     }
     if (done) notify_post("cn.triggr.back.ack"); // 主流水线已处理，告知 Tweak 免 Lua 兜底
 }
-}
 
 %ctor {
     %init(_ungrouped);
