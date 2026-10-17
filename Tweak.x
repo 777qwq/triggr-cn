@@ -357,14 +357,19 @@ static void CNRegister(void) {
     id shared = [triggrCls performSelector:@selector(shared)];
     if (!shared) return;
 
-    void (^reg)(NSString *, NSString *, NSString *, void (^)(id)) = ^(NSString *ident, NSString *title, NSString *symbol, void (^handler)(id)) {
+    void (^reg)(NSString *, NSString *, NSString *, void (^)(id)) = ^void(NSString *ident, NSString *title, NSString *symbol, void (^handler)(id)) {
         CNLog(@"reg: %@", ident);
-        id ai = [[infoCls alloc] performSelector:@selector(initWithIdentifier:) withObject:ident];
-        if (!ai) return;
+        @try {
+        id ai = [[infoCls alloc] init];
+        if (!ai) { CNLog(@"reg fail: alloc init nil %@", ident); return; }
+        if ([ai respondsToSelector:@selector(setIdentifier:)]) [ai performSelector:@selector(setIdentifier:) withObject:ident];
+        else { CNLog(@"reg fail: no setIdentifier: %@", ident); return; }
         [ai performSelector:@selector(setTitle:) withObject:title];
         [ai performSelector:@selector(setGroup:) withObject:@"Triggr 补丁"];
-        if (symbol) [ai performSelector:@selector(setSymbolName:) withObject:symbol];
+        if (symbol && [ai respondsToSelector:@selector(setSymbolName:)]) [ai performSelector:@selector(setSymbolName:) withObject:symbol];
+        if (![shared respondsToSelector:@selector(registerAction:handler:)]) { CNLog(@"reg fail: host lacks registerAction:handler:"); return; }
         [shared performSelector:@selector(registerAction:handler:) withObject:ai withObject:handler];
+        } @catch (NSException *e) { CNLog(@"reg exception %@: %@", ident, e); }
     };
 
     // 四动作 (cn2.73 配方)
