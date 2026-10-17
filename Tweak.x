@@ -382,6 +382,23 @@ static void TriggrExtInit(void) {
 
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
+            // touch-engine discovery (返回上级 needs a real synthesizer in SB)
+            {
+                unsigned int nc = 0;
+                Class *cls = objc_copyClassList(&nc);
+                for (unsigned int i = 0; i < nc; i++) {
+                    const char *nm = class_getName(cls[i]);
+                    if (strstr(nm, "Touch") || strstr(nm, "ATTouch") || strstr(nm, "TouchEngine") || strstr(nm, "Simulate")) {
+                        unsigned int nm2 = 0;
+                        Method *ms = class_copyMethodList(cls[i], &nm2);
+                        NSMutableString *list = [NSMutableString string];
+                        for (unsigned int j = 0; j < nm2 && j < 40; j++) [list appendFormat:@"%@ ", NSStringFromSelector(method_getName(ms[j]))];
+                        if (ms) free(ms);
+                        if (nm2) CNLog(@"engine? %s (%u): %@", nm, nm2, list);
+                    }
+                }
+                if (cls) free(cls);
+            }
         } @catch (NSException *e) { CNLog(@"ctor exception: %@", e); }
     });
 }
@@ -390,6 +407,8 @@ static void TriggrExtInit(void) {
 
 #import <sqlite3.h>
 #import <notify.h>
+#import <objc/runtime.h>
+#import <string.h>
 
 static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     NSMutableArray *names = [NSMutableArray array];
@@ -408,6 +427,18 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
         sqlite3 *db = NULL;
         if (sqlite3_open_v2(paths[i], &db, SQLITE_OPEN_READONLY, NULL) != SQLITE_OK) { if (db) sqlite3_close(db); continue; }
         sqlite3_stmt *st = NULL;
+        BOOL loggedTables = NO;
+        sqlite3_stmt *tt = NULL;
+        if (sqlite3_prepare_v2(db, "SELECT name FROM sqlite_master WHERE type='table'", -1, &tt, NULL) == SQLITE_OK) {
+            NSMutableArray *tn = [NSMutableArray array];
+            while (sqlite3_step(tt) == SQLITE_ROW) {
+                const unsigned char *t = sqlite3_column_text(tt, 0);
+                if (t) [tn addObject:@((const char *)t)];
+            }
+            sqlite3_finalize(tt);
+            CNLog(@"shortcut db tables: %@", tn);
+            loggedTables = YES;
+        }
         if (sqlite3_prepare_v2(db, "SELECT ZNAME FROM ZSHORTCUT WHERE ZNAME IS NOT NULL ORDER BY ZNAME", -1, &st, NULL) == SQLITE_OK) {
             while (sqlite3_step(st) == SQLITE_ROW) {
                 const unsigned char *txt = sqlite3_column_text(st, 0);
