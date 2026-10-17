@@ -535,10 +535,13 @@ static void CNRegister(void) {
 
     // 密码解锁（cn2 语义：弹窗设置密码，存本机；之后触发直接解锁）
     {
-        NSString *pwStore = @"com.johndie.triggr.l10n";
         void (^promptSet)(void) = ^{
             UIAlertController *a = [UIAlertController alertControllerWithTitle:@"密码解锁" message:@"输入设备的锁屏密码（仅存本机）" preferredStyle:UIAlertControllerStyleAlert];
-            [a addTextField:^(UITextField *tf) { tf.secureTextEntry = YES; tf.keyboardType = UIKeyboardTypeNumberPad; }];
+            SEL addTF = @selector(addTextFieldWithConfigurationHandler:);
+            if ([a respondsToSelector:addTF]) {
+                void (*add)(id,SEL,id) = (void (*)(id,SEL,id))objc_msgSend;
+                add(a, addTF, ^void(UITextField *tf) { tf.secureTextEntry = YES; tf.keyboardType = UIKeyboardTypeNumberPad; });
+            }
             [a addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *act) {
                 NSString *t = a.textFields.firstObject.text ?: @"";
                 if (t.length) [NSUserDefaults.standardUserDefaults setObject:t forKey:@"cn_unlock_pw"];
