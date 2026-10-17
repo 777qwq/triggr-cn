@@ -284,6 +284,68 @@ static void CNRunAutoTouch(NSString *name) {
     } @catch (NSException *e) { }
 }
 
+#pragma mark - diagnostics
+
+static void CNLog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1,2);
+static void CNLog(NSString *fmt, ...) {
+    static BOOL disabled = NO;
+    if (disabled) return;
+    va_list ap; va_start(ap, fmt);
+    NSString *line = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+    FILE *f = fopen("/var/mobile/Library/Triggr/cn_ext.log", "a");
+    if (!f) { disabled = YES; return; }
+    fprintf(f, "%s\n", line.UTF8String);
+    fclose(f);
+}
+
+#pragma mark - corrected volume / screenrecord (1.5.0+cn2 verified)
+
+static id CNSBControl(SEL sel) {
+    id sb = UIApplication.sharedApplication;
+    return [sb respondsToSelector:sel] ? ((id (*)(id, SEL))objc_msgSend)(sb, sel) : nil;
+}
+
+static void CNVolumeStep(BOOL up) {
+    id volume = CNSBControl(@selector(volumeControl));
+    SEL step = up ? @selector(volumeStepUp) : @selector(volumeStepDown);
+    if (!volume || ![volume respondsToSelector:step] || ![volume respondsToSelector:@selector(changeVolumeByDelta:)]) return;
+    float delta = fabsf(((float (*)(id, SEL))objc_msgSend)(volume, step));
+    if (delta <= 0 || delta > 0.5f) delta = 1.0f / 16;
+    ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? delta : -delta);
+}
+
+static void CNScreenRecord(void) {
+    Class cls = objc_getClass("RPScreenRecorder");
+    if (!cls) { dlopen("/System/Library/Frameworks/ReplayKit.framework/ReplayKit", RTLD_NOW); cls = objc_getClass("RPScreenRecorder"); }
+    if (!cls) return;
+    id recorder = [cls respondsToSelector:@selector(sharedRecorder)] ? [cls performSelector:@selector(sharedRecorder)] : nil;
+    SEL start = @selector(startSystemRecordingWithMicrophoneEnabled:handler:), stop = @selector(stopSystemRecording:);
+    if (!recorder || ![recorder respondsToSelector:start] || ![recorder respondsToSelector:stop]) return;
+    // systemRecording lies on iOS 16: toggle by attempting a stop first;
+    // error -5829 means "wasn't recording" -> start.
+    ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
+        NSInteger code = [error respondsToSelector:@selector(code)] ? [(NSError *)error code] : 0;
+        if (code == -5829) {
+            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id err2) {});
+        }
+    });
+}
+
+__attribute__((constructor))
+static void TriggrExtInit(void) {
+    if (!objc_getClass("TGTriggr")) return; // not in a Triggr host
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        @try {
+            Class tg = objc_getClass("TGTriggr");
+            CNLog("ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            if (!tg) return; // not in a Triggr host
+            CNRegister();
+            CNLog("ctor: CNRegister completed");
+        } @catch (NSException *e) { CNLog("ctor exception: %@", e); }
+    });
+}
+
 #pragma mark - Registration (BegoneCIA contract)
 
 static void CNRegister(void) {
@@ -350,64 +412,3 @@ static void CNRegister(void) {
     }
 }
 
-#pragma mark - diagnostics
-
-static void CNLog(NSString *fmt, ...) NS_FORMAT_FUNCTION(1,2);
-static void CNLog(NSString *fmt, ...) {
-    static BOOL disabled = NO;
-    if (disabled) return;
-    va_list ap; va_start(ap, fmt);
-    NSString *line = [[NSString alloc] initWithFormat:fmt arguments:ap];
-    va_end(ap);
-    FILE *f = fopen("/var/mobile/Library/Triggr/cn_ext.log", "a");
-    if (!f) { disabled = YES; return; }
-    fprintf(f, "%s\n", line.UTF8String);
-    fclose(f);
-}
-
-#pragma mark - corrected volume / screenrecord (1.5.0+cn2 verified)
-
-static id CNSBControl(SEL sel) {
-    id sb = UIApplication.sharedApplication;
-    return [sb respondsToSelector:sel] ? ((id (*)(id, SEL))objc_msgSend)(sb, sel) : nil;
-}
-
-static void CNVolumeStep(BOOL up) {
-    id volume = CNSBControl(@selector(volumeControl));
-    SEL step = up ? @selector(volumeStepUp) : @selector(volumeStepDown);
-    if (!volume || ![volume respondsToSelector:step] || ![volume respondsToSelector:@selector(changeVolumeByDelta:)]) return;
-    float delta = fabsf(((float (*)(id, SEL))objc_msgSend)(volume, step));
-    if (delta <= 0 || delta > 0.5f) delta = 1.0f / 16;
-    ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? delta : -delta);
-}
-
-static void CNScreenRecord(void) {
-    Class cls = objc_getClass("RPScreenRecorder");
-    if (!cls) { dlopen("/System/Library/Frameworks/ReplayKit.framework/ReplayKit", RTLD_NOW); cls = objc_getClass("RPScreenRecorder"); }
-    if (!cls) return;
-    id recorder = [cls respondsToSelector:@selector(sharedRecorder)] ? [cls performSelector:@selector(sharedRecorder)] : nil;
-    SEL start = @selector(startSystemRecordingWithMicrophoneEnabled:handler:), stop = @selector(stopSystemRecording:);
-    if (!recorder || ![recorder respondsToSelector:start] || ![recorder respondsToSelector:stop]) return;
-    // systemRecording lies on iOS 16: toggle by attempting a stop first;
-    // error -5829 means "wasn't recording" -> start.
-    ((void (*)(id, SEL, id))objc_msgSend)(recorder, stop, ^(id error) {
-        NSInteger code = [error respondsToSelector:@selector(code)] ? [(NSError *)error code] : 0;
-        if (code == -5829) {
-            ((void (*)(id, SEL, BOOL, id))objc_msgSend)(recorder, start, NO, ^(id err2) {});
-        }
-    });
-}
-
-__attribute__((constructor))
-static void TriggrExtInit(void) {
-    if (!objc_getClass("TGTriggr")) return; // not in a Triggr host
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        @try {
-            Class tg = objc_getClass("TGTriggr");
-            CNLog("ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
-            if (!tg) return; // not in a Triggr host
-            CNRegister();
-            CNLog("ctor: CNRegister completed");
-        } @catch (NSException *e) { CNLog("ctor exception: %@", e); }
-    });
-}
