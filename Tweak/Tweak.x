@@ -1134,7 +1134,7 @@ static void TGPerform(NSString *action) {
             TGRunShell([action substringFromIndex:TGShellPrefix.length]);
         } else if ([action hasPrefix:TGExtensionPrefix]) {
             TGRunExtension(action);
- else if ([action hasPrefix:TGAppPrefix]) {
+        } else if ([action hasPrefix:TGAppPrefix]) {
             TGOpenApp([action substringFromIndex:TGAppPrefix.length], NO);
         } else if ([action hasPrefix:TGMenuPrefix]) {
             TGShowMenu([action substringFromIndex:TGMenuPrefix.length]);
