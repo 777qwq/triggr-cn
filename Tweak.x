@@ -20,6 +20,15 @@ static NSString *L10nXform(NSString *s) {
     NSDictionary *m = L10n();
     NSString *hit = m[s];
     if (hit) return hit;
+    // Generic prefix table (1.5.0 legacy families, longest-first).
+    static NSDictionary *pf;
+    static dispatch_once_t once2;
+    dispatch_once(&once2, ^{ pf = L10nPrefixes(); });
+    NSString *bestKey = nil, *bestVal = nil;
+    for (NSString *k in pf) {
+        if ([s hasPrefix:k] && (!bestKey || k.length > bestKey.length)) { bestKey = k; bestVal = pf[k]; }
+    }
+    if (bestKey) return [NSString stringWithFormat:@"%@%@", bestVal, [s substringFromIndex:bestKey.length]];
     // Prefix families for formatted strings ("Home Screen %s", "Icon %s").
     if ([s hasPrefix:@"Home Screen "]) return [NSString stringWithFormat:@"主屏幕 %@", [s substringFromIndex:12]];
     if ([s hasPrefix:@"Icon "]) return [NSString stringWithFormat:@"图标 %@", [s substringFromIndex:5]];
