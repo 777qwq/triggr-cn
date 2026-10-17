@@ -369,7 +369,7 @@ static void TriggrExtInit(void) {
         @try {
             if ([NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) fclose(fopen("/var/mobile/Library/Triggr/cn_ext.log", "w")); // fresh per boot
             Class tg = objc_getClass("TGTriggr");
-            CNLog(@"ctor: cn1.34 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            CNLog(@"ctor: cn1.35 TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
             // Relay pop half: in apps, listen for the back notify and pop nav.
@@ -569,6 +569,43 @@ static void CNRegister(void) {
                 on = ((BOOL (*)(id, SEL))objc_msgSend)(bl, @selector(screenIsOn));
             if (!on && [sb respondsToSelector:@selector(_simulateLockButtonPress)])
                 ((void (*)(id, SEL))objc_msgSend)(sb, @selector(_simulateLockButtonPress));
+        });
+    });
+
+    // 快捷指令（cn2 源码复刻：SpringCuts CLI via NSTask，后台执行不弹前台）
+    reg(@"cn.shortcut", @"快捷指令…", @"square.on.square.intersection.dashed", ^void(id ctx) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIAlertController *a = [UIAlertController alertControllerWithTitle:@"快捷指令" message:@"输入要后台执行的快捷指令名称" preferredStyle:UIAlertControllerStyleAlert];
+            [a addTextField:^(UITextField *tf) {}];
+            [a addAction:[UIAlertAction actionWithTitle:@"运行" style:UIAlertActionStyleDefault handler:^(UIAlertAction *act) {
+                NSString *name = a.textFields.firstObject.text ?: @"";
+                if (!name.length) return;
+                dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+                    @try {
+                        NSString *bin = nil;
+                        for (NSString *p in @[@"/var/jb/usr/bin/springcuts", @"/usr/bin/springcuts", @"/var/jb/usr/local/bin/springcuts"]) {
+                            if ([NSFileManager.defaultManager fileExistsAtPath:p]) { bin = p; break; }
+                        }
+                        if (!bin) {
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                UIAlertController *m = [UIAlertController alertControllerWithTitle:@"Triggr 补丁" message:@"未检测到 SpringCuts：请从 Havoc 源安装后即可后台执行快捷指令。" preferredStyle:UIAlertControllerStyleAlert];
+                                [m addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+                                [UIApplication.sharedApplication.keyWindow.rootViewController presentViewController:m animated:YES completion:nil];
+                            });
+                            return;
+                        }
+                        Class taskCls = NSClassFromString(@"NSTask");
+                        if (taskCls) {
+                            id task = [[taskCls alloc] init];
+                            [task performSelector:@selector(setLaunchPath:) withObject:bin];
+                            [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
+                            [task launch];
+                        }
+                    } @catch (NSException *e) { }
+                });
+            }]];
+            [a addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+            [UIApplication.sharedApplication.keyWindow.rootViewController presentViewController:a animated:YES completion:nil];
         });
     });
 
