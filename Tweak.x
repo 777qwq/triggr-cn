@@ -358,6 +358,12 @@ static void TriggrExtInit(void) {
             CNLog(@"ctor: CNRegister completed");
             // Relay pop half: in apps, listen for the back notify and pop nav.
             if (![NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) {
+                // report injection to SB (sandbox can't write the log)
+                int tok0 = -1;
+                notify_register_dispatch("cn.triggr.appalive-ping", &tok0, dispatch_get_main_queue(), ^(int t) {});
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    notify_post("cn.triggr.appalive");
+                });
                 int tok2 = -1;
                 notify_register_dispatch("cn.triggr.backswipe", &tok2, dispatch_get_main_queue(), ^(int t) {
                     @try {
@@ -376,15 +382,28 @@ static void TriggrExtInit(void) {
                             if (!w.isKeyWindow) continue;
                             UIViewController *r = w.rootViewController;
                             while (r.presentedViewController) r = r.presentedViewController;
-                            vc = r;
+                            // descend through containers to the topmost nav content
+                            for (int guard = 0; guard < 8; guard++) {
+                                if ([r isKindOfClass:NSClassFromString(@"UITabBarController")])
+                                    r = [(UITabBarController *)r selectedViewController] ?: r;
+                                if ([r isKindOfClass:[UINavigationController class]]) { r = [(UINavigationController *)r topViewController]; break; }
+                                if (r.presentedViewController) { r = r.presentedViewController; continue; }
+                                if (r.navigationController && r.navigationController != r) { r = r.navigationController.topViewController ?: r; break; }
+                                break;
+                            }
+                            if (vc == nil) vc = r;
                         }
                         if (vc.navigationController && vc.navigationController.viewControllers.count > 1) {
                             [vc.navigationController popViewControllerAnimated:YES];
-                            CNLog(@"relay: popped");
-                        } else CNLog(@"relay: nothing to pop");
-                    } @catch (NSException *e2) { CNLog(@"relay exception: %@", e2); }
+                        }
+                    } @catch (NSException *e2) { }
                 });
-                CNLog(@"relay: listener armed");
+            } else {
+                // SB listens for app check-ins
+                int tok3 = -1;
+                notify_register_dispatch("cn.triggr.appalive", &tok3, dispatch_get_main_queue(), ^(int t) {
+                    CNLog(@"app alive check-in");
+                });
             }
         } @catch (NSException *e) { CNLog(@"ctor exception: %@", e); }
     });
