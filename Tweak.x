@@ -535,10 +535,10 @@ static void CNRegister(void) {
     // 唤醒屏幕（cn2 system.wake 原版：灭屏才动作，亮屏等于模拟锁键唤醒）
     reg(@"cn.wake", @"唤醒屏幕", @"sun.max", ^void(id ctx) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            id backlight = ((id (*)(id, SEL, NSString *))objc_msgSend)(objc_getClass("SBLockScreenManager"), @selector(sharedInstance));
+            id backlight = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("SBLockScreenManager"), @selector(sharedInstance));
             (void)backlight;
             id sb = UIApplication.sharedApplication;
-            id bl = ((id (*)(id, SEL, NSString *))objc_msgSend)(objc_getClass("SBBacklightController"), @selector(sharedInstance)) ?: nil;
+            id bl = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("SBBacklightController"), @selector(sharedInstance));
             BOOL on = YES;
             if (bl && [bl respondsToSelector:@selector(screenIsOn)])
                 on = ((BOOL (*)(id, SEL))objc_msgSend)(bl, @selector(screenIsOn));
