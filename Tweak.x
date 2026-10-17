@@ -379,13 +379,7 @@ static void TriggrExtInit(void) {
                 }
             }
             if (!tg) return; // not in a Triggr host
-            if (selfPath && !fromExtensions) {
-                NSString *extCopy = [selfPath stringByReplacingOccurrencesOfString:@"/Library/MobileSubstrate/DynamicLibraries/" withString:@"/Library/Triggr/Extensions/"];
-                if ([NSFileManager.defaultManager fileExistsAtPath:extCopy]) {
-                    CNLog(@"ctor: extensions copy exists, deferring registration to it");
-                    return;
-                }
-            }
+
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
         } @catch (NSException *e) { CNLog(@"ctor exception: %@", e); }
