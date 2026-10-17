@@ -1020,7 +1020,11 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"扫一扫", @"Scan"], @[@"scan"]);
             },
             @"system.wxpaycode": ^BOOL(BOOL dry) {
-                return dry ?: TGActivateQuickAction(@"com.tencent.xin", nil, @[@"收付款", @"Pay"], @[@"pay"]);
+                // cn2.68: weixin://widget/pay = the official widget route for
+                // 收付款 (community-verified, url-scheme-collection + URL_Sch_Launcher).
+                // Quick actions only carry 扫一扫 on 8.0.78/16.3 — pay is widget-only.
+                if (!dry) TGOpenURL(@"weixin://widget/pay");
+                return YES;
             },
             @"system.aliscan": ^BOOL(BOOL dry) {
                 if (!dry) TGOpenURL(@"alipay3dtouch://platformapi/startapp?appId=10000007&showOthers=YES&sourceId=3dtouch");
