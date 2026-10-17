@@ -1,9 +1,10 @@
 Package: com.johndie.triggr.l10n
-Name: Triggr汉化补丁 (2.0)
+Name: Triggr汉化补丁
 Version: 2.0.0-cn1.0
 Architecture: iphoneos-arm64
 Description: Triggr 2.0 汉化补丁。自测
 Maintainer: 777qwq
 Author: 777qwq
 Section: Tweaks
+SileoDepiction: https://raw.githubusercontent.com/777qwq/triggr-cn/l10n20/depictions/l10n.json
 Depends: mobilesubstrate, firmware (>= 15.0)

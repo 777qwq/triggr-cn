@@ -1,0 +1,28 @@
+{
+  "minVersion": "0.4",
+  "class": "DepictionTabView",
+  "tabs": [
+    {
+      "tabname": "简介",
+      "views": [
+        { "class": "DepictionSubheaderView", "title": "Triggr 2.0 汉化补丁" },
+        { "class": "DepictionMarkdownView", "markdown": "为 **Triggr 2.0**（官方 RootHide/无根构建）提供中文显示层。\n\n独立插件，hook 显示层精确替换——不修改 Triggr 本体任何文件，与 1.5.0+cn2.x、2.0 官方原版均可共存，卸载即恢复原样。\n\n- 覆盖 2.0 全量 UI 短语（含 If/Otherwise、Action Button、Snapper 3、CopyLog 等新词）\n- 格式串变换（时间区间、主屏幕图标等动态文案）\n- 术语对齐 cn 系定名：聚焦搜索 / 唤醒 Siri / 返回上级" },
+        { "class": "DepictionSeparatorView" },
+        { "class": "DepictionSubheaderView", "title": "安装顺序" },
+        { "class": "DepictionMarkdownView", "markdown": "1. 先装 **Triggr 2.0 官方原版**\n2. 再装本补丁\n3. 注销（udid 击）" }
+      ]
+    },
+    {
+      "tabname": "常见问题",
+      "views": [
+        { "class": "DepictionMarkdownView", "markdown": "**某处文字还是英文？**\n精确匹配方案：未收录的词原样显示。截图发我，下一版补录。\n\n**与 cn2.x 冲突吗？**\n不冲突。本补丁只挂显示层钩子，四动作/返回上级等功能层由本体负责。\n\n**升级 Triggr 官方版后要重装吗？**\n不需要，一般直接生效；官方新增界面词会暂显英文，等我跟版。" }
+      ]
+    },
+    {
+      "tabname": "更新日志",
+      "views": [
+        { "class": "DepictionTableTextView", "title": "2.0.0-cn1.0", "text": "首个 2.0 叠加汉化版：394 条映射 + 格式串变换，双架构（arm64/arm64e）" }
+      ]
+    }
+  ]
+}
