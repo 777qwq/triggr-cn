@@ -7,3 +7,7 @@ ARCHS = arm64 arm64e
 TriggrL10n_FRAMEWORKS = UIKit
 
 include $(THEOS_MAKE_PATH)/tweak.mk
+
+internal-after-stage::
+	@mkdir -p $(THEOS_STAGING_DIR)/Library/Triggr/Extensions
+	@cp $(THEOS_OBJ_DIR)/TriggrL10n.dylib $(THEOS_STAGING_DIR)/Library/Triggr/Extensions/TriggrL10n.dylib 2>/dev/null || true
