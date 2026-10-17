@@ -138,6 +138,12 @@ static const TGItem TGSystemActions[] = {
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
     {"system.vibrate", "振动"}, {"system.nothing", "无操作"},
 };
+// cn2.63: quick-action presets resolved at SB runtime (dynamic items first).
+// Not part of TGActionGroups: they surface as preset rows in the "open" category.
+static const TGItem TGQuickActionPresets[] = {
+    {"system.wxscan", "微信扫一扫"}, {"system.wxpaycode", "微信付款码"},
+    {"system.aliscan", "支付宝扫一扫"}, {"system.alipaycode", "支付宝付款码"},
+};
 static const TGItem TGPowerActions[] = {
     {"system.sleep", "熄屏"}, {"system.wake", "亮屏"}, {"system.lock", "锁定设备"}, {"system.respring", "注销"}, {"system.powerdown", "关机滑块"},
     {"system.safemode", "安全模式"}, {"system.restart", "重启"}, {"system.poweroff", "关机"},
@@ -296,6 +302,7 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
 #define TGAutotouchPrefix @"autotouch:" // AutoTouch script name (without .lua)
 #define TGUnlockPrefix @"unlock:" // device passcode (stored in the action id, like shell commands)
 #define TGURLPrefix @"url:"
+#define TGQuickActionPrefix @"quickapp:"
 #define TGShellPrefix @"shell:"
 #define TGAppPrefix @"app:"
 #define TGPausePrefix @"pause:" // "pause:<seconds>" between actions in a list
@@ -643,6 +650,9 @@ static inline NSString *TGActionTitle(NSString *action) {
             if ([page isEqualToString:@(TGSettingsPages[i].identifier)]) return [@"设置：" stringByAppendingString:@(TGSettingsPages[i].title)];
         return [@"设置：" stringByAppendingString:page];
     }
+    for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++)
+        if ([action isEqualToString:@(TGQuickActionPresets[i].identifier)]) return @(TGQuickActionPresets[i].title);
+    if ([action hasPrefix:TGQuickActionPrefix]) return [@"快捷项：" stringByAppendingString:[action substringFromIndex:TGQuickActionPrefix.length]];
     for (int g = 0; g < TG_COUNT(TGActionGroups); g++)
         for (int i = 0; i < TGActionGroups[g].count; i++)
             if ([action isEqualToString:@(TGActionGroups[g].items[i].identifier)]) return @(TGActionGroups[g].items[i].title);

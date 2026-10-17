@@ -841,15 +841,16 @@ static NSString *TGCategoryOf(NSString *action) {
         [rows addObject:[self rowForCommand:TGSettingsPrefix title:@"打开设置页…" prompt:nil]];
         [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
         [rows addObject:[self rowForCommand:TGURLPrefix title:@"打开 URL…" prompt:@"任意 URL 或 URL scheme，如 https://…、tel:…、music://"]];
-        // cn2.62: preset scanner actions (open category per TA request).
-        // WeChat: dl/scan placeholder — SquidGesture has no weixin:// at all, it
-        // triggers WeChat's home-screen quick action via
-        // activateShortcut:withBundleIdentifier:forIconView: (obfuscated type);
-        // pending WeChat Info.plist ShortcutItems evidence.
+        // cn2.63: quick-action presets (open category per TA request).
+        // WeChat: activate WeChat's own dynamic quick actions (Title match),
+        // TypeX-proven channel — activateShortcut:withBundleIdentifier:forIconView:.
         // Alipay: 3dtouch-only scheme recovered from SquidGesture — scan + pay code.
-        [rows addObject:[self rowForAction:@"url:weixin://dl/scan" title:@"微信扫一扫"]];
-        [rows addObject:[self rowForAction:@"url:alipay3dtouch://platformapi/startapp?appId=10000007&showOthers=YES&sourceId=3dtouch" title:@"支付宝扫一扫"]];
-        [rows addObject:[self rowForAction:@"url:alipay3dtouch://platformapi/startapp?appId=20000056&src=3dtouch" title:@"支付宝付款码"]];
+        [rows addObject:[self rowForAction:@"system.wxscan" title:@"微信扫一扫"]];
+        [rows addObject:[self rowForAction:@"system.wxpaycode" title:@"微信付款码"]];
+        [rows addObject:[self rowForAction:@"system.aliscan" title:@"支付宝扫一扫"]];
+        [rows addObject:[self rowForAction:@"system.alipaycode" title:@"支付宝付款码"]];
+        // Generic: any app's quick action by bundle id + type string.
+        [rows addObject:[self rowForCommand:TGQuickActionPrefix title:@"触发 App 快捷项…" prompt:@"格式：App 包标识|type，如 com.tencent.xin|com.tencent.xin.xxx（类型串可用其他工具从该 App 快捷项中查得）"]];
             } else if ([category isEqualToString:@"text"]) {
         [rows addObject:[self rowForCommand:TGMessagePrefix title:@"显示文字…" prompt:@"在弹窗中显示的文字"]];
         [rows addObject:[self rowForCommand:TGSpeakPrefix title:@"朗读文字…" prompt:@"设备朗读的文字"]];
