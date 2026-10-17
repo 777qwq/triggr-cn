@@ -902,6 +902,8 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 
 
 
+static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints);
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -1150,8 +1152,6 @@ static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray
     });
     return YES;
 }
-
-static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray<NSString *> *titles, NSArray<NSString *> *typeHints);
 
 static BOOL TGCanPerform(NSString *action) {
     if (action.length == 0) return NO;
