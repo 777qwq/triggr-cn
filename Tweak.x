@@ -354,34 +354,6 @@ static void TriggrExtInit(void) {
             if ([NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) fclose(fopen("/var/mobile/Library/Triggr/cn_ext.log", "w")); // fresh per boot
             Class tg = objc_getClass("TGTriggr");
             CNLog(@"ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
-            Dl_info selfInfo;
-            NSString *selfPath = nil;
-            if (dladdr((void *)TriggrExtInit, &selfInfo) && selfInfo.dli_fname) selfPath = @(selfInfo.dli_fname);
-(void)selfPath;
-            // Self-install into Triggr's Extensions dir (host contract needs it there).
-            {
-                Dl_info di;
-                if (dladdr((void *)TriggrExtInit, &di) && di.dli_fname) {
-                    NSString *selfPath = @(di.dli_fname);
-                    NSString *jb = nil;
-                    NSRange mk = [selfPath rangeOfString:@"/.jbroot-"];
-                    if (mk.location != NSNotFound) {
-                        NSRange sl = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(mk.location+1, selfPath.length-mk.location-1)];
-                        if (sl.location != NSNotFound) jb = [selfPath substringToIndex:sl.location];
-                    } else if ([selfPath hasPrefix:@"/var/jb/"]) jb = @"/var/jb";
-                    if (jb) {
-                        NSString *dst = [jb stringByAppendingPathComponent:@"Library/Triggr/Extensions/TriggrL10n.dylib"];
-                        if (![selfPath isEqualToString:dst] && ![NSFileManager.defaultManager fileExistsAtPath:dst]) {
-                            [NSFileManager.defaultManager createDirectoryAtPath:[dst stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
-                            NSError *err = nil;
-                            [NSFileManager.defaultManager copyItemAtPath:selfPath toPath:dst error:&err];
-                            CNLog(@"self-install to %@: %@", dst, err ?: @"ok");
-                        }
-                    }
-                }
-            }
-            if (!tg) return; // not in a Triggr host
-
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
             // Relay pop half: in apps, listen for the back notify and pop nav.
@@ -413,23 +385,6 @@ static void TriggrExtInit(void) {
                     } @catch (NSException *e2) { CNLog(@"relay exception: %@", e2); }
                 });
                 CNLog(@"relay: listener armed");
-            }
-            // touch-engine discovery (返回上级 needs a real synthesizer in SB)
-            {
-                unsigned int nc = 0;
-                Class *cls = objc_copyClassList(&nc);
-                for (unsigned int i = 0; i < nc; i++) {
-                    const char *nm = class_getName(cls[i]);
-                    if (strstr(nm, "Touch") || strstr(nm, "ATTouch") || strstr(nm, "TouchEngine") || strstr(nm, "Simulate")) {
-                        unsigned int nm2 = 0;
-                        Method *ms = class_copyMethodList(cls[i], &nm2);
-                        NSMutableString *list = [NSMutableString string];
-                        for (unsigned int j = 0; j < nm2 && j < 40; j++) [list appendFormat:@"%@ ", NSStringFromSelector(method_getName(ms[j]))];
-                        if (ms) free(ms);
-                        if (nm2) CNLog(@"engine? %s (%u): %@", nm, nm2, list);
-                    }
-                }
-                if (cls) free(cls);
             }
         } @catch (NSException *e) { CNLog(@"ctor exception: %@", e); }
     });
