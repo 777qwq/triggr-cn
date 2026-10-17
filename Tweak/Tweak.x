@@ -14,6 +14,9 @@
 #import <UIKit/UIKit.h>
 
 
+extern char **environ;
+
+
 #import <UIKit/UIGestureRecognizerSubclass.h>
 #import <AVFoundation/AVFoundation.h>
 #import <QuartzCore/QuartzCore.h>
@@ -283,8 +286,18 @@ static int TGSpawnShell(const char *const argv[], pid_t *pid) {
 
 // Hands a run to triggrd (it checks the action is one of the user's own).
 static void TGRunViaDaemon(NSString *action) {
-    NSString *path = [TGRunQueue stringByAppendingPathComponent:[NSString stringWithFormat:@"%.6f-%u.plist", CFAbsoluteTimeGetCurrent(), arc4random()]];
+    // Write to the jbroot-real queue path: triggrd (a jbroot process) resolves
+    // the same path through its own view — plain /var/tmp is a different dir
+    // in its rewritten view (libvroot), so the request would never land.
+    NSString *queue = TGRunQueue; // /var/tmp passes through libvroot on both sides (probe-proven)
+    NSString *path = [queue stringByAppendingPathComponent:[NSString stringWithFormat:@"%.6f-%u.plist", CFAbsoluteTimeGetCurrent(), arc4random()]];
+    [[NSFileManager defaultManager] createDirectoryAtPath:queue withIntermediateDirectories:YES attributes:nil error:nil];
     BOOL ok = [@{@"Action": action} writeToFile:path atomically:YES];
+    // [sb] diag: the daemon mirrors its drain count into the same file.
+    NSString *line = [NSString stringWithFormat:@"[sb %f] queue=%@ write=%@\n",
+        [NSDate timeIntervalSinceReferenceDate], path, ok ? @"ok" : @"FAILED"];
+    FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
+    if (fp) { fwrite(line.UTF8String, 1, line.length, fp); fclose(fp); }
     if (ok) notify_post(TGRunRequestNotification);
 }
 
@@ -725,29 +738,123 @@ static void TGRunAutoTouch(NSString *name) {
     }
 }
 
-static void TGRunShortcut(NSString *name) {
-    // Preferred: springcuts CLI via NSTask (RC's proven pattern — posix_spawn
-    // through sh fails under roothide, NSTask launches the binary directly).
-    NSString *bin = TGSpringCutsBinary();
-    if (bin) {
-        @try {
-            Class taskCls = NSClassFromString(@"NSTask");
-            if (taskCls) {
-                id task = [[taskCls alloc] init];
-                [task performSelector:@selector(setLaunchPath:) withObject:bin];
-                [task performSelector:@selector(setArguments:) withObject:@[@"-r", name]];
-                [task performSelector:@selector(launch)];
-                return;
-            }
-            // popen fallback (RC's second route)
-            FILE *fp = popen([[NSString stringWithFormat:@"%@ -r \"%@\"", bin, name] UTF8String], "r");
-            if (fp) pclose(fp);
-            return;
-        } @catch (NSException *e) {
-        }
+// Shortcut channel v2 (cn2.1): WorkflowKit in-process background runner.
+// Verified against iOS 16.3 runtime headers:
+//   WFDatabase.defaultDatabase
+//     -uniqueVisibleReferenceForWorkflowName:  (name -> WFWorkflowReference, .identifier = UUID)
+//   WFSpringBoardWorkflowRunnerClient (VoiceShortcutClient, SB-native runner)
+//     -initWithWorkflowIdentifier: + -start, self-delegates the run result.
+//   (WFWidgetWorkflowRunnerClient only has initWithWorkflowIdentifier: on 16.3 —
+//    the location: variant came later; used as a fallback class only.)
+// Cross-version facts (headers: lechium 15.5 / qingralf 16 / MTACS 17):
+//   defaultDatabase + uniqueVisibleReferenceForWorkflowName: + initWithWorkflowIdentifier:
+//   + start all present on 15/16/17. Result delegate: 15's SB client is a standalone
+//   class with NO setDelegate: (self-delegates internally -> fire-and-forget there);
+//   16/17 inherit setDelegate: and call didFinishRunningWorkflowWithOutput:error:cancelled:.
+// Dynamic dispatch only — no WorkflowKit/VoiceShortcutClient link dependency.
+
+
+// Shortcut channel v3: the daemon runs the whole WorkflowKit chain (it has
+// full DB access — SB's sandbox EPERMs the shortcuts DB, cn2.15). SB only
+// drops the request in the run queue, exactly like shell actions.
+// triggrd is spawned here on demand: launchd KeepAlive does not resurrect
+// jbroot daemons under roothide, and triggrd's flock guards double-spawn.
+__attribute__((unused)) static void TGSpawnDaemon(void) {
+    static BOOL tried;
+    if (tried) return;
+    tried = YES;
+    NSString *path = TGJB(@"/usr/libexec/triggrd");
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) return;
+    const char *argv[] = {path.fileSystemRepresentation, NULL};
+    pid_t pid = 0;
+    posix_spawn_file_actions_t actions;
+    posix_spawn_file_actions_init(&actions);
+    posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
+    posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
+    int error = posix_spawn(&pid, path.fileSystemRepresentation, &actions, NULL, (char *const *)argv, environ);
+    posix_spawn_file_actions_destroy(&actions);
+    if (error == 0) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ int st; waitpid(pid, &st, 0); });
     }
-    CFUserNotificationDisplayNotice(0, 0, NULL, NULL, NULL, CFSTR("Triggr"),
-        CFSTR("未检测到 SpringCuts：请从 Havoc 源安装后即可后台执行快捷指令。"), CFSTR("好"));
+}
+
+@interface TGShortcutRunObserver : NSObject
+@end
+@implementation TGShortcutRunObserver
+static void TGSDiag(NSString *line) {
+    FILE *fp = fopen("/var/mobile/Library/Triggr/diag.log", "a");
+    if (!fp) return;
+    NSString *l = [NSString stringWithFormat:@"[v4 %f] %@\n", [NSDate timeIntervalSinceReferenceDate], line];
+    fwrite(l.UTF8String, 1, l.length, fp);
+    fclose(fp);
+}
+
+- (void)workflowRunnerClient:(id)client didFinishRunningWorkflowWithOutput:(id)output error:(id)error cancelled:(BOOL)cancelled {
+    TGSDiag([NSString stringWithFormat:@"delegate: out=%@ err=%@ cancelled=%d", output, error, cancelled]);
+}
+@end
+
+
+void TGInjectShortcutDB(void);  // TGShortcutDB.c (pure C)
+id TGShortcutIdentifierForName(void *name); // same file
+
+__attribute__((unused)) static void TGStartShortcut(NSString *ident) {
+    static id observer;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
+
+    // Widget variant targets com.apple.siri.VoiceShortcuts.xpc which does not
+    // exist on 16.3 (TA-verified full-disk search -> 4097). The SB variant
+    // targets BackgroundShortcutRunner (the real backend, QaQ-confirmed).
+    Class clientCls = NSClassFromString(@"WFSpringBoardWorkflowRunnerClient")
+                   ?: NSClassFromString(@"WFWidgetWorkflowRunnerClient");
+    if (!clientCls) { TGSDiag(@"start: no client class"); return; }
+    SEL initSel = @selector(initWithWorkflowIdentifier:);
+    if (![clientCls instancesRespondToSelector:initSel]) { TGSDiag(@"start: no init sel"); return; }
+    @try {
+        // NSString, not NSUUID: the identifier goes straight into
+        // WFWorkflowDatabaseRunDescriptor (string-keyed DB lookup, 18.2 decomp).
+        id client = ((id (*)(id, SEL, id))objc_msgSend)([clientCls alloc], initSel, ident);
+        if (!client) { TGSDiag(@"start: init nil"); return; }
+        if ([client respondsToSelector:@selector(setDelegate:)])
+            ((void (*)(id, SEL, id))objc_msgSend)(client, @selector(setDelegate:), observer);
+        SEL startSel = @selector(start);
+        if ([client respondsToSelector:startSel])
+            ((void (*)(id, SEL))objc_msgSend)(client, startSel);
+    } @catch (NSException *e) {
+        TGSDiag([NSString stringWithFormat:@"start: exception %@", e]);
+    }
+}
+
+static void TGRunShortcut(NSString *name) {
+    // v4 final (Actra-proven): WFWidgetWorkflowRunnerClient + UUID, nothing else.
+    // cn2.17's "Widget variant is dead" verdict was wrong — Actra runs it fine.
+    NSDictionary *map = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcutmap.plist"];
+    NSString *ident = map[name];
+    if (![ident isKindOfClass:NSString.class] || !ident.length) {
+        if ([[NSUUID alloc] initWithUUIDString:name]) ident = name;
+    }
+    TGSDiag([NSString stringWithFormat:@"run: name=%@ ident=%@", name, ident ?: @"-"]);
+    if (!ident.length) { TGSDiag(@"run: no mapping — open Triggr settings to sync"); return; }
+    dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+    dlopen("/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit", RTLD_LAZY);
+    Class clientCls = NSClassFromString(@"WFWidgetWorkflowRunnerClient");
+    if (!clientCls) { TGSDiag(@"run: no Widget client class"); return; }
+    static id observer;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ observer = [TGShortcutRunObserver new]; });
+    @try {
+        id client = ((id(*)(id,SEL,id))objc_msgSend)(((id(*)(id,SEL))objc_msgSend)(clientCls, sel_registerName("alloc")),
+            sel_registerName("initWithWorkflowIdentifier:"), ident);
+        if (!client) { TGSDiag(@"run: client init nil"); return; }
+        if ([client respondsToSelector:NSSelectorFromString(@"setDelegate:")])
+            ((void(*)(id,SEL,id))objc_msgSend)(client, NSSelectorFromString(@"setDelegate:"), observer);
+        ((void(*)(id,SEL))objc_msgSend)(client, NSSelectorFromString(@"start"));
+        TGSDiag(@"run: started");
+    } @catch (NSException *e) {
+        TGSDiag([NSString stringWithFormat:@"run: exception %@", e]);
+    }
 }
 
 static void TGUnlockDevice(NSString *password) {
@@ -1143,7 +1250,19 @@ static BOOL TGActivateQuickAction(NSString *bundle, NSString *exactType, NSArray
             if (found) break;
         }
     }
-    if (!found) return NO;
+    if (!found) {
+        // cn2.64 diag: dump the actual pool so the user can send the real
+        // titles/types when title matching misses (wxpaycode dead report).
+        NSMutableString *dump = [NSMutableString stringWithFormat:@"[qa %f] %@ pool=%lu\n", [NSDate timeIntervalSinceReferenceDate], bundle, (unsigned long)pool.count];
+        for (id item in pool) {
+            NSString *ti = [item respondsToSelector:titleSel] ? [item localizedTitle] : nil;
+            NSString *ty = [item respondsToSelector:typeSel] ? ((NSString *(*)(id, SEL))objc_msgSend)(item, typeSel) : nil;
+            [dump appendFormat:@"  title=%@ type=%@\n", [ti isKindOfClass:NSString.class] ? ti : @"?", [ty isKindOfClass:NSString.class] ? ty : @"?"];
+        }
+        FILE *qfp = fopen("/var/mobile/Library/Triggr/quickact.log", "a");
+        if (qfp) { fwrite(dump.UTF8String, 1, dump.length, qfp); fclose(qfp); }
+        return NO;
+    }
     Class iconView = NSClassFromString(@"SBIconView");
     SEL activate = @selector(activateShortcut:withBundleIdentifier:forIconView:);
     if (!iconView || ![iconView respondsToSelector:activate]) return NO;
@@ -3109,6 +3228,7 @@ static void TGUpdateOtherEvents(void) {
     }
 }
 
+
 %ctor {
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) return;
     TGReadAssignments();
@@ -3144,4 +3264,5 @@ static void TGUpdateOtherEvents(void) {
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");
     Class uiBarWindow = objc_getClass("UIStatusBarWindow");
     if (sbBarWindow && !(uiBarWindow && [sbBarWindow isSubclassOfClass:uiBarWindow])) %init(StatusBarWindow17);
+    
 }
