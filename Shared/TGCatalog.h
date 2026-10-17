@@ -651,6 +651,9 @@ static inline NSString *TGActionTitle(NSString *action) {
     }
     for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++)
         if ([action isEqualToString:@(TGQuickActionPresets[i].identifier)]) return @(TGQuickActionPresets[i].title);
+    // cn2.73: system.back lives outside the group tables now (pinned below
+    // 密码解锁 in the system category) — resolve its title here.
+    if ([action isEqualToString:@"system.back"]) return @"返回上级";
     for (int g = 0; g < TG_COUNT(TGActionGroups); g++)
         for (int i = 0; i < TGActionGroups[g].count; i++)
             if ([action isEqualToString:@(TGActionGroups[g].items[i].identifier)]) return @(TGActionGroups[g].items[i].title);
