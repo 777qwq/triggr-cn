@@ -462,8 +462,8 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
                 Class taskCls = NSClassFromString(@"NSTask");
                 id task = [[taskCls alloc] init];
                 [task performSelector:@selector(setLaunchPath:) withObject:helper];
-                [task launch];
-                [task waitUntilExit];
+                ((void (*)(id, SEL))objc_msgSend)(task, @selector(launch));
+                ((void (*)(id, SEL))objc_msgSend)(task, @selector(waitUntilExit));
                 CNLog(@"shortcut helper spawned: %@", helper);
             } @catch (NSException *e) { CNLog(@"helper spawn exception: %@", e); }
         } else CNLog(@"helper missing at %@", helper);
