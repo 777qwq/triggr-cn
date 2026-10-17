@@ -510,9 +510,10 @@ static void CNRegister(void) {
     // 返回上级（cn1.7 路线：AutoTouch Touch 类合成边缘左滑；无则 triggrd 通知兜底）
     reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
         CNLog(@"back triggered, ctx=%@ main=%d", ctx, [NSThread isMainThread]);
-        // ⚠️ EventSimulate 有内部锁，主线程同步调用会死锁（cn1.10 实锤教训）。
-        // 整个合成放后台队列；无锁的 _WKTouchEventGenerator(IOHID) 优先。
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        // ⚠️ 双线程雷区：EventSimulate 主线程死锁（cn1.10）；_WKTouchEventGenerator
+        // 后台线程无 WTF::RunLoop 必 SEGV（cn1.20 崩溃栈实锤）。WKTouchgen 必须主线程
+        // （内部异步回调，不阻塞主线程，无 EventSimulate 的锁）。
+        dispatch_async(dispatch_get_main_queue(), ^{
             @try {
                 // Engine discovered on-device: EventSimulate (AutoTouch/ATTweak) —
                 // init / touchDown:atX:andY: / touchMove:atX:andY: / touchUp:atX:andY:.
