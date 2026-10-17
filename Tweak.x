@@ -468,7 +468,6 @@ static void CNRegister(void) {
 
     void (^reg)(NSString *, NSString *, NSString *, void (^)(id)) = ^void(NSString *ident, NSString *title, NSString *symbol, void (^handler)(id)) {
         CNLog(@"reg: %@", ident);
-        __block NSString *regIdent = ident;
         @try {
         id ai = [[infoCls alloc] init];
         if (!ai) { CNLog(@"reg fail: alloc init nil %@", ident); return; }
