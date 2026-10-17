@@ -350,6 +350,7 @@ static void TriggrExtInit(void) {
     if (!objc_getClass("TGTriggr")) return; // not in a Triggr host
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         @try {
+            if ([NSProcessInfo.processInfo.processName isEqualToString:@"SpringBoard"]) fclose(fopen("/var/mobile/Library/Triggr/cn_ext.log", "w")); // fresh per boot
             Class tg = objc_getClass("TGTriggr");
             CNLog(@"ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
             Dl_info selfInfo;
@@ -541,24 +542,30 @@ static void CNRegister(void) {
                         return;
                     }
                 }
-                Class es = objc_getClass("EventSimulate");
-                if (es && [es instancesRespondToSelector:@selector(touchDown:atX:andY:)]) {
-                    id sim = [[es alloc] init];
-                    if (sim) {
+                Class wk = objc_getClass("_WKTouchEventGenerator");
+                if (wk && [wk instancesRespondToSelector:@selector(touchDownAtPoints:touchCount:)]) {
+                    id gen = [[wk alloc] init];
+                    CNLog(@"back: gen=%@ cls=%@", gen, wk);
+                    if (gen) {
                         CGRect scr = [UIScreen mainScreen].bounds;
                         double y = scr.size.height / 2;
                         double x0 = 2.0, x1 = scr.size.width * 0.45;
-                        void (*down)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                        void (*move)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                        void (*up)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                        CNLog(@"back: EventSimulate swipe");
-                        down(sim, @selector(touchDown:atX:andY:), 2, x0, y);
+                        NSMutableArray *pts = [NSMutableArray array];
                         int steps = 12;
-                        for (int i = 1; i <= steps; i++) {
-                            move(sim, @selector(touchMove:atX:andY:), 2, x0 + (x1-x0)*i/steps, y);
-                            usleep(16000);
+                        for (int i = 0; i <= steps; i++) {
+                            double xx = x0 + (x1-x0)*i/steps;
+                            [pts addObject:@[@(xx), @(y)]];
                         }
-                        up(sim, @selector(touchUp:atX:andY:), 2, x1, y);
+                        void (*d2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
+                        void (*m2)(id,SEL,NSArray *,int,double) = (void (*)(id,SEL,NSArray *,int,double))objc_msgSend;
+                        void (*u2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
+                        CNLog(@"back: wk down");
+                        d2(gen, @selector(touchDownAtPoints:touchCount:), @[pts[0]], 1);
+                        CNLog(@"back: wk move");
+                        m2(gen, @selector(moveToPoints:touchCount:duration:), pts, steps+1, 0.18);
+                        CNLog(@"back: wk up");
+                        u2(gen, @selector(liftUpAtPoints:touchCount:), @[pts[steps]], 1);
+                        CNLog(@"back: wk done");
                         return;
                     }
                 }
