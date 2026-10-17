@@ -24,7 +24,7 @@ static NSString *MojibakeRepair(NSString *s) {
     static NSCharacterSet *sus;
     static dispatch_once_t once0;
     dispatch_once(&once0, ^{
-        NSMutableCharacterSet *mc = [NSMutableCharacterSet characterSet];
+        NSMutableCharacterSet *mc = [[NSMutableCharacterSet alloc] init];
         [mc addCharactersInRange:NSMakeRange(0x80, 0x80)]; // 0x80-0xFF
         sus = mc;
     });
