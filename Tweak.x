@@ -220,6 +220,7 @@ static NSArray<NSString *> *CNAutoTouchScriptList(void) {
             BOOL isDir = NO;
             [fm fileExistsAtPath:full isDirectory:&isDir];
             if (isDir) {
+                if ([file isEqualToString:@"Records"]) continue; // touch recordings, not scripts
                 for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
                     if (([sub.pathExtension isEqualToString:@"lua"] || [sub.pathExtension isEqualToString:@"at"]) && ![sub hasPrefix:@"."]) {
                         NSString *rel = [NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension];
