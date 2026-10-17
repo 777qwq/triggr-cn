@@ -443,6 +443,31 @@ static NSArray<NSString *> *CNShortcutNamesFromDB(void) {
     NSString *src = @"/var/mobile/Library/Shortcuts/Shortcuts.sqlite";
     NSString *dst = @"/var/mobile/Library/Triggr/sc.db";
     // cn2.17 pattern: SB cannot reliably read the live WAL DB; copy + wal/shm first.
+    if (![fm fileExistsAtPath:src] && ![fm fileExistsAtPath:dst]) {
+        // spawn entitlement helper (roothide: /var/jb 不可见，从自身路径反推 jbroot)
+        NSString *jbroot = nil;
+        Dl_info di;
+        if (dladdr((void *)CNRegisterShortcutsFromDB, &di) && di.dli_fname) {
+            NSString *sp = @(di.dli_fname);
+            NSRange mk = [sp rangeOfString:@"/.jbroot-"];
+            if (mk.location != NSNotFound) {
+                NSRange sl = [sp rangeOfString:@"/" options:0 range:NSMakeRange(mk.location+1, sp.length-mk.location-1)];
+                if (sl.location != NSNotFound) jbroot = [sp substringToIndex:sl.location];
+            }
+        }
+        if (!jbroot) jbroot = @"/var/jb";
+        NSString *helper = [jbroot stringByAppendingPathComponent:@"usr/libexec/cnshortcuts"];
+        if ([fm fileExistsAtPath:helper]) {
+            @try {
+                Class taskCls = NSClassFromString(@"NSTask");
+                id task = [[taskCls alloc] init];
+                [task performSelector:@selector(setLaunchPath:) withObject:helper];
+                [task launch];
+                [task waitUntilExit];
+                CNLog(@"shortcut helper spawned: %@", helper);
+            } @catch (NSException *e) { CNLog(@"helper spawn exception: %@", e); }
+        } else CNLog(@"helper missing at %@", helper);
+    }
     NSError *cperr = nil;
     for (NSString *ext in @[@"", @"-wal", @"-shm"]) {
         NSString *s = [src stringByAppendingString:ext];
@@ -657,7 +682,31 @@ static void CNRegister(void) {
             }
             [a addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *act) {
                 NSString *t = a.textFields.firstObject.text ?: @"";
-                if (t.length) [NSUserDefaults.standardUserDefaults setObject:t forKey:@"cn_unlock_pw"];
+                if (!t.length) return;
+                [NSUserDefaults.standardUserDefaults setObject:t forKey:@"cn_unlock_pw"];
+                @try {
+                    Class triggrCls = objc_getClass("TGTriggr");
+                    Class infoCls = objc_getClass("TGActionInfo");
+                    id shared = [triggrCls performSelector:@selector(shared)];
+                    if (shared) {
+                        id ai = [[infoCls alloc] init];
+                        [ai performSelector:@selector(setIdentifier:) withObject:@"cn.unlock.go"];
+                        [ai performSelector:@selector(setTitle:) withObject:@"密码解锁"];
+                        [ai performSelector:@selector(setGroup:) withObject:@"Triggr 补丁"];
+                        [ai performSelector:@selector(setSymbolName:) withObject:@"lock.open"];
+                        [shared performSelector:@selector(registerAction:handler:) withObject:ai withObject:^void(id ctx2) {
+                            dispatch_async(dispatch_get_main_queue(), ^{
+                                NSString *pw2 = [NSUserDefaults.standardUserDefaults stringForKey:@"cn_unlock_pw"];
+                                id mgr = ((id (*)(id, SEL))objc_msgSend)(objc_getClass("SBLockScreenManager"), @selector(sharedInstance));
+                                if (!mgr || !pw2.length) return;
+                                if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
+                                    ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
+                                if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)])
+                                    ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), pw2, YES);
+                            });
+                        }];
+                    }
+                } @catch (NSException *e2) { }
             }]];
             [a addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
             [UIApplication.sharedApplication.keyWindow.rootViewController presentViewController:a animated:YES completion:nil];
