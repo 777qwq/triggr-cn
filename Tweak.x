@@ -349,6 +349,28 @@ static void TriggrExtInit(void) {
         @try {
             Class tg = objc_getClass("TGTriggr");
             CNLog(@"ctor: TGTriggr=%@ prog=%@", tg, NSProcessInfo.processInfo.processName);
+            // Self-install into Triggr's Extensions dir (host contract needs it there).
+            {
+                Dl_info di;
+                if (dladdr((void *)TriggrExtInit, &di) && di.dli_fname) {
+                    NSString *selfPath = @(di.dli_fname);
+                    NSString *jb = nil;
+                    NSRange mk = [selfPath rangeOfString:@"/.jbroot-"];
+                    if (mk.location != NSNotFound) {
+                        NSRange sl = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(mk.location+1, selfPath.length-mk.location-1)];
+                        if (sl.location != NSNotFound) jb = [selfPath substringToIndex:sl.location];
+                    } else if ([selfPath hasPrefix:@"/var/jb/"]) jb = @"/var/jb";
+                    if (jb) {
+                        NSString *dst = [jb stringByAppendingPathComponent:@"Library/Triggr/Extensions/TriggrL10n.dylib"];
+                        if (![selfPath isEqualToString:dst] && ![NSFileManager.defaultManager fileExistsAtPath:dst]) {
+                            [NSFileManager.defaultManager createDirectoryAtPath:[dst stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
+                            NSError *err = nil;
+                            [NSFileManager.defaultManager copyItemAtPath:selfPath toPath:dst error:&err];
+                            CNLog(@"self-install to %@: %@", dst, err ?: @"ok");
+                        }
+                    }
+                }
+            }
             if (!tg) return; // not in a Triggr host
             CNRegister();
             CNLog(@"ctor: CNRegister completed");
