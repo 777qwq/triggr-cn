@@ -816,8 +816,11 @@ static NSString *TGCategoryOf(NSString *action) {
     else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
     for (int i = 0; i < count; i++) [rows addObject:[self rowForAction:@(items[i].identifier) title:@(items[i].title)]];
-    if ([category isEqualToString:@"system"])
+    if ([category isEqualToString:@"system"]) {
+        // cn2.72: 返回上级 sits right below 密码解锁 (TA order).
         [rows insertObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁…" prompt:@"设备的锁屏密码，存储在本机，用于锁屏状态下自动解锁"] atIndex:0];
+        [rows insertObject:[self rowForAction:@"system.back" title:@"返回上级"] atIndex:1];
+    }
     if ([category isEqualToString:@"media"])
         [rows addObject:[self rowForCommand:TGAirPlayPrefix title:@"AirPlay 到…" prompt:@"扬声器或电视名称，与 AirPlay 菜单中显示的一致（部分匹配即可）"]];
     if ([category isEqualToString:@"switches"]) {
