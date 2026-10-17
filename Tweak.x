@@ -509,37 +509,59 @@ static void CNRegister(void) {
     // 返回上级（cn1.7 路线：AutoTouch Touch 类合成边缘左滑；无则 triggrd 通知兜底）
     reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
         dispatch_async(dispatch_get_main_queue(), ^{
-            Class touch = objc_getClass("Touch");
-            if (touch && ![touch respondsToSelector:@selector(touchDown:x:y:)]) {
-                // dump ground truth: class + instance method lists
-                unsigned int n = 0;
-                Method *ms = class_copyMethodList(object_getClass(touch), &n);
-                for (unsigned int i = 0; i < n; i++) CNLog(@"Touch cls: %@", NSStringFromSelector(method_getName(ms[i])));
-                free(ms);
-                ms = class_copyMethodList(touch, &n);
-                for (unsigned int i = 0; i < n; i++) CNLog(@"Touch inst: %@", NSStringFromSelector(method_getName(ms[i])));
-                free(ms);
-            }
             @try {
-            if (touch && [touch respondsToSelector:@selector(touchDown:x:y:)]) {
-                CGRect scr = [UIScreen mainScreen].bounds;
-                double scale = [UIScreen mainScreen].scale;
-                double y = scr.size.height / 2;
-                double x0 = 1.0, x1 = scr.size.width * 0.45;
-                void (*down)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                void (*move)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                void (*up)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
-                // Touch class takes pixel coords (点数×scale, cn 实测结论)
-                down(touch, @selector(touchDown:x:y:), 2, x0*scale, y*scale);
-                int steps = 8;
-                for (int i = 1; i <= steps; i++) {
-                    move(touch, @selector(touchMove:x:y:), 2, (x0 + (x1-x0)*i/steps)*scale, y*scale);
-                    usleep(16000);
+                // Engine discovered on-device: EventSimulate (AutoTouch/ATTweak) —
+                // init / touchDown:atX:andY: / touchMove:atX:andY: / touchUp:atX:andY:.
+                Class es = objc_getClass("EventSimulate");
+                if (es && [es instancesRespondToSelector:@selector(touchDown:atX:andY:)]) {
+                    id sim = [[es alloc] init];
+                    if (sim) {
+                        CGRect scr = [UIScreen mainScreen].bounds;
+                        double y = scr.size.height / 2;
+                        double x0 = 2.0, x1 = scr.size.width * 0.45;
+                        void (*down)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                        void (*move)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                        void (*up)(id,SEL,long long,double,double) = (void (*)(id,SEL,long long,double,double))objc_msgSend;
+                        CNLog(@"back: EventSimulate swipe");
+                        down(sim, @selector(touchDown:atX:andY:), 2, x0, y);
+                        int steps = 12;
+                        for (int i = 1; i <= steps; i++) {
+                            move(sim, @selector(touchMove:atX:andY:), 2, x0 + (x1-x0)*i/steps, y);
+                            usleep(16000);
+                        }
+                        up(sim, @selector(touchUp:atX:andY:), 2, x1, y);
+                        return;
+                    }
                 }
-                up(touch, @selector(touchUp:x:y:), 2, x1*scale, y*scale);
-            } else {
+                // Fallback: WebKit's IOHID generator (present in SB via WebKit).
+                Class wk = objc_getClass("_WKTouchEventGenerator");
+                if (wk && [wk instancesRespondToSelector:@selector(touchDownAtPoints:touchCount:)]) {
+                    id gen = [[wk alloc] init];
+                    if (gen) {
+                        CGRect scr = [UIScreen mainScreen].bounds;
+                        double y = scr.size.height / 2;
+                        double x0 = 2.0, x1 = scr.size.width * 0.45;
+                        NSMutableArray *pts = [NSMutableArray array];
+                        int steps = 12;
+                        for (int i = 0; i <= steps; i++) {
+                            double xx = x0 + (x1-x0)*i/steps;
+                            [pts addObject:@[@(xx), @(y)]];
+                        }
+                        SEL down2 = @selector(touchDownAtPoints:touchCount:);
+                        SEL move2 = @selector(moveToPoints:touchCount:duration:);
+                        SEL up2 = @selector(liftUpAtPoints:touchCount:);
+                        void (*d2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
+                        void (*m2)(id,SEL,NSArray *,int,double) = (void (*)(id,SEL,NSArray *,int,double))objc_msgSend;
+                        CNLog(@"back: WKTouchgen swipe");
+                        d2(gen, down2, @[pts[0]], 1);
+                        m2(gen, move2, pts, steps+1, 0.18);
+                        void (*u2)(id,SEL,NSArray *,int) = (void (*)(id,SEL,NSArray *,int))objc_msgSend;
+                        u2(gen, up2, @[pts[steps]], 1);
+                        return;
+                    }
+                }
+                CNLog(@"back: no engine available");
                 notify_post("cn.triggr.backswipe");
-            }
             } @catch (NSException *e) { CNLog(@"back exception: %@", e); }
         });
     });
