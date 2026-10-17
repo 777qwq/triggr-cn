@@ -355,7 +355,7 @@ static void TriggrExtInit(void) {
             Dl_info selfInfo;
             NSString *selfPath = nil;
             if (dladdr((void *)TriggrExtInit, &selfInfo) && selfInfo.dli_fname) selfPath = @(selfInfo.dli_fname);
-            BOOL fromExtensions = selfPath && [selfPath containsString:@"/Triggr/Extensions/"];
+(void)selfPath;
             // Self-install into Triggr's Extensions dir (host contract needs it there).
             {
                 Dl_info di;
