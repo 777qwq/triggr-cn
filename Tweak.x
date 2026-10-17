@@ -468,6 +468,7 @@ static void CNRegister(void) {
 
     void (^reg)(NSString *, NSString *, NSString *, void (^)(id)) = ^void(NSString *ident, NSString *title, NSString *symbol, void (^handler)(id)) {
         CNLog(@"reg: %@", ident);
+        __block NSString *regIdent = ident;
         @try {
         id ai = [[infoCls alloc] init];
         if (!ai) { CNLog(@"reg fail: alloc init nil %@", ident); return; }
@@ -509,6 +510,7 @@ static void CNRegister(void) {
 
     // 返回上级（cn1.7 路线：AutoTouch Touch 类合成边缘左滑；无则 triggrd 通知兜底）
     reg(@"cn.back", @"返回上级", @"arrow.turn.up.left", ^void(id ctx) {
+        CNLog(@"back triggered, ctx=%@ main=%d", ctx, [NSThread isMainThread]);
         // ⚠️ EventSimulate 有内部锁，主线程同步调用会死锁（cn1.10 实锤教训）。
         // 整个合成放后台队列；无锁的 _WKTouchEventGenerator(IOHID) 优先。
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
