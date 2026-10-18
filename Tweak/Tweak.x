@@ -12,6 +12,7 @@
 // which just reports their status bar taps and shakes (see Shared/TGRelay.h).
 
 #import <UIKit/UIKit.h>
+#import <Foundation/NSDistributedNotificationCenter.h>
 
 
 #import <UIKit/UIGestureRecognizerSubclass.h>
@@ -3027,18 +3028,22 @@ static void TGUpdateOtherEvents(void) {
     static BOOL mfObserverArmed = NO;
     if (mfBits && !mfObserverArmed) {
         mfObserverArmed = YES;
-        static NSString *names[] = {
-            @"inapp.twotap", @"inapp.threetap",
-            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
-            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
-            @"inapp.pinchin", @"inapp.pinchout",
-        };
         for (int idx = 0; idx < 12; idx++) {
             uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
             if (!(mfBits & bit)) continue;
-            NSString *distName = [@"com.johndie.triggr/" stringByAppendingString:ids[idx]];
-            [[NSDistributedNotificationCenter defaultCenter] addObserverForName:distName object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-                if ([tgAssignedTriggers containsObject:ids[idx]]) dispatch_async(dispatch_get_main_queue(), ^{ TGFire(ids[idx]); });
+            NSString *idn = nil;
+            switch (idx) {
+                case 0: idn = @"inapp.twotap"; break;   case 1: idn = @"inapp.threetap"; break;
+                case 2: idn = @"inapp.twoup"; break;    case 3: idn = @"inapp.twodown"; break;
+                case 4: idn = @"inapp.twoleft"; break;  case 5: idn = @"inapp.tworight"; break;
+                case 6: idn = @"inapp.threeup"; break;  case 7: idn = @"inapp.threedown"; break;
+                case 8: idn = @"inapp.threeleft"; break; case 9: idn = @"inapp.threeright"; break;
+                case 10: idn = @"inapp.pinchin"; break; case 11: idn = @"inapp.pinchout"; break;
+            }
+            NSString *distName = [@"com.johndie.triggr/" stringByAppendingString:idn];
+            NSDistributedNotificationCenter *dc = [NSDistributedNotificationCenter defaultCenter];
+            [dc addObserverForName:distName object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+                if ([tgAssignedTriggers containsObject:idn]) dispatch_async(dispatch_get_main_queue(), ^{ TGFire(idn); });
             }];
         }
     }
