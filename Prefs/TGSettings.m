@@ -1785,7 +1785,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [specs addObject:row];
         }
         PSSpecifier *timeRow = [PSSpecifier preferenceSpecifierNamed:@"定时…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
-        [timeRow setProperty:TGTimePrefix forKey:@"tgNewEvent"];
+        [timeRow setProperty:TGTimePrefix forKey:@"tgNewTime"];
         [specs addObject:timeRow];
     }
     if (!self.navigationController.viewControllers.count) return specs;
@@ -1798,7 +1798,9 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
     NSString *dst = [spec propertyForKey:@"tgMoveDst"];
     NSArray *newEvent = [spec propertyForKey:@"tgNewEvent"];
+    NSString *newTime = [spec propertyForKey:@"tgNewTime"];
     if (!dst && newEvent) { [self promptNewEvent:newEvent]; return; }
+    if (!dst && newTime) { [self promptNewTime:newTime]; return; }
     if (!dst) return;
     NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
     NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
@@ -1825,18 +1827,56 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     }
 }
 
+// cn4.2：定时（time:HHMM:daily）
+- (void)promptNewTime:(NSString *)prefix {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"定时"
+        message:@"格式 HHMM（如 0730），每天触发" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"0730";
+        field.keyboardType = UIKeyboardTypeNumberPad;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"下一步" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (text.length != 4) return;
+        NSString *dst = [NSString stringWithFormat:@"%@%@:daily", prefix, text];
+        NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
+        NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
+        NSArray *existing = TGReadAssignment(self, mode, dst);
+        __weak typeof(self) weakSelf = self;
+        void (^move)(void) = ^{
+            __strong typeof(self) strongSelf = weakSelf;
+            NSArray *actions = TGReadAssignment(strongSelf, mode, srcTrigger);
+            PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), strongSelf, @selector(assignedActionTitle:), mode, dst);
+            [strongSelf setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
+            [strongSelf setPreferenceValue:@"" specifier:strongSelf.srcSpec];
+            [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+            [strongSelf.navigationController popViewControllerAnimated:YES];
+        };
+        if (existing.count) {
+            UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
+                message:[NSString stringWithFormat:@"「%@」已有指派（%@），将被替换。", TGSettingsTriggerTitle(dst), TGListTitle(existing)]
+                preferredStyle:UIAlertControllerStyleAlert];
+            [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+            [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a2) { move(); }]];
+            [self presentViewController:confirm animated:YES completion:nil];
+        } else {
+            move();
+        }
+    }];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
 // cn4.2：新类型自定义事件——输参数生成触发器 ID，创建即搬当前指派。
 - (void)promptNewEvent:(NSArray *)kind {
     NSString *title = kind[0], *prefix = kind[1], *placeholder = kind[2];
-    BOOL isTime = [prefix isEqualToString:TGTimePrefix];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-        message:isTime ? @"格式 HHMM（如 0730），每天触发" : nil
-        preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.placeholder = placeholder;
         field.autocorrectionType = UITextAutocorrectionTypeNo;
         field.autocapitalizationType = UITextAutocapitalizationTypeNone;
-        if (isTime || [placeholder hasSuffix:@"百分比"]) field.keyboardType = UIKeyboardTypeNumberPad;
+        if ([placeholder hasSuffix:@"百分比"]) field.keyboardType = UIKeyboardTypeNumberPad;
     }];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     __weak UIAlertController *weakAlert = alert;
