@@ -827,6 +827,7 @@ static NSString *TGCategoryOf(NSString *action) {
     if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
     else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
+    else if ([category isEqualToString:@"conditions"]) { items = TGSeqConditions; count = TG_COUNT(TGSeqConditions); }
     for (int i = 0; i < count; i++) [rows addObject:[self rowForAction:@(items[i].identifier) title:@(items[i].title)]];
     if ([category isEqualToString:@"system"]) {
         // cn2.72: 返回上级 sits right below 密码解锁 (TA order).
