@@ -1827,26 +1827,17 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     }
 }
 
-// cn4.2：定时（time:HHMM:daily）
+// cn4.2：定时——复用系统的定时选择器（时间+星期自由组合）
 - (void)promptNewTime:(NSString *)prefix {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"定时"
-        message:@"格式 HHMM（如 0730），每天触发" preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
-        field.placeholder = @"0730";
-        field.keyboardType = UIKeyboardTypeNumberPad;
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    __weak UIAlertController *weakAlert = alert;
-    [alert addAction:[UIAlertAction actionWithTitle:@"下一步" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
-        if (text.length != 4) return;
-        NSString *dst = [NSString stringWithFormat:@"%@%@:daily", prefix, text];
-        NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
-        NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
-        NSArray *existing = TGReadAssignment(self, mode, dst);
-        __weak typeof(self) weakSelf = self;
+    TGTimePickerController *picker = [TGTimePickerController new];
+    __weak typeof(self) weakSelf = self;
+    picker.onSave = ^(NSString *trigger) {
+        __strong typeof(self) strongSelf = weakSelf;
+        NSString *dst = [prefix stringByAppendingString:trigger];
+        NSString *srcTrigger = [strongSelf.srcSpec propertyForKey:@"tgTrigger"];
+        NSString *mode = [strongSelf.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
+        NSArray *existing = TGReadAssignment(strongSelf, mode, dst);
         void (^move)(void) = ^{
-            __strong typeof(self) strongSelf = weakSelf;
             NSArray *actions = TGReadAssignment(strongSelf, mode, srcTrigger);
             PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), strongSelf, @selector(assignedActionTitle:), mode, dst);
             [strongSelf setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
@@ -1860,15 +1851,13 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
                 preferredStyle:UIAlertControllerStyleAlert];
             [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
             [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a2) { move(); }]];
-            [self presentViewController:confirm animated:YES completion:nil];
+            [strongSelf presentViewController:confirm animated:YES completion:nil];
         } else {
             move();
         }
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
-}
-
-// cn4.2：新类型自定义事件——输参数生成触发器 ID，创建即搬当前指派。
+    };
+    [self.navigationController pushViewController:picker animated:YES];
+}// cn4.2：新类型自定义事件——输参数生成触发器 ID，创建即搬当前指派。
 - (void)promptNewEvent:(NSArray *)kind {
     NSString *title = kind[0], *prefix = kind[1], *placeholder = kind[2];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleAlert];
