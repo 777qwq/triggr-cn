@@ -2947,6 +2947,17 @@ static void TGBatteryLevelChanged(void) {
 }
 
 // Scheduled: one timer for the nearest time; fires only within 5 minutes of it.
+// cn4.4：PCPersistentTimer 的 target 代理（userInfo = 应触发的时间点）
+static void TGTimeTimerFired(NSDate *target);
+@interface TGTimePoker : NSObject
+@end
+@implementation TGTimePoker
+- (void)poke:(id)timer {
+    id when = [(id)timer userInfo];
+    if ([when isKindOfClass:NSDate.class]) TGTimeTimerFired(when);
+}
+@end
+static TGTimePoker *tgTimePoker;
 static NSTimer *tgTimeTimer;
 static id tgTimeObserver;
 
