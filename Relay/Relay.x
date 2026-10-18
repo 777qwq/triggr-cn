@@ -192,7 +192,10 @@ static void CNRelayAttachAll(void) {
         for (__kindof UIScene *sc in UIApplication.sharedApplication.connectedScenes)
             if ([sc isKindOfClass:[UIWindowScene class]]) [ws addObjectsFromArray:[(UIWindowScene *)sc windows]];
     } else {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
         [ws addObjectsFromArray:UIApplication.sharedApplication.windows];
+        #pragma clang diagnostic pop
     }
     for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:wanted];
     notify_post("cn.triggr.inappattach");
