@@ -314,12 +314,12 @@ static void CNRelayAttachAll(void) {
 
 - (void)recognized:(UIGestureRecognizer *)g {
     notify_post("cn.triggr.inappfired");
+    if (g.state != UIGestureRecognizerStateEnded) return;
+    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
     if (idxN) {
         if (idxN.intValue == 10) notify_post("cn.triggr.inappidx10");
         else if (idxN.intValue == 11) notify_post("cn.triggr.inappidx11");
     }
-    if (g.state != UIGestureRecognizerStateEnded) return;
-    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
     if (!idxN) return;
     int idx = idxN.intValue;
     static NSString *names[] = {
