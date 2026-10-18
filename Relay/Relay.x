@@ -191,6 +191,7 @@ static void TGRelayDoBack(void) {
     if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
     if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
     [[TGInAppTarget shared] refresh:self wanted:wanted];
+    [[NSDistributedNotificationCenter defaultCenter] postNotificationName:@"com.johndie.triggr/inapp-attach" object:nil userInfo:nil deliverImmediately:YES];
 }
 %end
 
@@ -277,6 +278,7 @@ static void TGRelayDoBack(void) {
 }
 
 - (void)recognized:(UIGestureRecognizer *)g {
+    [[NSDistributedNotificationCenter defaultCenter] postNotificationName:@"com.johndie.triggr/inapp-fired" object:nil userInfo:nil deliverImmediately:YES];
     if (g.state != UIGestureRecognizerStateEnded) return;
     NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
     if (!idxN) return;
@@ -296,6 +298,7 @@ static void TGRelayDoBack(void) {
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
     NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
     if (!idxN) return NO;
+    if ([g isKindOfClass:[UIPinchGestureRecognizer class]]) return YES; // 诊断直通
     int idx = idxN.intValue;
     uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
     uint64_t wanted = 0;
