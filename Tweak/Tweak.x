@@ -3034,13 +3034,7 @@ static void TGUpdateOtherEvents(void) {
         for (int i = 0; i < 12; i++) {
             NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", i];
             NSString *idn = nids[i];
-            notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){
-                static int cnt[12] = {0};
-                cnt[i]++;
-                FILE *f = fopen("/var/mobile/Library/Triggr/cn_ext.log", "a");
-                if (f) { fprintf(f, "inapp fire %s #%d\n", idn.UTF8String, cnt[i]); fclose(f); }
-                TGFire(idn);
-            });
+            notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
         }
     }
     
