@@ -65,6 +65,13 @@ static const TGItem TGStatusBar[] = {
 };
 // Shake rides on iOS's own shake detection, so no sensor runs for Triggr.
 static const TGItem TGMotion[] = { {"motion.shake", "摇晃设备"} };
+
+static const TGItem TGSeqConditions[] = {
+    {"if:wifi", "连着 Wi-Fi 网络"}, {"if:charging", "正在充电"},
+    {"if:locked", "设备已锁定"}, {"if:music", "正在播放音乐"},
+    {"if:headphones", "连着耳机"}, {"if:bt", "连着蓝牙设备"},
+    {"if:custom", "自定义条件…"}, {"else", "否则"}, {"endif", "结束条件"},
+};
 // A quick flick that starts on a Home Screen icon (see TGFlickRecognizer).
 // Gestures on the Home Screen pages themselves (not on an icon).
 static const TGItem TGHomeGestures[] = {
@@ -186,6 +193,7 @@ static const TGGroup TGActionGroups[] = {
     {"开启", TGOnActions, TG_COUNT(TGOnActions), NULL},
     {"关闭", TGOffActions, TG_COUNT(TGOffActions), NULL},
     {"媒体", TGMediaActions, TG_COUNT(TGMediaActions), NULL},
+    {"条件", TGSeqConditions, TG_COUNT(TGSeqConditions), "构建带条件的序列：条件为真才执行其后的动作，到「否则」换分支，「结束条件」收尾。"},
 };
 
 // Command actions carry their argument in the id: "<prefix><text>".
@@ -315,6 +323,12 @@ static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
 #define TGShellPrefix @"shell:"
 #define TGAppPrefix @"app:"
 #define TGPausePrefix @"pause:" // "pause:<seconds>" between actions in a list
+// cn2.77 序列条件（2.0 词表复刻）：if:<cond>[@wait 秒] / else / endif。'!' 前缀=取反。
+// 条件：wifi[:SSID] bt[:名称] charging locked music headphones battery<N battery>N time:H:MM-H:MM
+#define TGIfPrefix @"if:"
+#define TGElseAction @"else"
+#define TGEndIfAction @"endif"
+#define TGIfCustomAction @"if:custom"
 #define TGMenuPrefix @"menu:"   // "menu:<id>" shows that menu
 #define TGMenuKeyPrefix @"menu/" // "menu/<id>" = the menu's items
 // Custom event prefixes (see TGIsCustomTrigger).
@@ -630,8 +644,45 @@ static inline NSArray<NSString *> *TGExtensionAction(NSString *action) {
 }
 
 // Display title for an action id ("无" when unassigned).
+// cn2.77：条件串人话（不含 if: 前缀；'!' 与 '@秒' 已在外层剥掉）
+static inline NSString *TGSeqConditionTitle(NSString *cond) {
+    BOOL neg = NO;
+    if ([cond hasPrefix:@"!"]) { neg = YES; cond = [cond substringFromIndex:1]; }
+    NSString *base;
+    if ([cond isEqualToString:@"wifi"]) base = @"连着 Wi-Fi 网络";
+    else if ([cond hasPrefix:@"wifi:"]) base = [NSString stringWithFormat:@"连着 Wi-Fi「%@」", [cond substringFromIndex:5]];
+    else if ([cond hasPrefix:@"bt:"]) base = [NSString stringWithFormat:@"连着蓝牙「%@」", [cond substringFromIndex:3]];
+    else if ([cond isEqualToString:@"bt"]) base = @"连着蓝牙设备";
+    else if ([cond isEqualToString:@"charging"]) base = @"正在充电";
+    else if ([cond isEqualToString:@"locked"]) base = @"设备已锁定";
+    else if ([cond isEqualToString:@"music"]) base = @"正在播放音乐";
+    else if ([cond isEqualToString:@"headphones"]) base = @"连着耳机";
+    else if ([cond hasPrefix:@"battery<"]) base = [NSString stringWithFormat:@"电量低于 %@%%", [cond substringFromIndex:8]];
+    else if ([cond hasPrefix:@"battery>"]) base = [NSString stringWithFormat:@"电量高于 %@%%", [cond substringFromIndex:8]];
+    else if ([cond hasPrefix:@"time:"]) {
+        NSArray *parts = [[cond substringFromIndex:5] componentsSeparatedByString:@"-"];
+        base = parts.count == 2 ? [NSString stringWithFormat:@"时间在 %@ 和 %@ 之间", parts[0], parts[1]] : [@"时间条件 " stringByAppendingString:cond];
+    }
+    else base = cond;
+    return neg ? [NSString stringWithFormat:@"不满足「%@」", base] : base;
+}
+
 static inline NSString *TGActionTitle(NSString *action) {
     if (action.length == 0) return @"无";
+    if ([action isEqualToString:TGElseAction]) return @"否则";
+    if ([action isEqualToString:TGEndIfAction]) return @"结束条件";
+    if ([action hasPrefix:TGIfPrefix]) {
+        NSString *body = [action substringFromIndex:TGIfPrefix.length];
+        NSString *wait = nil;
+        NSRange at = [body rangeOfString:@"@" options:NSBackwardsSearch];
+        if (at.location != NSNotFound && at.location > 0) {
+            wait = [body substringFromIndex:at.location + 1];
+            body = [body substringToIndex:at.location];
+        }
+        NSString *title = [NSString stringWithFormat:@"仅当 %@", TGSeqConditionTitle(body)];
+        if (wait.doubleValue > 0) title = [title stringByAppendingFormat:@"（持续 %@ 秒）", wait];
+        return title;
+    }
     NSArray *extension = TGExtensionAction(action);
     if (extension) {
         id title = TGExtension(extension[0])[@"ItemTitle"];

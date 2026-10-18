@@ -557,6 +557,30 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 }
 
 // insert: a new pause at `index`; otherwise edit the pause at `index`.
+// cn2.77：自定义条件。语法见仓库 README：wifi[:SSID] bt:名称 charging locked music headphones
+// battery<N battery>N time:H:MM-H:MM；'!' 前缀取反；'@秒' = 条件持续 N 秒才执行。
+- (void)promptCustomCondition {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"自定义条件"
+        message:@"例如：wifi:Home、bt:AirPods Pro、battery<40、battery>80、time:9:00-18:00；加 ! 取反；结尾加 @10 表示持续 10 秒才执行。"
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"wifi:Home";
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertControllerStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"添加" style:UIAlertControllerStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (text.length == 0) return;
+        [self confirmAdding:[TGIfPrefix stringByAppendingString:text] then:^{
+            [self->_selection addObject:[TGIfPrefix stringByAppendingString:text]];
+            [self save];
+        }];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
 - (void)promptPauseAtIndex:(NSInteger)index insert:(BOOL)insert {
     NSString *current = insert ? @"" : [self.items[index] substringFromIndex:TGPausePrefix.length];
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"停顿" message:[NSString stringWithFormat:@"执行下一动作前的等待秒数（0.1–%g）。", TGPauseMax] preferredStyle:UIAlertControllerStyleAlert];
@@ -592,7 +616,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"], @[@"conditions", @"条件"]] mutableCopy];
     // Installed action extensions, each its own category ("ext:<name>").
     for (NSString *name in TGExtensionNames()) {
         NSDictionary *extension = TGExtension(name);
@@ -618,6 +642,7 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
         @"open": @[@"arrow.up.right.square.fill", UIColor.systemIndigoColor],
         @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
         @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor], @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
+        @"conditions": @[@"questionmark.circle.fill", UIColor.systemTealColor],
     };
     if (icons[category]) TGSetIcon(spec, icons[category][0], icons[category][1]);
     else if ([category hasPrefix:TGExtensionPrefix]) {
@@ -628,6 +653,7 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
 }
 
 static NSString *TGCategoryOf(NSString *action) {
+    if ([action isEqualToString:TGElseAction] || [action isEqualToString:TGEndIfAction] || [action hasPrefix:TGIfPrefix]) return @"conditions";
     if ([action hasPrefix:TGMenuPrefix]) return @"menus";
     NSArray *extension = TGExtensionAction(action);
     if (extension) return [TGExtensionPrefix stringByAppendingString:extension[0]];
@@ -955,6 +981,7 @@ static NSString *TGCategoryOf(NSString *action) {
 
 // None clears; any other action toggles, appended to the run order.
 - (void)toggle:(NSString *)action {
+    if ([action isEqualToString:TGIfCustomAction]) { [self promptCustomCondition]; return; }
     if (action.length == 0) [_selection removeAllObjects];
     else if ([_selection containsObject:action]) {
         [_selection removeObject:action];

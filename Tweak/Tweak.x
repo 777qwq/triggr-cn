@@ -1178,10 +1178,104 @@ static void TGNoteCausedStates(NSString *action) {
     for (NSNumber *family in families) tgCausedAt[family.intValue] = now;
 }
 
+// cn2.77 序列条件求值（2.0 词表；不含 '!' 与 '@秒'，那两层在调用处处理）
+static BOOL TGIsPluggedIn(void);
+static BOOL TGRouteHasHeadphones(AVAudioSessionRouteDescription *route);
+static int TGBatteryPercent(void);
+static BOOL TGSeqConditionCore(NSString *cond) {
+    if ([cond isEqualToString:@"wifi"] || [cond hasPrefix:@"wifi:"]) {
+        id mgr = TGShared("SBWiFiManager");
+        if (!mgr) return NO;
+        id name = [mgr respondsToSelector:@selector(currentNetworkName)] ? [mgr performSelector:@selector(currentNetworkName)] : nil;
+        if ([cond isEqualToString:@"wifi"]) return name != nil;
+        return name && [name isKindOfClass:NSString.class] && [(NSString *)name isEqualToString:[cond substringFromIndex:5]];
+    }
+    if ([cond isEqualToString:@"bt"] || [cond hasPrefix:@"bt:"]) {
+        id mgr = TGShared("EAAccessoryManager");
+        NSArray *accs = [mgr respondsToSelector:@selector(connectedAccessories)] ? [mgr performSelector:@selector(connectedAccessories)] : nil;
+        if ([cond isEqualToString:@"bt"]) return accs.count > 0;
+        for (id acc in accs)
+            if ([[acc performSelector:@selector(name)] isEqualToString:[cond substringFromIndex:3]]) return YES;
+        return NO;
+    }
+    if ([cond isEqualToString:@"charging"]) return TGIsPluggedIn();
+    if ([cond isEqualToString:@"locked"]) {
+        id mgr = TGShared("SBLockScreenManager");
+        return mgr && [mgr respondsToSelector:@selector(isUILocked)] && [mgr performSelector:@selector(isUILocked)];
+    }
+    if ([cond isEqualToString:@"music"]) {
+        id media = TGShared("SBMediaController");
+        return media && [media respondsToSelector:@selector(isPlaying)] && [media performSelector:@selector(isPlaying)];
+    }
+    if ([cond isEqualToString:@"headphones"]) return TGRouteHasHeadphones(AVAudioSession.sharedInstance.currentRoute);
+    if ([cond hasPrefix:@"battery<"] || [cond hasPrefix:@"battery>"]) {
+        int percent = TGBatteryPercent();
+        if (percent < 0) return NO;
+        int want = [[cond substringFromIndex:8] intValue];
+        return [cond hasPrefix:@"battery<"] ? percent < want : percent > want;
+    }
+    if ([cond hasPrefix:@"time:"]) {
+        NSArray *parts = [[cond substringFromIndex:5] componentsSeparatedByString:@"-"];
+        if (parts.count != 2) return NO;
+        NSArray *h1 = [parts[0] componentsSeparatedByString:@":"], *h2 = [parts[1] componentsSeparatedByString:@":"];
+        if (h1.count < 1 || h2.count < 1) return NO;
+        NSDateComponents *now = [[NSCalendar currentCalendar] components:NSCalendarUnitHour | NSCalendarUnitMinute fromDate:[NSDate date]];
+        int cur = now.hour * 60 + now.minute;
+        int a = [h1[0] intValue] * 60 + (h1.count > 1 ? [h1[1] intValue] : 0);
+        int b = [h2[0] intValue] * 60 + (h2.count > 1 ? [h2[1] intValue] : 0);
+        if (a <= b) return cur >= a && cur < b;
+        return cur >= a || cur < b; // 跨夜
+    }
+    return NO;
+}
+
+// cn2.77：跳到与 index 的 if: 配对的 else（缺省 endif）之后；否则跳到 endif 之后
+static NSUInteger TGSeqSkipBranch(NSArray<NSString *> *actions, NSUInteger index, BOOL toElse) {
+    NSInteger depth = 0;
+    NSUInteger j = index + 1;
+    for (; j < actions.count; j++) {
+        NSString *a = actions[j];
+        if ([a hasPrefix:TGIfPrefix]) depth++;
+        else if ([a isEqualToString:TGEndIfAction]) { if (depth == 0) { j++; break; } depth--; }
+        else if (toElse && [a isEqualToString:TGElseAction] && depth == 0) { j++; break; }
+    }
+    return MIN(j, actions.count);
+}
+
 // Runs a list in order; "pause:<s>" waits before the next action.
+// cn2.77：if:<cond>[@s] 为真跑主分支（else 前），假跑否则分支；@s = 条件持续 N 秒才执行（2.0 "Still true after"）。
 static void TGRunList(NSArray<NSString *> *actions, NSUInteger index) {
     for (; index < actions.count; index++) {
         NSString *action = actions[index];
+        if ([action hasPrefix:TGIfPrefix]) {
+            NSString *body = [action substringFromIndex:TGIfPrefix.length];
+            double wait = 0;
+            NSRange at = [body rangeOfString:@"@" options:NSBackwardsSearch];
+            if (at.location != NSNotFound && at.location > 0) {
+                wait = [[body substringFromIndex:at.location + 1] doubleValue];
+                body = [body substringToIndex:at.location];
+            }
+            if (![body hasPrefix:@"!"] ? TGSeqConditionCore(body) : !TGSeqConditionCore([body substringFromIndex:1])) {
+                if (wait > 0) {
+                    NSUInteger next = index + 1;
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                        if ([body hasPrefix:@"!"] ? !TGSeqConditionCore([body substringFromIndex:1]) : TGSeqConditionCore(body)) TGRunList(actions, next); // 仍真才跑
+                    });
+                    return;
+                }
+                continue; // 真：进主分支
+            }
+            index = TGSeqSkipBranch(actions, index, YES); // 假：跳到否则/结束条件之后
+            index--; // for 会 ++
+            continue;
+        }
+        if ([action isEqualToString:TGElseAction]) {
+            // 真分支跑完遇到否则：跳过否则块到结束条件之后
+            index = TGSeqSkipBranch(actions, index, NO);
+            index--;
+            continue;
+        }
+        if ([action isEqualToString:TGEndIfAction]) continue;
         if ([action hasPrefix:TGPausePrefix]) {
             double seconds = MIN(MAX([[action substringFromIndex:TGPausePrefix.length] doubleValue], 0.1), TGPauseMax);
             NSUInteger next = index + 1;
