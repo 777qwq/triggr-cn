@@ -3045,7 +3045,6 @@ static void TGUpdateOtherEvents(void) {
             notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
         }
     }
-    static BOOL mfObserverArmed = NO;
     
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");
