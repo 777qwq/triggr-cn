@@ -2950,6 +2950,18 @@ static void TGBatteryLevelChanged(void) {
 static NSTimer *tgTimeTimer;
 static id tgTimeObserver;
 
+// cn4.4：PCPersistentTimer 的 target 代理（userInfo = 应触发的时间点）
+static void TGTimeTimerFired(NSDate *target);
+@interface TGTimePoker : NSObject
+@end
+@implementation TGTimePoker
+- (void)poke:(id)timer {
+    id when = [(id)timer userInfo];
+    if ([when isKindOfClass:NSDate.class]) TGTimeTimerFired(when);
+}
+@end
+static TGTimePoker *tgTimePoker;
+
 static BOOL TGDayMatches(NSString *days, NSDate *date) {
     NSInteger weekday = [NSCalendar.currentCalendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
     BOOL weekend = weekday == 1 || weekday == 7;
@@ -2996,9 +3008,25 @@ static void TGScheduleTimes(void) {
         if (due && (!next || [due compare:next] == NSOrderedAscending)) next = due;
     }
     if (next) {
-        tgTimeTimer = [[NSTimer alloc] initWithFireDate:next interval:0 repeats:NO block:^(NSTimer *timer) { TGTimeTimerFired(next); }];
-        tgTimeTimer.tolerance = 1;
-        [NSRunLoop.mainRunLoop addTimer:tgTimeTimer forMode:NSRunLoopCommonModes];
+        // cn4.4：优先 PCPersistentTimer（闹钟级，设备休眠也准点；2.0 同款框架），
+        // 不可用再退 NSTimer。PC 的 target/selector 走小代理，userInfo 带目标时间。
+        static Class pcTimerClass;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            void *h = dlopen("/System/Library/PrivateFrameworks/PersistentConnection.framework/PersistentConnection", RTLD_LAZY);
+            if (h) {
+                Class cls = objc_getClass("PCPersistentTimer");
+                if (cls && [cls instancesRespondToSelector:@selector(initWithFireDate:interval:target:selector:userInfo:repeats:)]) pcTimerClass = cls;
+            }
+        });
+        if (!tgTimePoker) tgTimePoker = [TGTimePoker new];
+        if (pcTimerClass) {
+            tgTimeTimer = [[pcTimerClass alloc] initWithFireDate:next interval:0 target:tgTimePoker selector:@selector(poke:) userInfo:next repeats:NO];
+        } else {
+            tgTimeTimer = [[NSTimer alloc] initWithFireDate:next interval:0 repeats:NO block:^(NSTimer *timer) { TGTimeTimerFired(next); }];
+            tgTimeTimer.tolerance = 1;
+            [NSRunLoop.mainRunLoop addTimer:tgTimeTimer forMode:NSRunLoopCommonModes];
+        }
     }
     // Clock or time zone changes: reschedule.
     if (next && !tgTimeObserver) {
