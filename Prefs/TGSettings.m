@@ -200,15 +200,15 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 
 // Every Triggr page: reloads when you come back to it (so rows show what was
 // picked deeper down) and lets subclasses offer a swipe action on a row.
-@interface TGMoveTargetController : TGListController
-@property (nonatomic, strong) PSSpecifier *srcSpec;
-@end
-
 @interface TGListController : PSListController
 - (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec; // nil: this row can't be swiped
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec;              // do it; YES when the row goes away
 - (BOOL)replacesButtons;
 - (BOOL)statusBarTapsOn;
+@end
+
+@interface TGMoveTargetController : TGListController
+@property (nonatomic, strong) PSSpecifier *srcSpec;
 @end
 
 @implementation TGListController
@@ -282,8 +282,6 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 
 // cn3.4a：右滑「移动」——动作不动，触发器换键（同一位置内）。带 tgTrigger 的行通用。
 - (void)tgMoveAssignment:(PSSpecifier *)srcSpec {
-    NSString *srcTrigger = [srcSpec propertyForKey:@"tgTrigger"];
-    NSString *mode = [srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
     TGMoveTargetController *picker = [TGMoveTargetController new];
     picker.srcSpec = srcSpec;
     [self.navigationController pushViewController:picker animated:YES];
