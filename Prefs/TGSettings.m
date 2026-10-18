@@ -1767,7 +1767,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [customRows addObject:row];
         }
         if (customRows.count) {
-            [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(TGCustomGroupTitle)]];
+            [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(@"自定义事件")]];
             [specs addObjectsFromArray:customRows];
         }
     }
