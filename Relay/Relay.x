@@ -197,8 +197,18 @@ static void CNRelayAttachAll(void) {
         [ws addObjectsFromArray:UIApplication.sharedApplication.windows];
         #pragma clang diagnostic pop
     }
-    for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:wanted];
+    for (UIWindow *w in ws) {
+        [[TGInAppTarget shared] refresh:w wanted:wanted];
+        // 逐窗报挂载结果：bit12(pinchin) 挂上则发专属通知
+        BOOL pin = NO;
+        for (UIGestureRecognizer *g in w.gestureRecognizers) {
+            NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+            if (idxN && idxN.intValue == 10) pin = YES;
+        }
+        if (pin) notify_post("cn.triggr.inapppinattach");
+    }
     notify_post("cn.triggr.inappattach");
+    if (wanted & (1ULL << 12)) notify_post("cn.triggr.inappwantpin");
 }
 %group InAppGestures
 
@@ -304,6 +314,11 @@ static void CNRelayAttachAll(void) {
 
 - (void)recognized:(UIGestureRecognizer *)g {
     notify_post("cn.triggr.inappfired");
+    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+    if (idxN) {
+        if (idxN.intValue == 10) notify_post("cn.triggr.inappidx10");
+        else if (idxN.intValue == 11) notify_post("cn.triggr.inappidx11");
+    }
     if (g.state != UIGestureRecognizerStateEnded) return;
     NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
     if (!idxN) return;

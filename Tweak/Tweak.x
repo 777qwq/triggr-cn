@@ -3028,6 +3028,7 @@ static void TGUpdateOtherEvents(void) {
         if ([tgAssignedTriggers containsObject:ids[idx]]) mfBits |= bit;
     }
     if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | mfBits);
+    CNLog2([NSString stringWithFormat:@"mfBits=%llx assigned pin=%d", mfBits, [tgAssignedTriggers containsObject:@"inapp.pinchin"]]);
     // 多指上报监听（App 侧 Relay 经分布式通知上报）
     // 诊断：attach/fired 落盘
     {
@@ -3035,6 +3036,12 @@ static void TGUpdateOtherEvents(void) {
         if (ta == -1) notify_register_dispatch("cn.triggr.inappattach", &ta, dispatch_get_main_queue(), ^(int t){ CNLog2(@"inapp attach seen"); });
         static int tf = -1;
         if (tf == -1) notify_register_dispatch("cn.triggr.inappfired", &tf, dispatch_get_main_queue(), ^(int t){ CNLog2(@"inapp gesture FIRED"); });
+        static int tp = -1;
+        if (tp == -1) notify_register_dispatch("cn.triggr.inapppinattach", &tp, dispatch_get_main_queue(), ^(int t){ CNLog2(@"pinchin recognizer ATTACHED"); });
+        static int tw = -1;
+        if (tw == -1) notify_register_dispatch("cn.triggr.inappwantpin", &tw, dispatch_get_main_queue(), ^(int t){ CNLog2(@"wanted has pinchin bit"); });
+        static int t10 = -1;
+        if (t10 == -1) notify_register_dispatch("cn.triggr.inappidx10", &t10, dispatch_get_main_queue(), ^(int t){ CNLog2(@"pinchin idx10 FIRED"); });
     }
     static BOOL mfObserverArmed = NO;
     if (mfBits && !mfObserverArmed) {
