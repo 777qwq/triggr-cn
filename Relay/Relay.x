@@ -296,6 +296,7 @@ static void TGRelayDoBack(void) {
 
 @end
 
+%group InAppGestures
 %hook UIWindow
 - (void)didMoveToWindow {
     %orig;
@@ -306,4 +307,5 @@ static void TGRelayDoBack(void) {
     if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
     [[TGInAppTarget shared] refresh:self wanted:wanted];
 }
+%end
 %end
