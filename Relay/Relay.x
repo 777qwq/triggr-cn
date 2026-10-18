@@ -197,18 +197,7 @@ static void CNRelayAttachAll(void) {
         [ws addObjectsFromArray:UIApplication.sharedApplication.windows];
         #pragma clang diagnostic pop
     }
-    for (UIWindow *w in ws) {
-        [[TGInAppTarget shared] refresh:w wanted:wanted];
-        // 逐窗报挂载结果：bit12(pinchin) 挂上则发专属通知
-        BOOL pin = NO;
-        for (UIGestureRecognizer *g in w.gestureRecognizers) {
-            NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
-            if (idxN && idxN.intValue == 10) pin = YES;
-        }
-        if (pin) notify_post("cn.triggr.inapppinattach");
-    }
-    notify_post("cn.triggr.inappattach");
-    if (wanted & (1ULL << 12)) notify_post("cn.triggr.inappwantpin");
+    for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:wanted];
 }
 %group InAppGestures
 
@@ -235,7 +224,6 @@ static void CNRelayAttachAll(void) {
         %init(StatusBar);
         %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
         %init(InAppGestures); // 多指手势（cn2.74）
-        notify_post("cn.triggr.relayalive");
         [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
             CNRelayAttachAll();
         }];
@@ -313,12 +301,13 @@ static void CNRelayAttachAll(void) {
 }
 
 - (void)recognized:(UIGestureRecognizer *)g {
-    notify_post("cn.triggr.inappfired");
     if (g.state != UIGestureRecognizerStateEnded) return;
     NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
-    if (idxN) {
-        if (idxN.intValue == 10) notify_post("cn.triggr.inappidx10");
-        else if (idxN.intValue == 11) notify_post("cn.triggr.inappidx11");
+    if (!idxN) return;
+    int idx = idxN.intValue;
+    if (idx >= 0 && idx <= 11) {
+        NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
+        notify_post(nm.UTF8String);
     }
     if (!idxN) return;
     int idx = idxN.intValue;
@@ -337,7 +326,6 @@ static void CNRelayAttachAll(void) {
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
     NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
     if (!idxN) return NO;
-    if ([g isKindOfClass:[UIPinchGestureRecognizer class]]) return YES; // 诊断直通
     int idx = idxN.intValue;
     uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
     uint64_t wanted = 0;
