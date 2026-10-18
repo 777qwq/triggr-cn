@@ -1791,6 +1791,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     NSString *dst = [spec propertyForKey:@"tgMoveDst"];
     if ([spec propertyForKey:@"tgAddNew"]) {
         // 借用设置页的自定义事件创建流程（全功能：含应用通知/启动/图标轻扫）
+        NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
         PSSpecifier *groupSpec = [PSSpecifier preferenceSpecifierNamed:@"自定义事件" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [groupSpec setProperty:mode forKey:@"tgMode"];
         [groupSpec setProperty:@(-1) forKey:@"tgGroup"];
