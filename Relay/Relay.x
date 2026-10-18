@@ -309,18 +309,6 @@ static void CNRelayAttachAll(void) {
         NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
         notify_post(nm.UTF8String);
     }
-    if (!idxN) return;
-    int idx = idxN.intValue;
-    static NSString *names[] = {
-        @"com.johndie.triggr/inapp-twotap", @"com.johndie.triggr/inapp-threetap",
-        @"com.johndie.triggr/inapp-twoup", @"com.johndie.triggr/inapp-twodown",
-        @"com.johndie.triggr/inapp-twoleft", @"com.johndie.triggr/inapp-tworight",
-        @"com.johndie.triggr/inapp-threeup", @"com.johndie.triggr/inapp-threedown",
-        @"com.johndie.triggr/inapp-threeleft", @"com.johndie.triggr/inapp-threeright",
-        @"com.johndie.triggr/inapp-pinchin", @"com.johndie.triggr/inapp-pinchout",
-    };
-    if (idx >= 0 && idx <= 11)
-        [[NSDistributedNotificationCenter defaultCenter] postNotificationName:names[idx] object:nil userInfo:nil deliverImmediately:YES];
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
