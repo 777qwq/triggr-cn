@@ -173,29 +173,6 @@ static void TGRelayDoBack(void) {
 %end
 
 static void CNRelayAttachAll(void);
-%ctor {
-    // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
-    NSBundle *bundle = NSBundle.mainBundle;
-    if (![bundle.bundlePath hasSuffix:@".app"]) return;
-    %init(Shake);
-    BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
-    if (!springBoard) {
-        %init(StatusBar);
-        %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
-        %init(InAppGestures); // 多指手势（cn2.75b，2.0 逆向复刻）
-        CNRelayAttachAll();
-        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
-            CNRelayAttachAll();
-        }];
-        // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
-        static int backToken = -1;
-        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
- TGRelayDoBack();
-        });
-    }
-}
-
-
 // ---- 多指手势（cn2.75b，严格按 2.0 Relay 反汇编复刻）----
 // 12 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10/11=pinch（scale<0.7 捏合 / >1.4 张开）
 // 方向表 DAT_000076c8 实证：Up/Down/Left/Right，三指组复用同表；并发委托返回 YES；tap/swipe 到 Ended 派发
@@ -328,3 +305,27 @@ static void CNRelayAttachAll(void) {
 }
 %end
 %end
+
+%ctor {
+    // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
+    NSBundle *bundle = NSBundle.mainBundle;
+    if (![bundle.bundlePath hasSuffix:@".app"]) return;
+    %init(Shake);
+    BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
+    if (!springBoard) {
+        %init(StatusBar);
+        %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
+        %init(InAppGestures); // 多指手势（cn2.75b，2.0 逆向复刻）
+        CNRelayAttachAll();
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
+            CNRelayAttachAll();
+        }];
+        // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
+        static int backToken = -1;
+        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
+ TGRelayDoBack();
+        });
+    }
+}
+
+
