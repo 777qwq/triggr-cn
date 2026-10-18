@@ -173,7 +173,14 @@ static void TGRelayDoBack(void) {
 %end
 %end
 
-%@class TGInAppTarget;
+@interface TGInAppTarget : NSObject <UIGestureRecognizerDelegate>
++ (instancetype)shared;
+- (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted;
+- (UIGestureRecognizer *)recognizerFor:(int)idx;
+- (void)recognized:(UIGestureRecognizer *)g;
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
+@end
+
 %group InAppGestures
 %hook UIWindow
 - (void)didMoveToWindow {
@@ -211,13 +218,6 @@ static void TGRelayDoBack(void) {
 // wanted 位：bit(idx+2)；pinch 特例 bits12/13。未指派不挂载（动态开关）。
 // 上报：NSDistributedNotificationCenter "com.johndie.triggr/inapp-*"，SB 侧映射 inapp.* 动作执行。
 
-@interface TGInAppTarget : NSObject <UIGestureRecognizerDelegate>
-+ (instancetype)shared;
-- (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted;
-- (UIGestureRecognizer *)recognizerFor:(int)idx;
-- (void)recognized:(UIGestureRecognizer *)g;
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
-@end
 
 @implementation TGInAppTarget
 
