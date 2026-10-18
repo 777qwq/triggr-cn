@@ -280,43 +280,9 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (void)tgMoveAssignment:(PSSpecifier *)srcSpec {
     NSString *srcTrigger = [srcSpec propertyForKey:@"tgTrigger"];
     NSString *mode = [srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"移动到哪个触发器？"
-        message:[NSString stringWithFormat:@"「%@」的动作将原样搬过去。", TGSettingsTriggerTitle(srcTrigger)]
-        preferredStyle:UIAlertControllerStyleActionSheet];
-    BOOL hasHome = TGHasHomeButton();
-    for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
-        const TGItem *items = TGTriggerGroups[g].items;
-        for (int i = 0; i < TGTriggerGroups[g].count; i++) {
-            NSString *dst = @(items[i].identifier);
-            if ([dst isEqualToString:srcTrigger] || !TGIsKnownTrigger(dst) || !TGTriggerFitsHardware(dst, hasHome)) continue;
-            NSArray *existing = TGReadAssignment(self, mode, dst);
-            NSString *label = [TGButtonText(@(items[i].title)) stringByAppendingString:existing.count ? @"（覆盖）" : @""];
-            [sheet addAction:[UIAlertAction actionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-                void (^move)(void) = ^{
-                    NSArray *actions = TGReadAssignment(self, mode, srcTrigger);
-                    PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), self, @selector(assignedActionTitle:), mode, dst);
-                    [self setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
-                    [self setPreferenceValue:@"" specifier:srcSpec];
-                    [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
-                    [self reloadSpecifiers];
-                };
-                if (existing.count) {
-                    UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
-                        message:[NSString stringWithFormat:@"「%@」已有指派（%@），将被替换。", TGSettingsTriggerTitle(dst), TGListTitle(existing)]
-                        preferredStyle:UIAlertControllerStyleAlert];
-                    [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-                    [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a2) { move(); }]];
-                    [self presentViewController:confirm animated:YES completion:nil];
-                } else {
-                    move();
-                }
-            }]];
-        }
-    }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.view;
-    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
-    [self presentViewController:sheet animated:YES completion:nil];
+    TGMoveTargetController *picker = [TGMoveTargetController new];
+    picker.srcSpec = srcSpec;
+    [self.navigationController pushViewController:picker animated:YES];
 }
 
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
@@ -1754,6 +1720,76 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
 #pragma mark - Place (what's assigned there, then one row per kind of trigger)
 
 #pragma mark - Assigned (one place's assignments)
+
+
+// cn3.4：移动目标选择——按触发器分类分节，与设置页排序一致。
+@interface TGMoveTargetController : TGListController
+@property (nonatomic, strong) PSSpecifier *srcSpec;
+@end
+
+@implementation TGMoveTargetController
+
+- (NSArray *)specifiers {
+    if (_specifiers) return _specifiers;
+    self.title = @"移动到…";
+    NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
+    NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
+    BOOL hasHome = TGHasHomeButton();
+    NSMutableArray *specs = [NSMutableArray array];
+    for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
+        const TGItem *items = TGTriggerGroups[g].items;
+        NSMutableArray *rows = [NSMutableArray array];
+        for (int i = 0; i < TGTriggerGroups[g].count; i++) {
+            NSString *dst = @(items[i].identifier);
+            if ([dst isEqualToString:srcTrigger] || !TGIsKnownTrigger(dst) || !TGTriggerFitsHardware(dst, hasHome)) continue;
+            NSArray *existing = TGReadAssignment(self, mode, dst);
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
+                [TGButtonText(@(items[i].title)) stringByAppendingString:existing.count ? @"（覆盖）" : @""]
+                target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+            [row setProperty:dst forKey:@"tgMoveDst"];
+            [rows addObject:row];
+        }
+        if (!rows.count) continue;
+        PSSpecifier *header = [PSSpecifier groupSpecifierWithName:TGButtonText(@(TGTriggerGroups[g].title))];
+        [specs addObject:header];
+        [specs addObjectsFromArray:rows];
+    }
+    if (!self.navigationController.viewControllers.count) return specs;
+    _specifiers = specs;
+    return specs;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    NSString *dst = [spec propertyForKey:@"tgMoveDst"];
+    if (!dst) return;
+    NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
+    NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
+    NSArray *existing = TGReadAssignment(self, mode, dst);
+    __weak typeof(self) weakSelf = self;
+    void (^move)(void) = ^{
+        __strong typeof(self) strongSelf = weakSelf;
+        NSArray *actions = TGReadAssignment(strongSelf, mode, srcTrigger);
+        PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), strongSelf, @selector(assignedActionTitle:), mode, dst);
+        [strongSelf setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
+        [strongSelf setPreferenceValue:@"" specifier:strongSelf.srcSpec];
+        [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+        [strongSelf.navigationController popToRootViewControllerAnimated:YES];
+    };
+    if (existing.count) {
+        UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
+            message:[NSString stringWithFormat:@"「%@」已有指派（%@），将被替换。", TGSettingsTriggerTitle(dst), TGListTitle(existing)]
+            preferredStyle:UIAlertControllerStyleAlert];
+        [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) { move(); }]];
+        [self presentViewController:confirm animated:YES completion:nil];
+    } else {
+        move();
+    }
+}
+
+@end
 
 @interface TGAssignedController : TGListController
 @end
