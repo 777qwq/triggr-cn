@@ -967,9 +967,9 @@ static NSString *TGCategoryOf(NSString *action) {
         field.autocorrectionType = UITextAutocorrectionTypeNo;
         field.autocapitalizationType = UITextAutocapitalizationTypeNone;
     }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertControllerStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     __weak UIAlertController *weakAlert = alert;
-    [alert addAction:[UIAlertAction actionWithTitle:@"添加" style:UIAlertControllerStyleDefault handler:^(UIAlertAction *a) {
+    [alert addAction:[UIAlertAction actionWithTitle:@"添加" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
         if (text.length == 0) return;
         [self confirmAdding:[TGIfPrefix stringByAppendingString:text] then:^{
