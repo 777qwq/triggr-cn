@@ -3010,7 +3010,38 @@ static void TGUpdateOtherEvents(void) {
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0));
+    // cn2.74：多指手势位段 bit2..13（inapp.* 12 触发器）
+    uint64_t mfBits = 0;
+    for (int idx = 0; idx < 12; idx++) {
+        static NSString *ids[] = {
+            @"inapp.twotap", @"inapp.threetap",
+            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
+            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
+            @"inapp.pinchin", @"inapp.pinchout",
+        };
+        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+        if ([tgAssignedTriggers containsObject:ids[idx]]) mfBits |= bit;
+    }
+    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | mfBits);
+    // 多指上报监听（App 侧 Relay 经分布式通知上报）
+    static BOOL mfObserverArmed = NO;
+    if (mfBits && !mfObserverArmed) {
+        mfObserverArmed = YES;
+        static NSString *names[] = {
+            @"inapp.twotap", @"inapp.threetap",
+            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
+            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
+            @"inapp.pinchin", @"inapp.pinchout",
+        };
+        for (int idx = 0; idx < 12; idx++) {
+            uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+            if (!(mfBits & bit)) continue;
+            NSString *distName = [@"com.johndie.triggr/" stringByAppendingString:ids[idx]];
+            [[NSDistributedNotificationCenter defaultCenter] addObserverForName:distName object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
+                if ([tgAssignedTriggers containsObject:ids[idx]]) dispatch_async(dispatch_get_main_queue(), ^{ TGFire(ids[idx]); });
+            }];
+        }
+    }
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");
     if (wantPower && !tgPowerObserver) {

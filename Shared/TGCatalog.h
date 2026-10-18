@@ -72,6 +72,15 @@ static const TGItem TGHomeGestures[] = {
     {"homescreen.twoup", "双指上滑"}, {"homescreen.twodown", "双指下滑"},
     {"homescreen.doubletap", "双击空白处"},
 };
+
+static const TGItem TGInAppGestures[] = {
+    {"inapp.twotap", "两指点按"}, {"inapp.threetap", "三指点按"},
+    {"inapp.twoup", "两指上滑"}, {"inapp.twodown", "两指下滑"},
+    {"inapp.twoleft", "两指左滑"}, {"inapp.tworight", "两指右滑"},
+    {"inapp.threeup", "三指上滑"}, {"inapp.threedown", "三指下滑"},
+    {"inapp.threeleft", "三指左滑"}, {"inapp.threeright", "三指右滑"},
+    {"inapp.pinchin", "捏合"}, {"inapp.pinchout", "张开"},
+};
 static const TGItem TGIcons[] = {
     {"icon.flickup", "上滑"}, {"icon.flickdown", "下滑"}, {"icon.flickleft", "左滑"}, {"icon.flickright", "右滑"},
 };
@@ -121,6 +130,7 @@ static const TGGroup TGTriggerGroups[] = {
     {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。"},
     {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入，应用内、主屏幕和锁屏均有效。单指“从左侧滑入”会取代多数应用的返回手势；双指版（同 Activator）不会。"},
     {"主屏幕手势", TGHomeGestures, TG_COUNT(TGHomeGestures), "在主屏幕页面上（而非图标上）。双指滑动和捏合不影响单指滚动、聚焦搜索和今天视图；双击只在空白处生效。编辑主屏幕或打开文件夹时忽略。"},
+    {"应用内手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "在应用内有效。原应用仍会收到同样的手势，所以挑它没占用的：两指/三指点按和滑动最安全。捏合是双指缩放，会与照片、Safari、地图等缩放冲突——每个手势只在有指派的应用里启用。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且亮屏时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},
     {"电话", TGCalls, TG_COUNT(TGCalls), "使用 CallKit 的电话、FaceTime 及其他通话应用。来电在响铃时触发，接听电话在接通时触发。开启“实时留言信箱”后，转入语音信箱的电话也算接听。"},

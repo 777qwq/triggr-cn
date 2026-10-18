@@ -188,3 +188,121 @@ static void TGRelayDoBack(void) {
         });
     }
 }
+
+
+// ---- 多指手势（cn2.74，按 2.0 TGInAppTarget 逆向档案逐行复刻）----
+// 12 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10=pinchin 11=pinchout
+// wanted 位：bit(idx+2)；pinch 特例 bits12/13。未指派不挂载（动态开关）。
+// 上报：NSDistributedNotificationCenter "com.johndie.triggr/inapp-*"，SB 侧映射 inapp.* 动作执行。
+
+@interface TGInAppTarget : NSObject <UIGestureRecognizerDelegate>
++ (instancetype)shared;
+- (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted;
+- (UIGestureRecognizer *)recognizerFor:(int)idx;
+- (void)recognized:(UIGestureRecognizer *)g;
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
+@end
+
+@implementation TGInAppTarget
+
++ (instancetype)shared {
+    static id s;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ s = [[self alloc] init]; });
+    return s;
+}
+
+- (UIGestureRecognizer *)recognizerFor:(int)idx {
+    UIGestureRecognizer *g = nil;
+    if (idx >= 10) {
+        g = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+    } else if (idx < 2) {
+        UITapGestureRecognizer *t = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        t.numberOfTouchesRequired = idx == 0 ? 2 : 3;
+        t.numberOfTapsRequired = 1;
+        g = t;
+    } else {
+        UISwipeGestureRecognizer *s = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        s.numberOfTouchesRequired = idx < 6 ? 2 : 3;
+        int k = idx % 4;
+        s.direction = (k == 0) ? UISwipeGestureRecognizerDirectionUp
+                   : (k == 1) ? UISwipeGestureRecognizerDirectionDown
+                   : (k == 2) ? UISwipeGestureRecognizerDirectionLeft
+                              : UISwipeGestureRecognizerDirectionRight;
+        g = s;
+    }
+    g.delegate = self;
+    g.cancelsTouchesInView = NO;
+    g.delaysTouchesBegan = NO;
+    g.delaysTouchesEnded = NO;
+    objc_setAssociatedObject(g, "TGInAppIndex", @(idx), OBJC_ASSOCIATION_RETAIN);
+    return g;
+}
+
+- (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted {
+    if (!window) return;
+    for (UIGestureRecognizer *g in [window.gestureRecognizers copy]) {
+        NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+        if (!idxN) continue;
+        int idx = idxN.intValue;
+        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+        if (!(wanted & bit)) [window removeGestureRecognizer:g];
+    }
+    for (int idx = 0; idx < 12; idx++) {
+        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+        if (!(wanted & bit)) continue;
+        BOOL present = NO;
+        for (UIGestureRecognizer *g in window.gestureRecognizers) {
+            NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+            if (idxN && idxN.intValue == idx) { present = YES; break; }
+        }
+        if (!present) [window addGestureRecognizer:[self recognizerFor:idx]];
+    }
+}
+
+- (void)recognized:(UIGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateEnded) return;
+    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+    if (!idxN) return;
+    int idx = idxN.intValue;
+    static NSString *names[] = {
+        @"com.johndie.triggr/inapp-twotap", @"com.johndie.triggr/inapp-threetap",
+        @"com.johndie.triggr/inapp-twoup", @"com.johndie.triggr/inapp-twodown",
+        @"com.johndie.triggr/inapp-twoleft", @"com.johndie.triggr/inapp-tworight",
+        @"com.johndie.triggr/inapp-threeup", @"com.johndie.triggr/inapp-threedown",
+        @"com.johndie.triggr/inapp-threeleft", @"com.johndie.triggr/inapp-threeright",
+        @"com.johndie.triggr/inapp-pinchin", @"com.johndie.triggr/inapp-pinchout",
+    };
+    if (idx >= 0 && idx <= 11)
+        [[NSDistributedNotificationCenter defaultCenter] postNotificationName:names[idx] object:nil userInfo:nil deliverImmediately:YES];
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+    if (!idxN) return NO;
+    int idx = idxN.intValue;
+    uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+    uint64_t wanted = 0;
+    static int wtoken = -1;
+    if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
+    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
+    return (wanted & bit) != 0;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return NO;
+}
+
+@end
+
+%hook UIWindow
+- (void)didMoveToWindow {
+    %orig;
+    if (!self) return;
+    uint64_t wanted = 0;
+    static int wtoken = -1;
+    if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
+    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
+    [[TGInAppTarget shared] refresh:self wanted:wanted];
+}
+%end
