@@ -496,7 +496,10 @@ static BOOL TGSwitchFor(NSString *name, TGSwitch *out) {
                     ((void (*)(id, SEL, int))objc_msgSend)(m, sel_registerName("setState:"), on ? 0x3ff : 0x3fe);
             });
         };
-        id m = TGShared("MISManager");
+        // MISManager 单例方法是 sharedManager（不是 sharedInstance，TGShared 拿不到）
+        Class mcls = objc_getClass("MISManager");
+        if (!mcls || ![mcls respondsToSelector:@selector(sharedManager)]) return NO;
+        id m = ((id (*)(id, SEL))objc_msgSend)(mcls, @selector(sharedManager));
         if (!m) return NO;
         SEL gs = sel_registerName("getState:andReason:"), ss = sel_registerName("setState:");
         if (![m respondsToSelector:gs] || ![m respondsToSelector:ss]) return NO;
