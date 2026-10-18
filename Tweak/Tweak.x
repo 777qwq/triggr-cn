@@ -3030,12 +3030,12 @@ static void TGUpdateOtherEvents(void) {
     if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | mfBits);
     // 多指上报监听（App 侧 Relay 经分布式通知上报）
     // 诊断：attach/fired 落盘
-    [[NSDistributedNotificationCenter defaultCenter] addObserverForName:@"com.johndie.triggr/inapp-attach" object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-        CNLog2(@"inapp attach seen");
-    }];
-    [[NSDistributedNotificationCenter defaultCenter] addObserverForName:@"com.johndie.triggr/inapp-fired" object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-        CNLog2(@"inapp gesture FIRED");
-    }];
+    {
+        static int ta = -1;
+        if (ta == -1) notify_register_dispatch("cn.triggr.inappattach", &ta, dispatch_get_main_queue(), ^(int t){ CNLog2(@"inapp attach seen"); });
+        static int tf = -1;
+        if (tf == -1) notify_register_dispatch("cn.triggr.inappfired", &tf, dispatch_get_main_queue(), ^(int t){ CNLog2(@"inapp gesture FIRED"); });
+    }
     static BOOL mfObserverArmed = NO;
     if (mfBits && !mfObserverArmed) {
         mfObserverArmed = YES;

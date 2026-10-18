@@ -191,7 +191,7 @@ static void TGRelayDoBack(void) {
     if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
     if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
     [[TGInAppTarget shared] refresh:self wanted:wanted];
-    [[NSDistributedNotificationCenter defaultCenter] postNotificationName:@"com.johndie.triggr/inapp-attach" object:nil userInfo:nil deliverImmediately:YES];
+    notify_post("cn.triggr.inappattach");
 }
 %end
 
@@ -278,7 +278,7 @@ static void TGRelayDoBack(void) {
 }
 
 - (void)recognized:(UIGestureRecognizer *)g {
-    [[NSDistributedNotificationCenter defaultCenter] postNotificationName:@"com.johndie.triggr/inapp-fired" object:nil userInfo:nil deliverImmediately:YES];
+    notify_post("cn.triggr.inappfired");
     if (g.state != UIGestureRecognizerStateEnded) return;
     NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
     if (!idxN) return;
