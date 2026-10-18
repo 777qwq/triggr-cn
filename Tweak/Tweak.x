@@ -356,14 +356,10 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
     // iOS 16: volumeStepUp/Down only report the step (the empty @available
     // branch here once made assigned volume actions no-ops); apply the step
     // with changeVolumeByDelta: on every iOS that answers it.
-    if ([volume respondsToSelector:step] && [volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
-        // iOS 15: volumeStepUp/Down only return the step size (verified on 15.8),
-        // so the step is applied with changeVolumeByDelta:.
-        if (!dryRun) {
-            float delta = fabsf(((float (*)(id, SEL))objc_msgSend)(volume, step));
-            if (delta <= 0 || delta > 0.5f) delta = 1.0f / 16;
-            ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? delta : -delta);
-        }
+    // cn2.75c：不再调用 volumeStepUp——iOS 16.3 上它会真实执行步进（返回+生效），
+    // 叠加 changeVolumeByDelta: 造成一次动作跳两格。步进恒为 1/16，直接 delta。
+    if ([volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
+        if (!dryRun) ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? 1.0f / 16 : -1.0f / 16);
         return YES;
     }
     if ([volume respondsToSelector:step]) {
