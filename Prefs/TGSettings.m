@@ -1770,6 +1770,23 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(@"自定义事件")]];
             [specs addObjectsFromArray:customRows];
         }
+        // cn4.2：还没有实例的自定义事件类型——选参数即建即搬
+        [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(@"新建自定义事件")]];
+        for (NSArray *kind in @[
+            @[@"加入 Wi-Fi 网络…", TGWiFiJoinedPrefix, @"Wi-Fi 名称", @"Home"],
+            @[@"离开 Wi-Fi 网络…", TGWiFiLeftPrefix, @"Wi-Fi 名称", @"Home"],
+            @[@"蓝牙设备已连接…", TGBTConnectedPrefix, @"设备名称", @"AirPods Pro"],
+            @[@"蓝牙设备已断开…", TGBTDisconnectedPrefix, @"设备名称", @"AirPods Pro"],
+            @[@"电量高于…", TGBatteryAbovePrefix, @"电量百分比", @"80"],
+            @[@"电量低于…", TGBatteryBelowPrefix, @"电量百分比", @"20"],
+        ]) {
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:kind[0] target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+            [row setProperty:kind forKey:@"tgNewEvent"];
+            [specs addObject:row];
+        }
+        PSSpecifier *timeRow = [PSSpecifier preferenceSpecifierNamed:@"定时…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [timeRow setProperty:TGTimePrefix forKey:@"tgNewEvent"];
+        [specs addObject:timeRow];
     }
     if (!self.navigationController.viewControllers.count) return specs;
     _specifiers = specs;
@@ -1780,6 +1797,8 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
     NSString *dst = [spec propertyForKey:@"tgMoveDst"];
+    NSArray *newEvent = [spec propertyForKey:@"tgNewEvent"];
+    if (!dst && newEvent) { [self promptNewEvent:newEvent]; return; }
     if (!dst) return;
     NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
     NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
@@ -1804,6 +1823,52 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     } else {
         move();
     }
+}
+
+// cn4.2：新类型自定义事件——输参数生成触发器 ID，创建即搬当前指派。
+- (void)promptNewEvent:(NSArray *)kind {
+    NSString *title = kind[0], *prefix = kind[1], *placeholder = kind[2];
+    BOOL isTime = [prefix isEqualToString:TGTimePrefix];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+        message:isTime ? @"格式 HHMM（如 0730），每天触发" : nil
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = placeholder;
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        if (isTime || [placeholder hasSuffix:@"百分比"]) field.keyboardType = UIKeyboardTypeNumberPad;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"下一步" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (text.length == 0) return;
+        NSString *dst = [prefix stringByAppendingString:text];
+        NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
+        NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
+        NSArray *existing = TGReadAssignment(self, mode, dst);
+        __weak typeof(self) weakSelf = self;
+        void (^move)(void) = ^{
+            __strong typeof(self) strongSelf = weakSelf;
+            NSArray *actions = TGReadAssignment(strongSelf, mode, srcTrigger);
+            PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), strongSelf, @selector(assignedActionTitle:), mode, dst);
+            [strongSelf setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
+            [strongSelf setPreferenceValue:@"" specifier:strongSelf.srcSpec];
+            [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+            [strongSelf.navigationController popViewControllerAnimated:YES];
+        };
+        if (existing.count) {
+            UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
+                message:[NSString stringWithFormat:@"「%@」已有指派（%@），将被替换。", TGSettingsTriggerTitle(dst), TGListTitle(existing)]
+                preferredStyle:UIAlertControllerStyleAlert];
+            [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+            [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a2) { move(); }]];
+            [self presentViewController:confirm animated:YES completion:nil];
+        } else {
+            move();
+        }
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 @end
