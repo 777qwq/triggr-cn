@@ -3125,17 +3125,22 @@ static void TGUpdateOtherEvents(void) {
     // 诊断：attach/fired 落盘
     // cn2.75：多指手势分发（Relay 经 notify_post cn.triggr.inappidxN 上报，idx 与 TGCatalog 顺序一致）
     {
+        static int toks[12] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
         static NSString *nids[] = {
             @"inapp.twotap", @"inapp.threetap",
             @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
             @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
             @"inapp.pinchin", @"inapp.pinchout",
         };
-        static int toks[12] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
-        for (int i = 0; i < 12; i++) {
-            NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", i];
-            NSString *idn = nids[i];
-            notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
+        // 只注册一次：TGUpdateOtherEvents 每次跑都会到这里，重复注册会叠加派发（一次手势多次执行动作）
+        static BOOL registered = NO;
+        if (!registered) {
+            registered = YES;
+            for (int i = 0; i < 12; i++) {
+                NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", i];
+                NSString *idn = nids[i];
+                notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
+            }
         }
     }
     
