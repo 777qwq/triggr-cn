@@ -200,6 +200,8 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 
 // Every Triggr page: reloads when you come back to it (so rows show what was
 // picked deeper down) and lets subclasses offer a swipe action on a row.
+@class TGMoveTargetController;
+
 @interface TGListController : PSListController
 - (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec; // nil: this row can't be swiped
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec;              // do it; YES when the row goes away
