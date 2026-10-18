@@ -1774,7 +1774,9 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [row setProperty:trigger forKey:@"tgMoveDst"];
             [customRows addObject:row];
         }
-        [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(@"自定义事件")]];
+        PSSpecifier *customGroup = [PSSpecifier groupSpecifierWithName:TGButtonText(@"自定义事件")];
+        [customGroup setProperty:@"先创建你需要的事件作为触发器，再搬动作过来将其覆盖即可。" forKey:@"footerText"];
+        [specs addObject:customGroup];
         if (customRows.count) [specs addObjectsFromArray:customRows];
         PSSpecifier *addNew = [PSSpecifier preferenceSpecifierNamed:@"新建自定义事件…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [addNew setProperty:@YES forKey:@"tgAddNew"];
