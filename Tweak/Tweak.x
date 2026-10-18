@@ -2962,16 +2962,6 @@ static NSTimer *tgTimeTimer;
 static id tgTimeObserver;
 
 // cn4.4：PCPersistentTimer 的 target 代理（userInfo = 应触发的时间点）
-static void TGTimeTimerFired(NSDate *target);
-@interface TGTimePoker : NSObject
-@end
-@implementation TGTimePoker
-- (void)poke:(id)timer {
-    id when = [(id)timer userInfo];
-    if ([when isKindOfClass:NSDate.class]) TGTimeTimerFired(when);
-}
-@end
-static TGTimePoker *tgTimePoker;
 
 static BOOL TGDayMatches(NSString *days, NSDate *date) {
     NSInteger weekday = [NSCalendar.currentCalendar component:NSCalendarUnitWeekday fromDate:date]; // 1 = Sunday
