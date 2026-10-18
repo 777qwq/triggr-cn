@@ -181,6 +181,7 @@ static void TGRelayDoBack(void) {
     if (!springBoard) {
         %init(StatusBar);
         %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
+        %init(InAppGestures); // 多指手势（cn2.74）
         // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
         static int backToken = -1;
         notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
