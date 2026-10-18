@@ -4,6 +4,7 @@
 // assigned it doesn't even send the message.
 
 #import <UIKit/UIKit.h>
+#import <Foundation/NSDistributedNotificationCenter.h>
 #import <notify.h>
 #import <objc/message.h>
 #import "../Shared/TGRelay.h"
@@ -172,6 +173,7 @@ static void TGRelayDoBack(void) {
 %end
 %end
 
+%@class TGInAppTarget;
 %group InAppGestures
 %hook UIWindow
 - (void)didMoveToWindow {
