@@ -3041,30 +3041,23 @@ static void TGUpdateOtherEvents(void) {
         static int tw = -1;
         if (tw == -1) notify_register_dispatch("cn.triggr.inappwantpin", &tw, dispatch_get_main_queue(), ^(int t){ CNLog2(@"wanted has pinchin bit"); });
         static int t10 = -1;
-        if (t10 == -1) notify_register_dispatch("cn.triggr.inappidx10", &t10, dispatch_get_main_queue(), ^(int t){ CNLog2(@"pinchin idx10 FIRED"); });
-    }
-    static BOOL mfObserverArmed = NO;
-    if (mfBits && !mfObserverArmed) {
-        mfObserverArmed = YES;
-        for (int idx = 0; idx < 12; idx++) {
-            uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
-            if (!(mfBits & bit)) continue;
-            NSString *idn = nil;
-            switch (idx) {
-                case 0: idn = @"inapp.twotap"; break;   case 1: idn = @"inapp.threetap"; break;
-                case 2: idn = @"inapp.twoup"; break;    case 3: idn = @"inapp.twodown"; break;
-                case 4: idn = @"inapp.twoleft"; break;  case 5: idn = @"inapp.tworight"; break;
-                case 6: idn = @"inapp.threeup"; break;  case 7: idn = @"inapp.threedown"; break;
-                case 8: idn = @"inapp.threeleft"; break; case 9: idn = @"inapp.threeright"; break;
-                case 10: idn = @"inapp.pinchin"; break; case 11: idn = @"inapp.pinchout"; break;
-            }
-            NSString *distName = [@"com.johndie.triggr/" stringByAppendingString:idn];
-            NSDistributedNotificationCenter *dc = [NSDistributedNotificationCenter defaultCenter];
-            [dc addObserverForName:distName object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-                if ([tgAssignedTriggers containsObject:idn]) dispatch_async(dispatch_get_main_queue(), ^{ TGFire(idn); });
-            }];
+        if (t10 == -1) notify_register_dispatch("cn.triggr.inappidx10", &t10, dispatch_get_main_queue(), ^(int t){ CNLog2(@"pinchin idx10 FIRED"); dispatch_async(dispatch_get_main_queue(), ^{ TGFire(@"inapp.pinchin"); }); });
+        static int t11 = -1;
+        if (t11 == -1) notify_register_dispatch("cn.triggr.inappidx11", &t11, dispatch_get_main_queue(), ^(int t){ TGFire(@"inapp.pinchout"); });
+        static NSString *nids[] = {
+            @"inapp.twotap", @"inapp.threetap",
+            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
+            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
+        };
+        for (int i = 0; i < 10; i++) {
+            NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", i];
+            NSString *idn = nids[i];
+            static int toks[10] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
+            if (toks[i] == -1) notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
         }
     }
+    static BOOL mfObserverArmed = NO;
+    if (NO) {
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");
     if (wantPower && !tgPowerObserver) {
