@@ -775,6 +775,16 @@ static NSString *TGCategoryOf(NSString *action) {
         [clear setProperty:@YES forKey:@"tgClear"];
         [specs addObject:clear];
     }
+    // cn2.78：仅当（2.0 ONLY IF）——条件门存为 if: 行（执行器已支持）
+    if (!_menuEditor) {
+        [specs addObject:[PSSpecifier groupSpecifierWithName:@"仅当"]];
+        NSString *cond = [self itemWithPrefix:TGIfPrefix];
+        PSSpecifier *onlyif = [PSSpecifier preferenceSpecifierNamed:cond ? TGDisplayTitle(cond) : @"添加条件…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [onlyif setProperty:@YES forKey:@"tgOnlyIf"];
+        if (cond) [onlyif setProperty:@"点按可更换；在已选择列表左滑可移除。" forKey:@"footerText"];
+        else [onlyif setProperty:@"在特定情况下才运行这些动作：连着 Wi-Fi 网络、正在充电、时间段内等。" forKey:@"footerText"];
+        [specs addObject:onlyif];
+    }
     [specs addObject:[PSSpecifier groupSpecifierWithName:@"动作"]];
     if ([self rowsForCategory:@"recent"].count) {
         PSSpecifier *header = [PSSpecifier preferenceSpecifierNamed:@"最近使用" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
@@ -958,6 +968,89 @@ static NSString *TGCategoryOf(NSString *action) {
 // None clears; any other action toggles, appended to the run order.
 // cn2.77：自定义条件。语法见仓库 README：wifi[:SSID] bt:名称 charging locked music headphones
 // battery<N battery>N time:H:MM-H:MM；'!' 前缀取反；'@秒' = 条件持续 N 秒才执行。
+// cn2.78：仅当条件选择（2.0 Add Condition 同位）。条件存 if: 行，置顶；nil 移除。
+- (void)setOnlyIf:(NSString *)cond {
+    NSString *existing = [self itemWithPrefix:TGIfPrefix];
+    if (existing) [_selection removeObject:existing];
+    if (cond) [_selection insertObject:cond atIndex:0];
+    _selection = TGTidyPauses(_selection);
+    [self save];
+}
+
+- (void)applyOnlyIfCore:(NSString *)core wait:(NSString *)waitText {
+    NSString *wait = waitText.length ? [NSString stringWithFormat:@"@%@", waitText] : @"";
+    [self setOnlyIf:[TGIfPrefix stringByAppendingFormat:@"%@%@", core, wait]];
+}
+
+- (void)promptOnlyIfParam:(NSString *)title message:(NSString *)message placeholder:(NSString *)placeholder compose:(NSString *(^)(NSString *text))compose {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = placeholder;
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    }];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"持续秒数（可空，如 10）";
+        field.keyboardType = UIKeyboardTypeDecimalPad;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        if (text.length == 0) return;
+        NSString *wait = [weakAlert.textFields.lastObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+        NSString *core = compose(text);
+        if (core.length == 0) return;
+        [self applyOnlyIfCore:core wait:wait];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)pickOnlyIfFrom:(NSIndexPath *)indexPath {
+    NSString *existing = [self itemWithPrefix:TGIfPrefix];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:existing ? @"更换条件" : @"仅当满足条件时" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    void (^pick)(NSString *) = ^(NSString *core) { [self applyOnlyIfCore:core wait:nil]; };
+    [sheet addAction:[UIAlertAction actionWithTitle:@"连着 Wi-Fi 网络" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { pick(@"wifi"); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"连着 Wi-Fi（指定网络）…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [self promptOnlyIfParam:@"Wi-Fi 名称" message:@"与设置里显示的网络名一致" placeholder:@"Home" compose:^(NSString *t) { return [@"wifi:" stringByAppendingString:t]; }];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"连着蓝牙设备…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [self promptOnlyIfParam:@"蓝牙设备名称" message:nil placeholder:@"AirPods Pro" compose:^(NSString *t) { return [@"bt:" stringByAppendingString:t]; }];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"正在充电" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { pick(@"charging"); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"设备已锁定" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { pick(@"locked"); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"正在播放音乐" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { pick(@"music"); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"连着耳机" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { pick(@"headphones"); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"电量低于…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [self promptOnlyIfParam:@"电量低于" message:@"0–100" placeholder:@"40" compose:^(NSString *t) { return [@"battery<" stringByAppendingString:t]; }];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"电量高于…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [self promptOnlyIfParam:@"电量高于" message:@"0–100" placeholder:@"80" compose:^(NSString *t) { return [@"battery>" stringByAppendingString:t]; }];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"时间段…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"时间段" message:@"如 9:00 到 18:00；结束小于开始表示跨夜" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *f) { f.placeholder = @"开始（9:00）"; f.keyboardType = UIKeyboardTypeNumbersAndPunctuation; }];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *f) { f.placeholder = @"结束（18:00）"; f.keyboardType = UIKeyboardTypeNumbersAndPunctuation; }];
+        [alert addTextFieldWithConfigurationHandler:^(UITextField *f) { f.placeholder = @"持续秒数（可空）"; f.keyboardType = UIKeyboardTypeDecimalPad; }];
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        __weak UIAlertController *weakAlert = alert;
+        [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a2) {
+            NSString *s = [weakAlert.textFields[0].text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            NSString *e2 = [weakAlert.textFields[1].text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            NSString *w = [weakAlert.textFields[2].text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceCharacterSet]];
+            if (s.length == 0 || e2.length == 0) return;
+            [self applyOnlyIfCore:[NSString stringWithFormat:@"time:%@-%@", s, e2] wait:w];
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"自定义…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [self promptOnlyIfParam:@"自定义条件" message:@"wifi:名称、bt:名称、battery<40、time:9:00-18:00；! 开头=取反" placeholder:@"!wifi" compose:^(NSString *t) { return t; }];
+    }]];
+    if (existing) [sheet addAction:[UIAlertAction actionWithTitle:@"移除条件" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) { [self setOnlyIf:nil]; }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentSheet:sheet fromRowAtIndexPath:indexPath];
+}
+
 - (void)promptCustomCondition {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"自定义条件"
         message:@"例如：wifi:Home、bt:AirPods Pro、battery<40、battery>80、time:9:00-18:00；加 ! 取反；结尾加 @10 表示持续 10 秒才执行。"
@@ -1079,7 +1172,11 @@ static NSString *TGCategoryOf(NSString *action) {
     else if (!category) cell.imageView.image = nil;
     cell.separatorInset = UIEdgeInsetsMake(0, child ? 60 : (category ? 60 : 16), 0, 0);
     NSString *detail = nil;
-    if (picked) {
+    if ([spec propertyForKey:@"tgOnlyIf"]) {
+        cell.imageView.image = [UIImage systemImageNamed:@"plus.circle.fill"
+            withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:29 weight:UIImageSymbolWeightRegular]];
+        cell.imageView.tintColor = UIColor.systemGreenColor;
+    } else if (picked) {
         if (TGCategoryOf(picked)) detail = [self titleForCategory:TGCategoryOf(picked)];
     } else if (category) {
         BOOL open = [_expanded isEqualToString:category];
@@ -1256,6 +1353,7 @@ static NSString *TGCategoryOf(NSString *action) {
         [self presentSheet:sheet fromRowAtIndexPath:indexPath];
         return;
     }
+    if ([spec propertyForKey:@"tgOnlyIf"]) { [self pickOnlyIfFrom:indexPath]; return; }
     NSString *action = [spec propertyForKey:@"tgAction"];
     if (action) {
         [[UISelectionFeedbackGenerator new] selectionChanged];
