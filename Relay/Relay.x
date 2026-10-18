@@ -172,6 +172,19 @@ static void TGRelayDoBack(void) {
 %end
 %end
 
+%group InAppGestures
+%hook UIWindow
+- (void)didMoveToWindow {
+    %orig;
+    if (!self) return;
+    uint64_t wanted = 0;
+    static int wtoken = -1;
+    if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
+    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
+    [[TGInAppTarget shared] refresh:self wanted:wanted];
+}
+%end
+
 %ctor {
     // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
     NSBundle *bundle = NSBundle.mainBundle;
@@ -296,16 +309,4 @@ static void TGRelayDoBack(void) {
 
 @end
 
-%group InAppGestures
-%hook UIWindow
-- (void)didMoveToWindow {
-    %orig;
-    if (!self) return;
-    uint64_t wanted = 0;
-    static int wtoken = -1;
-    if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
-    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
-    [[TGInAppTarget shared] refresh:self wanted:wanted];
-}
-%end
 %end
