@@ -13,10 +13,6 @@
 
 #import <UIKit/UIKit.h>
 #import <Foundation/NSDistributedNotificationCenter.h>
-static void CNLog2(NSString *s) {
-    FILE *f = fopen("/var/mobile/Library/Triggr/cn_ext.log", "a");
-    if (f) { fprintf(f, "%s\n", s.UTF8String); fclose(f); }
-}
 
 
 #import <UIKit/UIGestureRecognizerSubclass.h>
