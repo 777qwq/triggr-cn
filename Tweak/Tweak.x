@@ -478,6 +478,12 @@ static BOOL TGSwitchFor(NSString *name, TGSwitch *out) {
     if ([name isEqualToString:@"hotspot"]) {
         // cn3.2：个人热点（Actra 实证移植）——MISManager 主线程 getState:andReason:/setState:，
         // 状态 0x3FF=开 0x3FE=关；首次 setState 常不生效，3 秒后复查重试。
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            // MISManager 在 WirelessModemSettings.bundle 里，SpringBoard 不链接，手动 dlopen（Actra 同款）
+            void *h = dlopen("/System/Library/PreferenceBundles/WirelessModemSettings.bundle/WirelessModemSettings", RTLD_LAZY);
+            if (!h) dlopen("/System/Library/PreferenceBundles/WirelessModemSettings.bundle/WirelessModemSettings/WirelessModemSettings", RTLD_LAZY);
+        });
         void (^apply)(id, BOOL) = ^(id m, BOOL on) {
             int state = 0, reason = 0;
             ((void (*)(id, SEL, int *, int *))objc_msgSend)(m, sel_registerName("getState:andReason:"), &state, &reason);

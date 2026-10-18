@@ -1,6 +1,6 @@
 Package: com.johndie.triggr
 Name: Triggr汉化修改
-Version: 1.5.0+cn3.2
+Version: 1.5.0+cn3.2a
 Architecture: iphoneos-arm64
 Description: 基于 Triggr 1.5.0 源码修改。全量汉化；新增微信/支付宝扫一扫、密码解锁、返回上级、快捷指令等动作；移植 2.0 的应用内多指手势（两指/三指点按、滑动、捏合）与条件序列（仅当满足 Wi-Fi/充电/时间段等条件时执行，支持否则分支与持续确认）。
 Maintainer: 777qwq
