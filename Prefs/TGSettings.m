@@ -1760,6 +1760,8 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         for (NSString *key in TGAllAssignments()) {
             NSString *trigger = [key substringFromIndex:[key rangeOfString:@"/"].location + 1];
             if (!TGIsCustomTrigger(trigger) || [trigger isEqualToString:srcTrigger] || [seen containsObject:trigger]) continue;
+            // 应用通知/应用启动/图标轻扫三类不作为移动目标（cn4.5）
+            if ([trigger hasPrefix:TGNotificationAppPrefix] || [trigger hasPrefix:TGAppLaunchedPrefix] || [trigger hasPrefix:@"icon.flick"]) continue;
             [seen addObject:trigger];
             NSArray *existing = TGReadAssignment(self, mode, trigger);
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
@@ -1768,9 +1770,11 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [row setProperty:trigger forKey:@"tgMoveDst"];
             [customRows addObject:row];
         }
-        if (customRows.count) {
-            [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(@"自定义事件")]];
-            [specs addObjectsFromArray:customRows];
+        [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(@"自定义事件")]];
+        if (customRows.count) [specs addObjectsFromArray:customRows];
+        else {
+            PSSpecifier *empty = [PSSpecifier preferenceSpecifierNamed:@"（暂无其他自定义事件）" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+            [specs addObject:empty];
         }
     }
     if (!self.navigationController.viewControllers.count) return specs;

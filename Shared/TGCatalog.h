@@ -501,7 +501,7 @@ static inline NSString *TGDaysTitle(NSString *days) {
         NSMutableArray *names = [NSMutableArray array];
         for (NSInteger i = 0; i < 7; i++) {
             NSInteger weekday = (calendar.firstWeekday - 1 + i) % 7 + 1;
-            if ([days containsString:@(weekday).stringValue]) [names addObject:calendar.shortWeekdaySymbols[weekday - 1]];
+            if ([days containsString:@(weekday).stringValue]) [names addObject:@[@"周日", @"周一", @"周二", @"周三", @"周四", @"周五", @"周六"][weekday - 1]];
         }
         return [names componentsJoinedByString:@", "];
     }
@@ -529,8 +529,8 @@ static inline NSString *TGFlickDirectionTitle(NSString *trigger) {
 static inline NSString *TGCustomTriggerTitle(NSString *trigger) {
     NSString *value = nil;
     for (NSString *prefix in TGCustomPrefixes()) if ([trigger hasPrefix:prefix]) value = [trigger substringFromIndex:prefix.length];
-    if ([trigger hasPrefix:TGWiFiJoinedPrefix]) return [NSString stringWithFormat:@"Joined \u201c%@\u201d", value];
-    if ([trigger hasPrefix:TGWiFiLeftPrefix]) return [NSString stringWithFormat:@"Left \u201c%@\u201d", value];
+    if ([trigger hasPrefix:TGWiFiJoinedPrefix]) return [NSString stringWithFormat:@"加入 Wi-Fi「%@」", value];
+    if ([trigger hasPrefix:TGWiFiLeftPrefix]) return [NSString stringWithFormat:@"离开 Wi-Fi「%@」", value];
     if ([trigger hasPrefix:TGBTConnectedPrefix]) return [NSString stringWithFormat:@"连接到“%@”", value];
     if ([trigger hasPrefix:TGBTDisconnectedPrefix]) return [NSString stringWithFormat:@"从“%@”断开", value];
     if ([trigger hasPrefix:TGBatteryAbovePrefix]) return [NSString stringWithFormat:@"电量升破 %@%%", value];
