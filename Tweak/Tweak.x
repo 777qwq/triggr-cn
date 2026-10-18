@@ -12,7 +12,6 @@
 // which just reports their status bar taps and shakes (see Shared/TGRelay.h).
 
 #import <UIKit/UIKit.h>
-#import <Foundation/NSDistributedNotificationCenter.h>
 
 
 #import <UIKit/UIGestureRecognizerSubclass.h>
@@ -359,14 +358,7 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
     // cn2.75c：不再调用 volumeStepUp——iOS 16.3 上它会真实执行步进（返回+生效），
     // 叠加 changeVolumeByDelta: 造成一次动作跳两格。步进恒为 1/16，直接 delta。
     if ([volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
-        if (!dryRun) {
-            static int cnt = 0; cnt++;
-            id cur = [volume respondsToSelector:@selector(volume)] ? [volume performSelector:@selector(volume)] : nil;
-            ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? 1.0f / 16 : -1.0f / 16);
-            id after = [volume respondsToSelector:@selector(volume)] ? [volume performSelector:@selector(volume)] : nil;
-            FILE *f = fopen("/var/mobile/Library/Triggr/cn_ext.log", "a");
-            if (f) { fprintf(f, "vstep#%d up=%d before=%s after=%s\n", cnt, up, [cur isKindOfClass:NSNumber.class] ? [[cur stringValue] UTF8String] : "?", [after isKindOfClass:NSNumber.class] ? [[after stringValue] UTF8String] : "?"); fclose(f); }
-        }
+        if (!dryRun) ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? 1.0f / 16 : -1.0f / 16);
         return YES;
     }
     if ([volume respondsToSelector:step]) {
@@ -3121,9 +3113,7 @@ static void TGUpdateOtherEvents(void) {
         if ([tgAssignedTriggers containsObject:ids[idx]]) mfBits |= bit;
     }
     if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | mfBits);
-    // 多指上报监听（App 侧 Relay 经分布式通知上报）
-    // 诊断：attach/fired 落盘
-    // cn2.75：多指手势分发（Relay 经 notify_post cn.triggr.inappidxN 上报，idx 与 TGCatalog 顺序一致）
+    // cn2.77：多指手势分发（Relay 经 notify_post cn.triggr.inappidxN 上报，idx 与 TGCatalog 顺序一致）
     {
         static int toks[12] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
         static NSString *nids[] = {

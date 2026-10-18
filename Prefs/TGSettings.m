@@ -592,7 +592,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"], @[@"conditions", @"条件"]] mutableCopy];
     // Installed action extensions, each its own category ("ext:<name>").
     for (NSString *name in TGExtensionNames()) {
         NSDictionary *extension = TGExtension(name);
@@ -777,7 +777,7 @@ static NSString *TGCategoryOf(NSString *action) {
     }
     // cn2.78：仅当（2.0 ONLY IF）——条件门存为 if: 行（执行器已支持）
     if (!_menuEditor) {
-        [specs addObject:[PSSpecifier groupSpecifierWithName:@"条件"]];
+        [specs addObject:[PSSpecifier groupSpecifierWithName:@"仅当"]];
         NSString *cond = [self itemWithPrefix:TGIfPrefix];
         PSSpecifier *onlyif = [PSSpecifier preferenceSpecifierNamed:cond ? TGDisplayTitle(cond) : @"添加条件…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [onlyif setProperty:@YES forKey:@"tgOnlyIf"];
@@ -1047,13 +1047,8 @@ static NSString *TGCategoryOf(NSString *action) {
     [sheet addAction:[UIAlertAction actionWithTitle:@"自定义…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [self promptOnlyIfParam:@"自定义条件" message:@"wifi:名称、bt:名称、battery<40、time:9:00-18:00；! 开头=取反" placeholder:@"!wifi" compose:^(NSString *t) { return t; }];
     }]];
-    // 否则/结束条件：序列分支行，作为普通动作追加（跟在动作后面，不是门槛条件）
-    [sheet addAction:[UIAlertAction actionWithTitle:@"否则（追加到动作序列）" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [self confirmAdding:TGElseAction then:^{ [self->_selection addObject:TGElseAction]; [self save]; }];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"结束条件（追加到动作序列）" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [self confirmAdding:TGEndIfAction then:^{ [self->_selection addObject:TGEndIfAction]; [self save]; }];
-    }]];
+
+
     if (existing) [sheet addAction:[UIAlertAction actionWithTitle:@"移除条件" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) { [self setOnlyIf:nil]; }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self presentSheet:sheet fromRowAtIndexPath:indexPath];
