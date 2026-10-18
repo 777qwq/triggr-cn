@@ -4,7 +4,6 @@
 // assigned it doesn't even send the message.
 
 #import <UIKit/UIKit.h>
-#import <Foundation/NSDistributedNotificationCenter.h>
 #import <notify.h>
 #import <objc/message.h>
 #import "../Shared/TGRelay.h"
@@ -173,6 +172,35 @@ static void TGRelayDoBack(void) {
 %end
 %end
 
+static void CNRelayAttachAll(void);
+%ctor {
+    // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
+    NSBundle *bundle = NSBundle.mainBundle;
+    if (![bundle.bundlePath hasSuffix:@".app"]) return;
+    %init(Shake);
+    BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
+    if (!springBoard) {
+        %init(StatusBar);
+        %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
+        %init(InAppGestures); // 多指手势（cn2.75b，2.0 逆向复刻）
+        CNRelayAttachAll();
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
+            CNRelayAttachAll();
+        }];
+        // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
+        static int backToken = -1;
+        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
+ TGRelayDoBack();
+        });
+    }
+}
+
+
+// ---- 多指手势（cn2.75b，严格按 2.0 Relay 反汇编复刻）----
+// 12 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10/11=pinch（scale<0.7 捏合 / >1.4 张开）
+// 方向表 DAT_000076c8 实证：Up/Down/Left/Right，三指组复用同表；并发委托返回 YES；tap/swipe 到 Ended 派发
+// wanted 位：bit(idx+2)；pinch 特例 bit12/13。上报 notify_post("cn.triggr.inappidxN")
+
 @interface TGInAppTarget : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
 - (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted;
@@ -181,12 +209,14 @@ static void TGRelayDoBack(void) {
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
 @end
 
-
-static void CNRelayAttachAll(void) {
-    uint64_t wanted = 0;
+static uint64_t CNRelayWanted(void) {
     static int wtoken = -1;
     if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
-    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
+    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); return st; }
+    return 0;
+}
+
+static void CNRelayAttachAll(void) {
     NSMutableArray *ws = [NSMutableArray array];
     if (@available(iOS 13.0, *)) {
         for (__kindof UIScene *sc in UIApplication.sharedApplication.connectedScenes)
@@ -197,51 +227,8 @@ static void CNRelayAttachAll(void) {
         [ws addObjectsFromArray:UIApplication.sharedApplication.windows];
         #pragma clang diagnostic pop
     }
-    for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:wanted];
+    for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:CNRelayWanted()];
 }
-%group InAppGestures
-
-%hook UIWindow
-- (void)didMoveToWindow {
-    %orig;
-    if (!self) return;
-    uint64_t wanted = 0;
-    static int wtoken = -1;
-    if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
-    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
-    [[TGInAppTarget shared] refresh:self wanted:wanted];
-    notify_post("cn.triggr.inappattach");
-}
-%end
-
-%ctor {
-    // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
-    NSBundle *bundle = NSBundle.mainBundle;
-    if (![bundle.bundlePath hasSuffix:@".app"]) return;
-    %init(Shake);
-    BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
-    if (!springBoard) {
-        %init(StatusBar);
-        %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
-        %init(InAppGestures); // 多指手势（cn2.74）
-        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
-            CNRelayAttachAll();
-        }];
-        CNRelayAttachAll();
-        // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
-        static int backToken = -1;
-        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
- TGRelayDoBack();
-        });
-    }
-}
-
-
-// ---- 多指手势（cn2.74，按 2.0 TGInAppTarget 逆向档案逐行复刻）----
-// 12 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10=pinchin 11=pinchout
-// wanted 位：bit(idx+2)；pinch 特例 bits12/13。未指派不挂载（动态开关）。
-// 上报：NSDistributedNotificationCenter "com.johndie.triggr/inapp-*"，SB 侧映射 inapp.* 动作执行。
-
 
 @implementation TGInAppTarget
 
@@ -264,7 +251,7 @@ static void CNRelayAttachAll(void) {
     } else {
         UISwipeGestureRecognizer *s = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
         s.numberOfTouchesRequired = idx < 6 ? 2 : 3;
-        int k = idx % 4;
+        int k = (idx - 2) % 4;
         s.direction = (k == 0) ? UISwipeGestureRecognizerDirectionUp
                    : (k == 1) ? UISwipeGestureRecognizerDirectionDown
                    : (k == 2) ? UISwipeGestureRecognizerDirectionLeft
@@ -301,10 +288,17 @@ static void CNRelayAttachAll(void) {
 }
 
 - (void)recognized:(UIGestureRecognizer *)g {
-    if (g.state != UIGestureRecognizerStateEnded) return;
     NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
-    if (!idxN) return;
-    int idx = idxN.intValue;
+    int idx = idxN ? idxN.intValue : -1;
+    if (idx >= 0 && (idx & 0xfffffffe) == 10) {
+        if (g.state != UIGestureRecognizerStateEnded) return;
+        CGFloat scale = [(UIPinchGestureRecognizer *)g scale];
+        if (scale < 0.7) idx = 10;
+        else if (scale > 1.4) idx = 11;
+        else return;
+    } else {
+        if (g.state != UIGestureRecognizerStateEnded) return;
+    }
     if (idx >= 0 && idx <= 11) {
         NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
         notify_post(nm.UTF8String);
@@ -316,17 +310,21 @@ static void CNRelayAttachAll(void) {
     if (!idxN) return NO;
     int idx = idxN.intValue;
     uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
-    uint64_t wanted = 0;
-    static int wtoken = -1;
-    if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
-    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); wanted = st; }
-    return (wanted & bit) != 0;
+    return (CNRelayWanted() & bit) != 0;
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
-    return NO;
+    return YES; // 2.0 实证：方向识别器共存的关键
 }
 
 @end
 
+%group InAppGestures
+%hook UIWindow
+- (void)didMoveToWindow {
+    %orig;
+    if (!self) return;
+    [[TGInAppTarget shared] refresh:self wanted:CNRelayWanted()];
+}
+%end
 %end
