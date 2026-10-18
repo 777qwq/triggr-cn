@@ -1864,7 +1864,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         } else {
             move();
         }
-    }];
+    }]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
