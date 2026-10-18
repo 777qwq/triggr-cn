@@ -276,6 +276,65 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
     return [UISwipeActionsConfiguration configurationWithActions:@[action]];
 }
 
+// cn3.4：右滑「移动」——动作不动，触发器换键（同一位置内）。所有带 tgTrigger 的行通用。
+- (void)tgMoveAssignment:(PSSpecifier *)srcSpec {
+    NSString *srcTrigger = [srcSpec propertyForKey:@"tgTrigger"];
+    NSString *mode = [srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"移动到哪个触发器？"
+        message:[NSString stringWithFormat:@"「%@」的动作将原样搬过去。", TGSettingsTriggerTitle(srcTrigger)]
+        preferredStyle:UIAlertControllerStyleActionSheet];
+    BOOL hasHome = TGHasHomeButton();
+    for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
+        const TGItem *items = TGTriggerGroups[g].items;
+        for (int i = 0; i < TGTriggerGroups[g].count; i++) {
+            NSString *dst = @(items[i].identifier);
+            if ([dst isEqualToString:srcTrigger] || !TGIsKnownTrigger(dst) || !TGTriggerFitsHardware(dst, hasHome)) continue;
+            NSArray *existing = TGReadAssignment(self, mode, dst);
+            NSString *label = [TGButtonText(@(items[i].title)) stringByAppendingString:existing.count ? @"（覆盖）" : @""];
+            [sheet addAction:[UIAlertAction actionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                void (^move)(void) = ^{
+                    NSArray *actions = TGReadAssignment(self, mode, srcTrigger);
+                    PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), self, @selector(assignedActionTitle:), mode, dst);
+                    [self setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
+                    [self setPreferenceValue:@"" specifier:srcSpec];
+                    [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+                    [self reloadSpecifiers];
+                };
+                if (existing.count) {
+                    UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
+                        message:[NSString stringWithFormat:@"「%@」已有指派（%@），将被替换。", TGSettingsTriggerTitle(dst), TGListTitle(existing)]
+                        preferredStyle:UIAlertControllerStyleAlert];
+                    [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+                    [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a2) { move(); }]];
+                    [self presentViewController:confirm animated:YES completion:nil];
+                } else {
+                    move();
+                }
+            }]];
+        }
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = self.view;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    if (![spec propertyForKey:@"tgTrigger"]) return nil;
+    __weak typeof(self) weakSelf = self;
+    UIContextualAction *move = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"移动" handler:^(UIContextualAction *a, UIView *view, void (^done)(BOOL)) {
+        __strong typeof(self) strongSelf = weakSelf;
+        [strongSelf tgMoveAssignment:spec];
+        done(YES);
+    }];
+    move.image = [UIImage systemImageNamed:@"arrow.right.circle.fill"];
+    move.backgroundColor = UIColor.systemBlueColor;
+    UISwipeActionsConfiguration *config = [UISwipeActionsConfiguration configurationWithActions:@[move]];
+    config.performsFirstActionWithFullSwipe = NO;
+    return config;
+}
+
 @end
 
 #pragma mark - Saved networks and devices (for Custom Events)
@@ -1758,74 +1817,14 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
 }
 
 
-// cn3.4：移动指派——动作不动，触发器换键（同一位置内）。
-- (void)moveAssignment:(PSSpecifier *)srcSpec {
-    NSString *srcTrigger = [srcSpec propertyForKey:@"tgTrigger"];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"移动到哪个触发器？"
-        message:[NSString stringWithFormat:@"「%@」的动作将原样搬过去。", TGSettingsTriggerTitle(srcTrigger)]
-        preferredStyle:UIAlertControllerStyleActionSheet];
-    BOOL hasHome = TGHasHomeButton();
-    for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
-        const TGItem *items = TGTriggerGroups[g].items;
-        for (int i = 0; i < TGTriggerGroups[g].count; i++) {
-            NSString *dst = @(items[i].identifier);
-            if ([dst isEqualToString:srcTrigger] || !TGIsKnownTrigger(dst) || !TGTriggerFitsHardware(dst, hasHome)) continue;
-            NSArray *existing = TGReadAssignment(self, _mode, dst);
-            NSString *label = [TGButtonText(@(items[i].title)) stringByAppendingString:existing.count ? @"（覆盖）" : @""];
-            [sheet addAction:[UIAlertAction actionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-                void (^move)(void) = ^{
-                    NSArray *actions = TGReadAssignment(self, _mode, srcTrigger);
-                    PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), self, @selector(assignedActionTitle:), _mode, dst);
-                    [self setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
-                    [self setPreferenceValue:@"" specifier:srcSpec];
-                    [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
-                    [self reloadSpecifiers];
-                };
-                if (existing.count) {
-                    UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
-                        message:[NSString stringWithFormat:@"「%@」已有指派（%@），将被替换。", TGSettingsTriggerTitle(dst), TGListTitle(existing)]
-                        preferredStyle:UIAlertControllerStyleAlert];
-                    [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-                    [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a2) { move(); }]];
-                    [self presentViewController:confirm animated:YES completion:nil];
-                } else {
-                    move();
-                }
-            }]];
-        }
-    }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.view;
-    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
-    [self presentViewController:sheet animated:YES completion:nil];
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgTrigger"] ? @"移除" : nil;
 }
 
-// 左滑出两个动作：移动（蓝）+ 移除（红）。
-- (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
-    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
-    if (![spec propertyForKey:@"tgTrigger"]) return [super tableView:tableView trailingSwipeActionsConfigurationForRowAtIndexPath:indexPath];
-    __weak typeof(self) weakSelf = self;
-    UIContextualAction *move = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"移动" handler:^(UIContextualAction *a, UIView *view, void (^done)(BOOL)) {
-        __strong typeof(self) strongSelf = weakSelf;
-        [strongSelf moveAssignment:spec];
-        done(YES);
-    }];
-    move.image = [UIImage systemImageNamed:@"arrow.right.circle.fill"];
-    move.backgroundColor = UIColor.systemBlueColor;
-    UIContextualAction *remove = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive title:@"移除" handler:^(UIContextualAction *a, UIView *view, void (^done)(BOOL)) {
-        __strong typeof(self) strongSelf = weakSelf;
-        [strongSelf setPreferenceValue:@"" specifier:spec];
-        [strongSelf removeSpecifier:spec animated:YES];
-        done(YES);
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ [weakSelf reloadSpecifiers]; });
-    }];
-    remove.image = [UIImage systemImageNamed:@"trash.fill"];
-    return [UISwipeActionsConfiguration configurationWithActions:@[move, remove]];
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    [self setPreferenceValue:@"" specifier:spec];
+    return YES;
 }
-
-@end
-
-@interface TGModeController : TGListController
 @end
 
 @implementation TGModeController {
