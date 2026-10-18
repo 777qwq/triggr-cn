@@ -1724,7 +1724,9 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
 
 
 // cn3.4：移动目标选择——按触发器分类分节，与设置页排序一致。
-@implementation TGMoveTargetController
+@implementation TGMoveTargetController {
+    NSString *_pendingMoveTrigger; // App pick back: the trigger waiting to be moved onto
+}
 
 - (NSArray *)specifiers {
     if (_specifiers) return _specifiers;
@@ -1787,6 +1789,21 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         PSSpecifier *timeRow = [PSSpecifier preferenceSpecifierNamed:@"定时…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [timeRow setProperty:TGTimePrefix forKey:@"tgNewTime"];
         [specs addObject:timeRow];
+        PSSpecifier *addApp = [PSSpecifier preferenceSpecifierNamed:@"打开了应用…" target:self set:@selector(setMoveApp:specifier:) get:@selector(noApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+        [addApp setProperty:@YES forKey:@"useSearchBar"];
+        [addApp setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+        [addApp setProperty:TGAppLaunchedPrefix forKey:@"tgAppKind"];
+        [specs addObject:addApp];
+        PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:@"来自应用的通知…" target:self set:@selector(setMoveApp:specifier:) get:@selector(noApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+        [addNotification setProperty:@YES forKey:@"useSearchBar"];
+        [addNotification setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+        [addNotification setProperty:TGNotificationAppPrefix forKey:@"tgAppKind"];
+        [specs addObject:addNotification];
+        PSSpecifier *addFlick = [PSSpecifier preferenceSpecifierNamed:@"应用图标轻扫…" target:self set:@selector(setMoveApp:specifier:) get:@selector(noApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+        [addFlick setProperty:@YES forKey:@"useSearchBar"];
+        [addFlick setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+        [addFlick setProperty:@"flick" forKey:@"tgAppKind"];
+        [specs addObject:addFlick];
     }
     if (!self.navigationController.viewControllers.count) return specs;
     _specifiers = specs;
@@ -1825,6 +1842,71 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     } else {
         move();
     }
+}
+
+// cn4.2：应用类自定义事件——AltList 选应用回来即搬。
+- (void)setMoveApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
+    if (![identifier isKindOfClass:NSString.class] || !identifier.length) return;
+    NSString *kindPrefix = [spec propertyForKey:@"tgAppKind"];
+    if ([kindPrefix isEqualToString:@"flick"]) {
+        _pendingMoveTrigger = identifier; // 先记应用，回页面后选方向
+        return;
+    }
+    _pendingMoveTrigger = [kindPrefix stringByAppendingString:identifier];
+}
+
+- (NSString *)noApp:(PSSpecifier *)spec { return nil; }
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    if (!_pendingMoveTrigger) return;
+    NSString *trigger = _pendingMoveTrigger;
+    _pendingMoveTrigger = nil;
+    NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
+    NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
+    void (^move)(void) = ^{
+        NSArray *actions = TGReadAssignment(self, mode, srcTrigger);
+        PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), mode, trigger);
+        [self setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
+        [self setPreferenceValue:@"" specifier:self.srcSpec];
+        [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+        [self.navigationController popViewControllerAnimated:YES];
+    };
+    if ([trigger hasPrefix:TGAppLaunchedPrefix] || [trigger hasPrefix:TGNotificationAppPrefix]) {
+        move();
+        return;
+    }
+    // 图标轻扫：选方向
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:[NSString stringWithFormat:@"在 %@ 上轻扫", TGAppName([trigger substringFromIndex:TGIconFlickUpPrefix.length])]
+        message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSString *prefix in @[TGIconFlickUpPrefix, TGIconFlickDownPrefix, TGIconFlickLeftPrefix, TGIconFlickRightPrefix]) {
+        NSString *t = [prefix stringByAppendingString:[trigger substringFromIndex:TGIconFlickUpPrefix.length]];
+        [sheet addAction:[UIAlertAction actionWithTitle:TGFlickDirectionTitle(t) style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            void (^move2)(void) = ^{
+                NSArray *actions = TGReadAssignment(self, mode, srcTrigger);
+                PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(t), self, @selector(assignedActionTitle:), mode, t);
+                [self setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
+                [self setPreferenceValue:@"" specifier:self.srcSpec];
+                [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+                [self.navigationController popViewControllerAnimated:YES];
+            };
+            NSArray *existing = TGReadAssignment(self, mode, t);
+            if (existing.count) {
+                UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
+                    message:[NSString stringWithFormat:@"「%@」已有指派（%@），将被替换。", TGSettingsTriggerTitle(t), TGListTitle(existing)]
+                    preferredStyle:UIAlertControllerStyleAlert];
+                [confirm addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+                [confirm addAction:[UIAlertAction actionWithTitle:@"覆盖" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a2) { move2(); }]];
+                [self presentViewController:confirm animated:YES completion:nil];
+            } else {
+                move2();
+            }
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = self.view;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+    [self presentViewController:sheet animated:YES completion:nil];
 }
 
 // cn4.2：定时——复用系统的定时选择器（时间+星期自由组合）
