@@ -1773,7 +1773,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         [strongSelf setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
         [strongSelf setPreferenceValue:@"" specifier:strongSelf.srcSpec];
         [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
-        [strongSelf.navigationController popToRootViewControllerAnimated:YES];
+        [strongSelf.navigationController popViewControllerAnimated:YES];
     };
     if (existing.count) {
         UIAlertController *confirm = [UIAlertController alertControllerWithTitle:@"覆盖现有指派"
