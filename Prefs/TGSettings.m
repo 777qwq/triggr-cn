@@ -276,7 +276,7 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
     return [UISwipeActionsConfiguration configurationWithActions:@[action]];
 }
 
-// cn3.4：右滑「移动」——动作不动，触发器换键（同一位置内）。所有带 tgTrigger 的行通用。
+// cn3.4a：右滑「移动」——动作不动，触发器换键（同一位置内）。带 tgTrigger 的行通用。
 - (void)tgMoveAssignment:(PSSpecifier *)srcSpec {
     NSString *srcTrigger = [srcSpec propertyForKey:@"tgTrigger"];
     NSString *mode = [srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
@@ -1816,7 +1816,6 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
-
 - (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
     return [spec propertyForKey:@"tgTrigger"] ? @"移除" : nil;
 }
@@ -1825,6 +1824,10 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     [self setPreferenceValue:@"" specifier:spec];
     return YES;
 }
+
+@end
+
+@interface TGModeController : TGListController
 @end
 
 @implementation TGModeController {
