@@ -181,11 +181,8 @@ static void TGRelayDoBack(void) {
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
 @end
 
-%group InAppGestures
-%hook UIApplication
-- (void)setApplicationIconBadgeNumber:(NSInteger)n { %orig; }
-- (void)didBecomeActive {
-    %orig;
+
+static void CNRelayAttachAll(void) {
     uint64_t wanted = 0;
     static int wtoken = -1;
     if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
@@ -200,7 +197,7 @@ static void TGRelayDoBack(void) {
     for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:wanted];
     notify_post("cn.triggr.inappattach");
 }
-%end
+%group InAppGestures
 
 %hook UIWindow
 - (void)didMoveToWindow {
@@ -226,6 +223,10 @@ static void TGRelayDoBack(void) {
         %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
         %init(InAppGestures); // 多指手势（cn2.74）
         notify_post("cn.triggr.relayalive");
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
+            CNRelayAttachAll();
+        }];
+        CNRelayAttachAll();
         // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
         static int backToken = -1;
         notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
