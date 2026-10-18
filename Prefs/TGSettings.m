@@ -1811,7 +1811,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor], @"锁键 + 音量键": @[@"plus.rectangle.on.rectangle", UIColor.systemPurpleColor],
             @"拨片开关": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
             @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
-            @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
+            @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"应用内手势": @[@"hand.tap.fill", UIColor.systemMintColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
         };
         for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
             if (!TGShowsTriggerGroup(&TGTriggerGroups[g])) continue;

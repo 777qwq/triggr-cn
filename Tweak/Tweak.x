@@ -359,7 +359,14 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
     // cn2.75c：不再调用 volumeStepUp——iOS 16.3 上它会真实执行步进（返回+生效），
     // 叠加 changeVolumeByDelta: 造成一次动作跳两格。步进恒为 1/16，直接 delta。
     if ([volume respondsToSelector:@selector(changeVolumeByDelta:)]) {
-        if (!dryRun) ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? 1.0f / 16 : -1.0f / 16);
+        if (!dryRun) {
+            static int cnt = 0; cnt++;
+            id cur = [volume respondsToSelector:@selector(volume)] ? [volume performSelector:@selector(volume)] : nil;
+            ((void (*)(id, SEL, float))objc_msgSend)(volume, @selector(changeVolumeByDelta:), up ? 1.0f / 16 : -1.0f / 16);
+            id after = [volume respondsToSelector:@selector(volume)] ? [volume performSelector:@selector(volume)] : nil;
+            FILE *f = fopen("/var/mobile/Library/Triggr/cn_ext.log", "a");
+            if (f) { fprintf(f, "vstep#%d up=%d before=%s after=%s\n", cnt, up, [cur isKindOfClass:NSNumber.class] ? [[cur stringValue] UTF8String] : "?", [after isKindOfClass:NSNumber.class] ? [[after stringValue] UTF8String] : "?"); fclose(f); }
+        }
         return YES;
     }
     if ([volume respondsToSelector:step]) {
