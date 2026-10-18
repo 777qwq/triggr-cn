@@ -475,6 +475,33 @@ static BOOL TGSwitchFor(NSString *name, TGSwitch *out) {
         out->set = ^(BOOL on) { set(on); };
         return YES;
     }
+    if ([name isEqualToString:@"hotspot"]) {
+        // cn3.1：个人热点。候选链（运行时探测，找不到就不可用）：
+        // SBHotSpotControl（CC 模块控制，setActive:/isActive）→ SBWiFiManager hotspotEnabled。
+        id control = TGShared("SBHotSpotControl");
+        if (control) {
+            BOOL canSet = [control respondsToSelector:@selector(setActive:)];
+            BOOL canGet = [control respondsToSelector:@selector(isActive)] || [control respondsToSelector:@selector(active)];
+            if (canSet && canGet) {
+                out->get = ^BOOL {
+                    if ([control respondsToSelector:@selector(isActive)]) return (BOOL)[control performSelector:@selector(isActive)];
+                    return (BOOL)[control performSelector:@selector(active)];
+                };
+                out->set = ^(BOOL on) {
+                    if ([control respondsToSelector:@selector(isActive)] && ((BOOL)[control performSelector:@selector(isActive)]) == on) return;
+                    ((void (*)(id, SEL, BOOL))objc_msgSend)(control, @selector(setActive:), on);
+                };
+                return YES;
+            }
+        }
+        id wifi = TGShared("SBWiFiManager");
+        if (wifi && [wifi respondsToSelector:@selector(setHotspotEnabled:)] && [wifi respondsToSelector:@selector(hotspotEnabled)]) {
+            out->get = ^BOOL { return (BOOL)[wifi performSelector:@selector(hotspotEnabled)]; };
+            out->set = ^(BOOL on) { ((void (*)(id, SEL, BOOL))objc_msgSend)(wifi, @selector(setHotspotEnabled:), on); };
+            return YES;
+        }
+        return NO;
+    }
     if ([name isEqualToString:@"dnd"]) {
         // The same manual Do Not Disturb that Control Center's Focus button takes
         // (DoNotDisturb.framework, private, guarded).

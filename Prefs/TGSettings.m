@@ -591,8 +591,8 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
 // (one at a time). Each shows what's picked inside it, and the search field
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
-    NSMutableArray *categories = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"], @[@"conditions", @"条件"]] mutableCopy];
+    NSMutableArray *categories = [@[@[@"conditions", @"条件"], @[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
     // Installed action extensions, each its own category ("ext:<name>").
     for (NSString *name in TGExtensionNames()) {
         NSDictionary *extension = TGExtension(name);

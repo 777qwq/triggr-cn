@@ -169,7 +169,7 @@ static const TGItem TGPowerActions[] = {
 // Siri: no safe SpringBoard entry point found yet.
 #define TG_SWITCHES(X) \
     X("flashlight", "手电筒") X("wifi", "Wi-Fi") X("bluetooth", "蓝牙") X("airplane", "飞行模式") \
-    X("cellular", "蜂窝数据") X("dnd", "勿扰模式") X("lowpower", "低电量模式") X("rotation", "方向锁定") \
+    X("cellular", "蜂窝数据") X("hotspot", "个人热点") X("dnd", "勿扰模式") X("lowpower", "低电量模式") X("rotation", "方向锁定") \
     X("mute", "静音") X("darkmode", "深色模式") X("nightshift", "夜览") X("autobrightness", "自动亮度") \
     X("keepawake", "保持屏幕常亮") X("location", "定位服务")
 #define TG_SWITCH_NAME(id, name) {id, name},
