@@ -1728,6 +1728,12 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     NSString *_pendingMoveTrigger; // App pick back: the trigger waiting to be moved onto
 }
 
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    _specifiers = nil; // 新建事件回来后重新枚举
+    [self reloadSpecifiers];
+}
+
 - (NSArray *)specifiers {
     if (_specifiers) return _specifiers;
     self.title = @"移动到…";
@@ -1760,8 +1766,6 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         for (NSString *key in TGAllAssignments()) {
             NSString *trigger = [key substringFromIndex:[key rangeOfString:@"/"].location + 1];
             if (!TGIsCustomTrigger(trigger) || [trigger isEqualToString:srcTrigger] || [seen containsObject:trigger]) continue;
-            // 应用通知/应用启动/图标轻扫三类不作为移动目标（cn4.5）
-            if ([trigger hasPrefix:TGNotificationAppPrefix] || [trigger hasPrefix:TGAppLaunchedPrefix] || [trigger hasPrefix:@"icon.flick"]) continue;
             [seen addObject:trigger];
             NSArray *existing = TGReadAssignment(self, mode, trigger);
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
@@ -1772,10 +1776,9 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         }
         [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(@"自定义事件")]];
         if (customRows.count) [specs addObjectsFromArray:customRows];
-        else {
-            PSSpecifier *empty = [PSSpecifier preferenceSpecifierNamed:@"（暂无其他自定义事件）" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
-            [specs addObject:empty];
-        }
+        PSSpecifier *addNew = [PSSpecifier preferenceSpecifierNamed:@"新建自定义事件…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [addNew setProperty:@YES forKey:@"tgAddNew"];
+        [specs addObject:addNew];
     }
     if (!self.navigationController.viewControllers.count) return specs;
     _specifiers = specs;
@@ -1786,6 +1789,16 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
     NSString *dst = [spec propertyForKey:@"tgMoveDst"];
+    if ([spec propertyForKey:@"tgAddNew"]) {
+        // 借用设置页的自定义事件创建流程（全功能：含应用通知/启动/图标轻扫）
+        PSSpecifier *groupSpec = [PSSpecifier preferenceSpecifierNamed:@"自定义事件" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [groupSpec setProperty:mode forKey:@"tgMode"];
+        [groupSpec setProperty:@(-1) forKey:@"tgGroup"];
+        TGGroupController *gc = [TGGroupController new];
+        gc.specifier = groupSpec;
+        [self.navigationController pushViewController:gc animated:YES];
+        return;
+    }
     if (!dst) return;
     NSString *srcTrigger = [self.srcSpec propertyForKey:@"tgTrigger"];
     NSString *mode = [self.srcSpec propertyForKey:@"tgMode"] ?: @"anywhere";
