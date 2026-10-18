@@ -296,7 +296,6 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         [strongSelf tgMoveAssignment:spec];
         done(YES);
     }];
-    move.image = [UIImage systemImageNamed:@"arrow.right.circle.fill"];
     move.backgroundColor = UIColor.systemBlueColor;
     UISwipeActionsConfiguration *config = [UISwipeActionsConfiguration configurationWithActions:@[move]];
     config.performsFirstActionWithFullSwipe = NO;
@@ -1751,6 +1750,26 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         PSSpecifier *header = [PSSpecifier groupSpecifierWithName:TGButtonText(@(TGTriggerGroups[g].title))];
         [specs addObject:header];
         [specs addObjectsFromArray:rows];
+    }
+    // cn4.1：自定义事件（动态键，不在静态表里）——收集所有已存在的自定义事件作为候选
+    {
+        NSMutableArray *customRows = [NSMutableArray array];
+        NSMutableSet *seen = [NSMutableSet set];
+        for (NSString *key in TGAllAssignments()) {
+            NSString *trigger = [key substringFromIndex:[key rangeOfString:@"/"].location + 1];
+            if (!TGIsCustomTrigger(trigger) || [trigger isEqualToString:srcTrigger] || [seen containsObject:trigger]) continue;
+            [seen addObject:trigger];
+            NSArray *existing = TGReadAssignment(self, mode, trigger);
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:
+                [TGSettingsTriggerTitle(trigger) stringByAppendingString:existing.count ? @"（覆盖）" : @""]
+                target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+            [row setProperty:trigger forKey:@"tgMoveDst"];
+            [customRows addObject:row];
+        }
+        if (customRows.count) {
+            [specs addObject:[PSSpecifier groupSpecifierWithName:TGButtonText(TGCustomGroupTitle)]];
+            [specs addObjectsFromArray:customRows];
+        }
     }
     if (!self.navigationController.viewControllers.count) return specs;
     _specifiers = specs;
