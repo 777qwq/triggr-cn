@@ -476,31 +476,35 @@ static BOOL TGSwitchFor(NSString *name, TGSwitch *out) {
         return YES;
     }
     if ([name isEqualToString:@"hotspot"]) {
-        // cn3.1：个人热点。候选链（运行时探测，找不到就不可用）：
-        // SBHotSpotControl（CC 模块控制，setActive:/isActive）→ SBWiFiManager hotspotEnabled。
-        id control = TGShared("SBHotSpotControl");
-        if (control) {
-            BOOL canSet = [control respondsToSelector:@selector(setActive:)];
-            BOOL canGet = [control respondsToSelector:@selector(isActive)] || [control respondsToSelector:@selector(active)];
-            if (canSet && canGet) {
-                out->get = ^BOOL {
-                    if ([control respondsToSelector:@selector(isActive)]) return (BOOL)[control performSelector:@selector(isActive)];
-                    return (BOOL)[control performSelector:@selector(active)];
-                };
-                out->set = ^(BOOL on) {
-                    if ([control respondsToSelector:@selector(isActive)] && ((BOOL)[control performSelector:@selector(isActive)]) == on) return;
-                    ((void (*)(id, SEL, BOOL))objc_msgSend)(control, @selector(setActive:), on);
-                };
-                return YES;
-            }
-        }
-        id wifi = TGShared("SBWiFiManager");
-        if (wifi && [wifi respondsToSelector:@selector(setHotspotEnabled:)] && [wifi respondsToSelector:@selector(hotspotEnabled)]) {
-            out->get = ^BOOL { return (BOOL)[wifi performSelector:@selector(hotspotEnabled)]; };
-            out->set = ^(BOOL on) { ((void (*)(id, SEL, BOOL))objc_msgSend)(wifi, @selector(setHotspotEnabled:), on); };
-            return YES;
-        }
-        return NO;
+        // cn3.2：个人热点（Actra 实证移植）——MISManager 主线程 getState:andReason:/setState:，
+        // 状态 0x3FF=开 0x3FE=关；首次 setState 常不生效，3 秒后复查重试。
+        void (^apply)(id, BOOL) = ^(id m, BOOL on) {
+            int state = 0, reason = 0;
+            ((void (*)(id, SEL, int *, int *))objc_msgSend)(m, sel_registerName("getState:andReason:"), &state, &reason);
+            if ((state & 1) == (on ? 1 : 0)) return;
+            ((void (*)(id, SEL, int))objc_msgSend)(m, sel_registerName("setState:"), on ? 0x3ff : 0x3fe);
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                int s2 = 0, r2 = 0;
+                ((void (*)(id, SEL, int *, int *))objc_msgSend)(m, sel_registerName("getState:andReason:"), &s2, &r2);
+                if ((s2 & 1) != (on ? 1 : 0))
+                    ((void (*)(id, SEL, int))objc_msgSend)(m, sel_registerName("setState:"), on ? 0x3ff : 0x3fe);
+            });
+        };
+        id m = TGShared("MISManager");
+        if (!m) return NO;
+        SEL gs = sel_registerName("getState:andReason:"), ss = sel_registerName("setState:");
+        if (![m respondsToSelector:gs] || ![m respondsToSelector:ss]) return NO;
+        out->get = ^BOOL {
+            if (!NSThread.isMainThread) return NO;
+            int state = 0, reason = 0;
+            ((void (*)(id, SEL, int *, int *))objc_msgSend)(m, sel_registerName("getState:andReason:"), &state, &reason);
+            return (state & 1) != 0;
+        };
+        out->set = ^(BOOL on) {
+            if (!NSThread.isMainThread) { dispatch_async(dispatch_get_main_queue(), ^{ apply(m, on); }); return; }
+            apply(m, on);
+        };
+        return YES;
     }
     if ([name isEqualToString:@"dnd"]) {
         // The same manual Do Not Disturb that Control Center's Focus button takes
