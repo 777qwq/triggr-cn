@@ -118,7 +118,7 @@ static const TGItem TGMusic[] = {
 // The proximity sensor (by the earpiece), only kept on while the screen is.
 static const TGItem TGProximity[] = { {"proximity.cover", "遮挡"}, {"proximity.wave", "挥手（短暂遮挡）"} };
 static const TGItem TGStateChanges[] = {
-    {"wifi.on", "WWi-Fi 已开启"}, {"wifi.off", "WWi-Fi 已关闭"},
+    {"wifi.on", "Wi-Fi 已开启"}, {"wifi.off", "Wi-Fi 已关闭"},
     {"wifi.joined", "加入 Wi-Fi 网络"}, {"wifi.left", "离开 Wi-Fi 网络"},
     {"bluetooth.on", "蓝牙已开启"}, {"bluetooth.off", "蓝牙已关闭"},
     {"lowpower.on", "低电量模式开启"}, {"lowpower.off", "低电量模式关闭"},
