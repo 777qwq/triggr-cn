@@ -361,7 +361,7 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
     [super viewDidLoad];
     self.title = @"定时";
     self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemSave target:self action:@selector(save)];
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"保存" style:UIBarButtonItemStylePlain target:self action:@selector(save)];
     _picker = [UIDatePicker new];
     _picker.datePickerMode = UIDatePickerModeTime;
     _picker.preferredDatePickerStyle = UIDatePickerStyleWheels;
