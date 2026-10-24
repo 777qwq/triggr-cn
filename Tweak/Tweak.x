@@ -938,6 +938,17 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 
 
 
+// cn4.8: medium/light haptics via UIKit impact generator (SpringBoard process).
+// dispatch_async(main) because generators assert on background threads.
+static BOOL TGImpactHaptic(BOOL dry, UIImpactFeedbackStyle style, double intensity) {
+    if (dry) return YES;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithFeedbackStyle:style];
+        [gen impactOccurredWithIntensity:intensity];
+    });
+    return YES;
+}
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -952,10 +963,15 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 return YES;
             },
             @"system.nothing": ^BOOL(BOOL dry) { return YES; }, // only takes the trigger away from iOS
-            @"system.vibrate": ^BOOL(BOOL dry) {
+            // cn4.8: three vibration intensities. Legacy "system.vibrate" (saved in old
+            // configs) stays as a hidden alias -> medium. Impact generators must run on main.
+            @"system.vibrate.strong": ^BOOL(BOOL dry) {
                 if (!dry) AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
                 return YES;
             },
+            @"system.vibrate.medium": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, UIImpactFeedbackStyleMedium, 0.6); },
+            @"system.vibrate.light": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, UIImpactFeedbackStyleLight, 0.3); },
+            @"system.vibrate": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, UIImpactFeedbackStyleMedium, 0.6); },
             @"system.home": ^BOOL(BOOL dry) {
                 SEL sel = @selector(_simulateHomeButtonPressWithCompletion:);
                 if (![springBoard respondsToSelector:sel]) return NO;

@@ -153,7 +153,7 @@ static const TGItem TGSystemActions[] = {
     {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"},
     {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.dismisssiri", "关闭Siri"}, {"system.screenshot", "截屏"},
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
-    {"system.vibrate", "振动"}, {"system.nothing", "无操作"},
+    {"system.vibrate.strong", "震动（强烈）"}, {"system.vibrate.medium", "震动（中等）"}, {"system.vibrate.light", "震动（轻微）"}, {"system.nothing", "无操作"},
 };
 // cn2.70: scanner presets — pure URL actions (official widget / 3dtouch routes).
 // Not part of TGActionGroups: they surface as preset rows in the "open" category.
