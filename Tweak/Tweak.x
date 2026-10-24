@@ -944,24 +944,26 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 // 主线程创建/调用；引擎按需 start，isAutoShutdownEnabled 交给系统管理。
 static void TGTransientHaptic(double intensity, double sharpness) {
     dispatch_async(dispatch_get_main_queue(), ^{
+        // 16.5 SDK 的 CoreHaptics 没有 scheduleEvent:/isStarted（API 名按 SDK 头文件核实）：
+        // 播放走 createPlayerWithPattern: + startAtTime:，startAndReturnError 幂等可反复调。
         static CHHapticEngine *engine;
         static dispatch_once_t once;
         dispatch_once(&once, ^{
-            if (![CHHapticEngine.capabilitiesForHardware.supportsHaptics]) return;
+            if (![[CHHapticEngine capabilitiesForHardware] supportsHaptics]) return;
             NSError *err = nil;
             engine = [[CHHapticEngine alloc] initAndReturnError:&err];
-            if (engine) engine.isAutoShutdownEnabled = YES;
+            if (engine) engine.autoShutdownEnabled = YES;
         });
         if (!engine) { [[UISelectionFeedbackGenerator new] selectionChanged]; return; }
         NSError *err = nil;
+        if (![engine startAndReturnError:&err]) { [[UISelectionFeedbackGenerator new] selectionChanged]; return; }
         CHHapticEvent *event = [[CHHapticEvent alloc] initWithEventType:CHHapticEventTypeHapticTransient parameters:@[
             [[CHHapticEventParameter alloc] initWithParameterID:CHHapticEventParameterIDHapticIntensity value:(float)intensity],
             [[CHHapticEventParameter alloc] initWithParameterID:CHHapticEventParameterIDHapticSharpness value:(float)sharpness]
         ] relativeTime:0];
-        BOOL wasStarted = engine.isStarted;
-        if (!wasStarted && ![engine startAndReturnError:&err]) { [[UISelectionFeedbackGenerator new] selectionChanged]; return; }
-        if (![engine scheduleEvent:event error:&err]) { [[UISelectionFeedbackGenerator new] selectionChanged]; return; }
-        if (!wasStarted) [engine startAndReturnError:&err];
+        CHHapticPattern *pattern = [[CHHapticPattern alloc] initWithEvents:@[event] parameters:@[] error:&err];
+        id<CHHapticPatternPlayer> player = pattern ? [engine createPlayerWithPattern:pattern error:&err] : nil;
+        if (![player startAtTime:0 error:&err]) [[UISelectionFeedbackGenerator new] selectionChanged];
     });
 }
 
