@@ -16,6 +16,7 @@
 
 #import <UIKit/UIGestureRecognizerSubclass.h>
 #import <AVFoundation/AVFoundation.h>
+#import <CoreHaptics/CoreHaptics.h>
 #import <QuartzCore/QuartzCore.h>
 #import <notify.h>
 #import <spawn.h>
@@ -938,11 +939,30 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 
 
 
-// cn4.8: haptic ladder via AudioServices (same channel as strong). 1519 = light
-// impact, 1520 = medium impact, kSystemSoundID_Vibrate (4095) = full-body vibrate.
-static BOOL TGImpactHaptic(BOOL dry, int soundID) {
-    if (!dry) AudioServicesPlaySystemSound(soundID);
-    return YES;
+// cn4.9: 短触（transient）via CoreHaptics，强度/锐度可调；引擎不可用或启动失败时
+// 退回 UISelectionFeedbackGenerator 的 selection tick（同为短触，无冲击感）。
+// 主线程创建/调用；引擎按需 start，isAutoShutdownEnabled 交给系统管理。
+static void TGTransientHaptic(double intensity, double sharpness) {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        static CHHapticEngine *engine;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{
+            if (![CHHapticEngine.capabilitiesForHardware.supportsHaptics]) return;
+            NSError *err = nil;
+            engine = [[CHHapticEngine alloc] initAndReturnError:&err];
+            if (engine) engine.isAutoShutdownEnabled = YES;
+        });
+        if (!engine) { [[UISelectionFeedbackGenerator new] selectionChanged]; return; }
+        NSError *err = nil;
+        CHHapticEvent *event = [[CHHapticEvent alloc] initWithEventType:CHHapticEventTypeHapticTransient parameters:@[
+            [[CHHapticEventParameter alloc] initWithParameterID:CHHapticEventParameterIDHapticIntensity value:(float)intensity],
+            [[CHHapticEventParameter alloc] initWithParameterID:CHHapticEventParameterIDHapticSharpness value:(float)sharpness]
+        ] relativeTime:0];
+        BOOL wasStarted = engine.isStarted;
+        if (!wasStarted && ![engine startAndReturnError:&err]) { [[UISelectionFeedbackGenerator new] selectionChanged]; return; }
+        if (![engine scheduleEvent:event error:&err]) { [[UISelectionFeedbackGenerator new] selectionChanged]; return; }
+        if (!wasStarted) [engine startAndReturnError:&err];
+    });
 }
 
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
@@ -965,9 +985,9 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 if (!dry) AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
                 return YES;
             },
-            @"system.vibrate.medium": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, 1520); },
-            @"system.vibrate.light": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, 1519); },
-            @"system.vibrate": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, 1520); },
+            @"system.vibrate.medium": ^BOOL(BOOL dry) { if (!dry) TGTransientHaptic(0.8, 0.7); return YES; },
+            @"system.vibrate.light": ^BOOL(BOOL dry) { if (!dry) TGTransientHaptic(0.35, 0.7); return YES; },
+            @"system.vibrate": ^BOOL(BOOL dry) { if (!dry) TGTransientHaptic(0.8, 0.7); return YES; }, // legacy alias = medium
             @"system.home": ^BOOL(BOOL dry) {
                 SEL sel = @selector(_simulateHomeButtonPressWithCompletion:);
                 if (![springBoard respondsToSelector:sel]) return NO;

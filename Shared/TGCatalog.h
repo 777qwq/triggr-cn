@@ -153,7 +153,7 @@ static const TGItem TGSystemActions[] = {
     {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"},
     {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.dismisssiri", "关闭Siri"}, {"system.screenshot", "截屏"},
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
-    {"system.vibrate.strong", "震动（强烈）"}, {"system.vibrate.medium", "震动（中等）"}, {"system.vibrate.light", "震动（轻微）"}, {"system.nothing", "无操作"},
+    {"system.nothing", "无操作"},
 };
 // cn2.70: scanner presets — pure URL actions (official widget / 3dtouch routes).
 // Not part of TGActionGroups: they surface as preset rows in the "open" category.
@@ -715,6 +715,15 @@ static inline NSString *TGActionTitle(NSString *action) {
     // cn2.73: system.back lives outside the group tables now (pinned below
     // 密码解锁 in the system category) — resolve its title here.
     if ([action isEqualToString:@"system.back"]) return @"返回上级";
+    // cn4.9: 震动 is one row that picks a strength; the three variants live outside
+    // the group tables (like system.back). Legacy "system.vibrate" = medium.
+    if ([action isEqualToString:@"system.vibrate"]) return @"震动";
+    if ([action hasPrefix:@"system.vibrate."]) {
+        NSString *strength = [action substringFromIndex:15];
+        if ([strength isEqualToString:@"strong"]) return @"震动（强烈）";
+        if ([strength isEqualToString:@"medium"]) return @"震动（中等）";
+        if ([strength isEqualToString:@"light"]) return @"震动（轻微）";
+    }
     for (int g = 0; g < TG_COUNT(TGActionGroups); g++)
         for (int i = 0; i < TGActionGroups[g].count; i++)
             if ([action isEqualToString:@(TGActionGroups[g].items[i].identifier)]) return @(TGActionGroups[g].items[i].title);

@@ -159,13 +159,16 @@ static void TGRelayDoBack(void) {
 %hook _UINavigationInteractiveTransition
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
     BOOL r = %orig;
-    static int logged;
-    if (logged < 8) {
-        logged++;
-    }
     if (!r && [g isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) {
-        g.enabled = YES;
-        return YES; // 淘宝等禁用边缘返回的 App：强制放行，系统动画照常
+        // cn4.9 守卫：只在"有级可返且没有转场进行中"才强制放行（淘宝类禁用返回的 App 照常复活）。
+        // 根页/转场中尊重原生 NO——此前的无条件放行会把交互式过渡打进半开状态，致原生左滑失效。
+        UINavigationController *nav = nil;
+        if ([self respondsToSelector:@selector(navigationController)])
+            nav = ((UINavigationController *(*)(id, SEL))objc_msgSend)(self, @selector(navigationController));
+        if (nav && nav.viewControllers.count > 1 && !nav.transitionCoordinator) {
+            g.enabled = YES;
+            return YES;
+        }
     }
     return r;
 }

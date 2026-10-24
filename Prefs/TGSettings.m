@@ -859,6 +859,10 @@ static NSString *TGCategoryOf(NSString *action) {
         // cn2.72: 返回上级 sits right below 密码解锁 (TA order).
         [rows insertObject:[self rowForCommand:TGUnlockPrefix title:@"密码解锁…" prompt:@"设备的锁屏密码，存储在本机，用于锁屏状态下自动解锁"] atIndex:0];
         [rows insertObject:[self rowForAction:@"system.back" title:@"返回上级"] atIndex:1];
+        // cn4.9: 震动 = one row; tapping picks 强烈/中等/轻微 (like the switches' verbs).
+        PSSpecifier *vibrate = [PSSpecifier preferenceSpecifierNamed:@"震动" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [vibrate setProperty:@YES forKey:@"tgHaptic"];
+        [rows insertObject:vibrate atIndex:2];
     }
     if ([category isEqualToString:@"media"])
         [rows addObject:[self rowForCommand:TGAirPlayPrefix title:@"AirPlay 到…" prompt:@"扬声器或电视名称，与 AirPlay 菜单中显示的一致（部分匹配即可）"]];
@@ -1295,6 +1299,36 @@ static NSString *TGCategoryOf(NSString *action) {
     [self toggle:action];
 }
 
+// cn4.9: 震动 row — tapping asks for the strength (强烈/中等/轻微).
+- (void)pickVibrateStrengthAtIndexPath:(NSIndexPath *)indexPath {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"震动" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSArray<NSString *> *option in @[@[@"strong", @"强烈"], @[@"medium", @"中等"], @[@"light", @"轻微"]]) {
+        NSString *action = [NSString stringWithFormat:@"system.vibrate.%@", option[0]];
+        BOOL selected = [_selection containsObject:action];
+        UIAlertAction *item = [UIAlertAction actionWithTitle:option[1] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { [self pickVibrateAction:action]; }];
+        @try { if (selected) [item setValue:@YES forKey:@"checked"]; } @catch (NSException *e) { }
+        [sheet addAction:item];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentSheet:sheet fromRowAtIndexPath:indexPath];
+}
+
+// Picking a strength: when 震动 is all that's picked (no pause, nothing else),
+// a different strength replaces it, like the switches' verbs do.
+- (void)pickVibrateAction:(NSString *)action {
+    BOOL onlyThisVibrate = _selection.count > 0 && ![_selection containsObject:action];
+    for (NSString *item in _selection)
+        if (![item hasPrefix:@"system.vibrate."] || [item hasPrefix:TGPausePrefix]) onlyThisVibrate = NO;
+    if (onlyThisVibrate) {
+        [[UISelectionFeedbackGenerator new] selectionChanged];
+        _selection = [@[action] mutableCopy];
+        [self noteRecent:action];
+        [self save];
+        return;
+    }
+    [self toggle:action];
+}
+
 // AirPlay To: the speakers and TVs iOS can see right now (found the way the
 // AirPlay menu finds them), or any name typed in.
 - (void)pickAirPlayDeviceAtIndexPath:(NSIndexPath *)indexPath specifier:(PSSpecifier *)spec existing:(NSString *)existingItem {
@@ -1392,6 +1426,10 @@ static NSString *TGCategoryOf(NSString *action) {
     NSString *name = [spec propertyForKey:@"tgSwitch"];
     if (name) {
         [self pickVerbsForSwitch:name title:spec.name atIndexPath:indexPath];
+        return;
+    }
+    if ([spec propertyForKey:@"tgHaptic"]) {
+        [self pickVibrateStrengthAtIndexPath:indexPath];
         return;
     }
     if ([spec propertyForKey:@"tgOrder"]) {
