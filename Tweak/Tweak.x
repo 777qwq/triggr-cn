@@ -938,14 +938,10 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
 
 
 
-// cn4.8: medium/light haptics via UIKit impact generator (SpringBoard process).
-// dispatch_async(main) because generators assert on background threads.
-static BOOL TGImpactHaptic(BOOL dry, UIImpactFeedbackStyle style, double intensity) {
-    if (dry) return YES;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithFeedbackStyle:style];
-        [gen impactOccurredWithIntensity:intensity];
-    });
+// cn4.8: haptic ladder via AudioServices (same channel as strong). 1519 = light
+// impact, 1520 = medium impact, kSystemSoundID_Vibrate (4095) = full-body vibrate.
+static BOOL TGImpactHaptic(BOOL dry, int soundID) {
+    if (!dry) AudioServicesPlaySystemSound(soundID);
     return YES;
 }
 
@@ -969,9 +965,9 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
                 if (!dry) AudioServicesPlaySystemSound(kSystemSoundID_Vibrate);
                 return YES;
             },
-            @"system.vibrate.medium": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, UIImpactFeedbackStyleMedium, 0.6); },
-            @"system.vibrate.light": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, UIImpactFeedbackStyleLight, 0.3); },
-            @"system.vibrate": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, UIImpactFeedbackStyleMedium, 0.6); },
+            @"system.vibrate.medium": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, 1520); },
+            @"system.vibrate.light": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, 1519); },
+            @"system.vibrate": ^BOOL(BOOL dry) { return TGImpactHaptic(dry, 1520); },
             @"system.home": ^BOOL(BOOL dry) {
                 SEL sel = @selector(_simulateHomeButtonPressWithCompletion:);
                 if (![springBoard respondsToSelector:sel]) return NO;
