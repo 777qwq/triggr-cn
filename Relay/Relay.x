@@ -47,14 +47,15 @@ static void TGRelay(const char *name, uint64_t wantedBit) {
 %end
 
 
-// ---- 返回上级：只走 accessibilityPerformEscape ----
+// ---- 返回上级：先问语义，再动容器 ----
 // 入口是 SpringBoard 发来的一条 Darwin 通知（com.johndie.triggr/back）。
-// iOS 没有跨 App 的返回 API，系统自己认可的「返回 / 关闭」语义只有这一条
-// （VoiceOver 双指搓调的就是它）。问语义、零副作用：App 没重写就什么都不发生；
-// 谁应答就由谁决定退到哪，我们不指定落点。
+// iOS 没有跨 App 的返回 API，所以按「信息可信度」依次试两步：
 //
-// 动作越底层，落点越不由我们决定。pop、leftBarButtonItem、label 点按、改栈、Esc
-// 都试过并删掉了，取舍写在项目文档里，代码中不再保留死路径。
+//   1 accessibilityPerformEscape                      App 自己声明能处理关闭/返回，零副作用
+//   2 _popViewControllerWithTransition:allowPoppingLast:  真导航栈，退一级
+//
+// 第 1 步说「处理了」不代表页面真动了，0.35 秒后比对页面身份，没变才走第 2 步；
+// 第 1 步没人应答也直接走第 2 步。两步都不会指定落点以外的事情。
 
 #define TGBackMaxDepth 24
 
@@ -145,23 +146,71 @@ static BOOL TGEscapeTree(UIViewController *vc, int depth) {
     return NO;
 }
 
-// 先问看得见的那一层（最内层优先），不行再扫全树。
-static void TGEscapeIn(UIViewController *root) {
+// 先问看得见的那一层（最内层优先），不行再扫全树。返回有没有控制器应答。
+static BOOL TGEscapeIn(UIViewController *root) {
     for (UIViewController *vc in TGVisibleChain(root).reverseObjectEnumerator)
-        if (TGEscapeOne(vc)) return;
-    TGEscapeTree(root, 0);
+        if (TGEscapeOne(vc)) return YES;
+    return TGEscapeTree(root, 0);
 }
 
-// 把系统「返回 / 关闭」的语义发给可见链上第一个真正实现了它的控制器：
-// 最内层优先，链上都不行再扫全树。谁应答就由谁决定退到哪。
+// 页面身份：根类名 + 各子控制器的类名与子视图数。
+// 只用来判断「动作发出后页面有没有变」，不展示、不记录。
+static NSString *TGPageStamp(UIViewController *vc) {
+    if (!vc) return @"";
+    NSMutableString *s = [NSMutableString stringWithString:NSStringFromClass(vc.class)];
+    for (UIViewController *child in vc.childViewControllers)
+        [s appendFormat:@"/%@#%lu", NSStringFromClass(child.class),
+            (unsigned long)child.viewIfLoaded.subviews.count];
+    [s appendFormat:@"#%lu", (unsigned long)vc.viewIfLoaded.subviews.count];
+    return s;
+}
+
+// 私有 pop：_popViewControllerWithTransition:allowPoppingLast:
+// transition 2 = pop；allowPoppingLast:NO 保证栈只剩一页时不弹——弹空栈会崩。
+// 只对真正的 UINavigationController 子类动手：自绘容器没有这个方法，也不该猜。
+static void TGPrivatePop(UIWindow *win) {
+    UIViewController *root = win.rootViewController;
+    if (!root) return;
+    SEL sel = NSSelectorFromString(@"_popViewControllerWithTransition:allowPoppingLast:");
+    for (UIViewController *vc in TGVisibleChain(root).reverseObjectEnumerator) {
+        if (![vc isKindOfClass:[UINavigationController class]]) continue;
+        UINavigationController *nav = (UINavigationController *)vc;
+        if (nav.viewControllers.count < 2) continue;
+        if (nav.transitionCoordinator) continue; // 转场中不碰，打断动画会留半开的界面
+        if (![nav respondsToSelector:sel]) continue;
+        @try {
+            ((id (*)(id, SEL, int, BOOL))objc_msgSend)(nav, sel, 2, NO);
+        } @catch (NSException *e) {
+            // 私有方法抛什么都不能带崩宿主
+        }
+        return;
+    }
+}
+
 static void TGBackStep(UIWindow *win) {
     UIViewController *root = win.rootViewController;
     if (!root) return;
+
+    NSString *stamp = TGPageStamp(root);
+    BOOL acted = NO;
     @try {
-        TGEscapeIn(root);
+        acted = TGEscapeIn(root);
     } @catch (NSException *e) {
-        // 别人家的控制器抛什么都不能带崩宿主
+        acted = NO;
     }
+    if (!acted) { // 没人应答，直接交给容器
+        TGPrivatePop(win);
+        return;
+    }
+
+    // 应答了也要确认页面真动了：说「处理了」却原地不动的页面不少，
+    // 那种时候这次返回就白按了，交给私有 pop 兜底。
+    __weak UIWindow *weakWin = win;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIWindow *w = weakWin;
+        if (!w) return;
+        if ([TGPageStamp(w.rootViewController) isEqualToString:stamp]) TGPrivatePop(w);
+    });
 }
 
 static void TGRelayDoBack(void) {
