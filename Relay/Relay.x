@@ -1,0 +1,429 @@
+// Triggr's in-app half. Apps handle their own status bar taps and shakes, so
+// this tiny library tells SpringBoard about them, and performs the one action
+// that must run in-process: the accessibility "back / dismiss" escape.
+
+#import <UIKit/UIKit.h>
+#import <notify.h>
+#import <objc/message.h>
+#import <objc/runtime.h>
+#import "../Shared/TGRelay.h"
+
+
+static void TGRelay(const char *name, uint64_t wantedBit) {
+    static int token = -1;
+    if (token == -1 && notify_register_check(TGRelayWanted, &token) != NOTIFY_STATUS_OK) token = -1;
+    uint64_t wanted = 0;
+    if (token != -1) notify_get_state(token, &wanted);
+    if (wanted & wantedBit) notify_post(name);
+}
+
+// Verified on-device: every status bar tap reaches the app as
+// -[UIStatusBarManager handleTapAction:]. (SpringBoard watches its own status bar.)
+%group StatusBar
+%hook UIStatusBarManager
+- (void)handleTapAction:(id)action {
+    %orig;
+    // Which half of the status bar was tapped, for Left / Right triggers.
+    const char *name = TGRelayStatusBarTap;
+    CGFloat width = ((UIStatusBarManager *)self).statusBarFrame.size.width;
+    if ([action respondsToSelector:@selector(xPosition)] && width > 0) {
+        CGFloat x = ((CGFloat (*)(id, SEL))objc_msgSend)(action, @selector(xPosition));
+        if (x >= 0) name = x < width / 2 ? TGRelayStatusBarTapLeft : TGRelayStatusBarTapRight;
+    }
+    TGRelay(name, TGRelayWantsStatusBar);
+}
+%end
+%end
+
+// iOS's own shake detection (the one behind Shake to Undo) ends at the
+// application object, in apps and in SpringBoard alike.
+%group Shake
+%hook UIApplication
+- (void)motionEnded:(UIEventSubtype)motion withEvent:(UIEvent *)event {
+    %orig;
+    if (motion == UIEventSubtypeMotionShake) TGRelay(TGRelayShake, TGRelayWantsShake);
+}
+%end
+%end
+
+
+// ---- 返回上级：先问语义，再动容器 ----
+// 入口是 SpringBoard 发来的一条 Darwin 通知（com.johndie.triggr/back）。
+// iOS 没有跨 App 的返回 API，所以按「信息可信度」依次试两步：
+//
+//   1 accessibilityPerformEscape                      App 自己声明能处理关闭/返回，零副作用
+//   2 _popViewControllerWithTransition:allowPoppingLast:  真导航栈，退一级
+//
+// 第 1 步说「处理了」不代表页面真动了，0.35 秒后比对页面身份，没变才走第 2 步；
+// 第 1 步没人应答也直接走第 2 步。两步都不会指定落点以外的事情。
+
+#define TGBackMaxDepth 24
+
+// 所有可见窗口，key window 排最前。
+static NSArray<UIWindow *> *TGRelayWindows(void) {
+    NSMutableArray *windows = [NSMutableArray array];
+    UIWindow *key = nil;
+    if (@available(iOS 13.0, *)) {
+        for (__kindof UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+            UIWindowScene *ws = (UIWindowScene *)scene;
+            if (ws.activationState == UISceneActivationStateBackground) continue;
+            for (UIWindow *w in ws.windows) {
+                if (w.hidden) continue;
+                if (w.isKeyWindow) key = w; else [windows addObject:w];
+            }
+        }
+    } else {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        for (UIWindow *w in UIApplication.sharedApplication.windows) {
+            if (w.hidden) continue;
+            if (w.isKeyWindow) key = w; else [windows addObject:w];
+        }
+        #pragma clang diagnostic pop
+    }
+    if (key) [windows insertObject:key atIndex:0];
+    return windows;
+}
+
+// 当前真正看得见的那条控制器链，从最外层排到最内层。
+// tab 只走选中的那个、nav 沿栈顶下钻、presented 只走最上层——后台 tab 里的栈、
+// 被盖住的页面一律不进链。淘宝那种自绘容器没有 selectedViewController，
+// 链上就只剩它自己，正好就是「当前这一屏」。
+static NSArray<UIViewController *> *TGVisibleChain(UIViewController *root) {
+    NSMutableArray *chain = [NSMutableArray array];
+    UIViewController *vc = root;
+    int guard = 0;
+    while (vc && guard++ < TGBackMaxDepth) {
+        [chain addObject:vc];
+        UIViewController *next = nil;
+        if (vc.presentedViewController) {
+            next = vc.presentedViewController;
+        } else if ([vc isKindOfClass:[UITabBarController class]]) {
+            next = ((UITabBarController *)vc).selectedViewController;
+        } else if ([vc isKindOfClass:[UINavigationController class]]) {
+            next = ((UINavigationController *)vc).topViewController;
+        } else if (vc.childViewControllers.count) {
+            next = vc.childViewControllers.lastObject;
+        }
+        if (!next || next == vc || [chain containsObject:next]) break;
+        vc = next;
+    }
+    return chain;
+}
+
+
+
+// 辅助功能逃逸：iOS 自己的「返回 / 关闭」语义（双指 Z 手势、VoiceOver 走的都是它）。
+// 跳过 UIViewController 的基类空实现，只认真重写了的控制器，否则每个 VC 都会空转返回 YES。
+static IMP TGVCBaseEscapeImp(void) {
+    static IMP imp;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        imp = class_getMethodImplementation([UIViewController class], @selector(accessibilityPerformEscape));
+    });
+    return imp;
+}
+
+// 有没有「自己的」escape 实现。基类那份对谁都应 YES，但什么都不做，必须排除。
+static BOOL TGEscapeAllowed(UIViewController *vc) {
+    SEL sel = @selector(accessibilityPerformEscape);
+    if (![vc respondsToSelector:sel]) return NO;
+    return class_getMethodImplementation(object_getClass(vc), sel) != TGVCBaseEscapeImp();
+}
+
+static BOOL TGEscapeOne(UIViewController *vc) {
+    if (!TGEscapeAllowed(vc)) return NO;
+    return ((BOOL (*)(id, SEL))objc_msgSend)(vc, @selector(accessibilityPerformEscape));
+}
+
+static BOOL TGEscapeTree(UIViewController *vc, int depth) {
+    if (!vc || depth > TGBackMaxDepth) return NO;
+    if (vc.presentedViewController && TGEscapeTree(vc.presentedViewController, depth + 1)) return YES;
+    if (TGEscapeOne(vc)) return YES;
+    for (UIViewController *child in vc.childViewControllers)
+        if (TGEscapeTree(child, depth + 1)) return YES;
+    return NO;
+}
+
+// 先问看得见的那一层（最内层优先），不行再扫全树。返回有没有控制器应答。
+static BOOL TGEscapeIn(UIViewController *root) {
+    for (UIViewController *vc in TGVisibleChain(root).reverseObjectEnumerator)
+        if (TGEscapeOne(vc)) return YES;
+    return TGEscapeTree(root, 0);
+}
+
+// 页面身份：根类名 + 各子控制器的类名与子视图数。
+// 只用来判断「动作发出后页面有没有变」，不展示、不记录。
+static NSString *TGPageStamp(UIViewController *vc) {
+    if (!vc) return @"";
+    NSMutableString *s = [NSMutableString stringWithString:NSStringFromClass(vc.class)];
+    for (UIViewController *child in vc.childViewControllers)
+        [s appendFormat:@"/%@#%lu", NSStringFromClass(child.class),
+            (unsigned long)child.viewIfLoaded.subviews.count];
+    [s appendFormat:@"#%lu", (unsigned long)vc.viewIfLoaded.subviews.count];
+    return s;
+}
+
+// 私有 pop：_popViewControllerWithTransition:allowPoppingLast:
+// transition 2 = pop；allowPoppingLast:NO 保证栈只剩一页时不弹——弹空栈会崩。
+// 只对真正的 UINavigationController 子类动手：自绘容器没有这个方法，也不该猜。
+static BOOL TGPrivatePop(UIWindow *win) {
+    UIViewController *root = win.rootViewController;
+    if (!root) return NO;
+    SEL sel = NSSelectorFromString(@"_popViewControllerWithTransition:allowPoppingLast:");
+    for (UIViewController *vc in TGVisibleChain(root).reverseObjectEnumerator) {
+        if (![vc isKindOfClass:[UINavigationController class]]) continue;
+        UINavigationController *nav = (UINavigationController *)vc;
+        if (nav.viewControllers.count < 2) continue;
+        if (nav.transitionCoordinator) continue; // 转场中不碰，打断动画会留半开的界面
+        if (![nav respondsToSelector:sel]) continue;
+        @try {
+            ((id (*)(id, SEL, int, BOOL))objc_msgSend)(nav, sel, 2, NO);
+        } @catch (NSException *e) {
+            // 私有方法抛什么都不能带崩宿主
+        }
+        return YES;
+    }
+    return NO;
+}
+
+// 公开 pop：私有方法被系统改签名或整个消失时的最后一级。
+// 只走 UINavigationController 的公开 API，落到哪一页由业务自己决定。
+static BOOL TGPublicPop(UIWindow *win) {
+    UIViewController *root = win.rootViewController;
+    if (!root) return NO;
+    SEL sel = @selector(popViewControllerAnimated:);
+    for (UIViewController *vc in TGVisibleChain(root).reverseObjectEnumerator) {
+        if (![vc isKindOfClass:[UINavigationController class]]) continue;
+        UINavigationController *nav = (UINavigationController *)vc;
+        if (nav.viewControllers.count < 2) continue;
+        if (nav.transitionCoordinator) continue;
+        if (![nav respondsToSelector:sel]) continue;
+        @try {
+            [nav popViewControllerAnimated:YES];
+        } @catch (NSException *e) {
+            // 同上：容器抛异常不能带崩宿主
+        }
+        return YES;
+    }
+    return NO;
+}
+
+// 容器级兜底：先私有，私有没人应答再公开。
+static void TGPopContainer(UIWindow *win) {
+    if (TGPrivatePop(win)) return;
+    TGPublicPop(win);
+}
+
+static void TGBackStep(UIWindow *win) {
+    UIViewController *root = win.rootViewController;
+    if (!root) return;
+
+    NSString *stamp = TGPageStamp(root);
+    BOOL acted = NO;
+    @try {
+        acted = TGEscapeIn(root);
+    } @catch (NSException *e) {
+        acted = NO;
+    }
+    if (!acted) { // 没人应答，直接交给容器
+        TGPopContainer(win);
+        return;
+    }
+
+    // 应答了也要确认页面真动了：说「处理了」却原地不动的页面不少，
+    // 那种时候这次返回就白按了，交给容器兜底。
+    __weak UIWindow *weakWin = win;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        UIWindow *w = weakWin;
+        if (!w) return;
+        if ([TGPageStamp(w.rootViewController) isEqualToString:stamp]) TGPopContainer(w);
+    });
+}
+
+static void TGRelayDoBack(void) {
+    UIWindow *win = TGRelayWindows().firstObject;
+    if (!win) return;
+    notify_post("cn.triggr.back.ack");
+    TGBackStep(win);
+}
+
+// ---- 左滑返回（leftPan 核心方案）：hook 系统交互过渡类，让淘宝类禁用边缘返回的 App 复活原生边缘手势（全系统动画） ----
+%group EdgeBack
+%hook _UINavigationInteractiveTransition
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    BOOL r = %orig;
+    if (!r && [g isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) {
+        // cn4.9 守卫：只在"有级可返且没有转场进行中"才强制放行（淘宝类禁用返回的 App 照常复活）。
+        // 根页/转场中尊重原生 NO——此前的无条件放行会把交互式过渡打进半开状态，致原生左滑失效。
+        UINavigationController *nav = nil;
+        if ([(id)self respondsToSelector:@selector(navigationController)])
+            nav = ((UINavigationController *(*)(id, SEL))objc_msgSend)(self, @selector(navigationController));
+        if (nav && nav.viewControllers.count > 1 && !nav.transitionCoordinator) {
+            g.enabled = YES;
+            return YES;
+        }
+    }
+    return r;
+}
+%end
+%end
+
+static void CNRelayAttachAll(void);
+// ---- 多指手势（cn2.75b，严格按 2.0 Relay 反汇编复刻）----
+// 12 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10/11=pinch（scale<0.7 捏合 / >1.4 张开）
+// 方向表 DAT_000076c8 实证：Up/Down/Left/Right，三指组复用同表；并发委托返回 YES；tap/swipe 到 Ended 派发
+// wanted 位：bit(idx+2)；pinch 特例 bit12/13。上报 notify_post("cn.triggr.inappidxN")
+
+@interface TGInAppTarget : NSObject <UIGestureRecognizerDelegate>
++ (instancetype)shared;
+- (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted;
+- (UIGestureRecognizer *)recognizerFor:(int)idx;
+- (void)recognized:(UIGestureRecognizer *)g;
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
+@end
+
+static uint64_t CNRelayWanted(void) {
+    static int wtoken = -1;
+    if (wtoken == -1 && notify_register_check("com.johndie.triggr/relay-wanted", &wtoken) != NOTIFY_STATUS_OK) wtoken = -1;
+    if (wtoken != -1) { uint64_t st = 0; notify_get_state(wtoken, &st); return st; }
+    return 0;
+}
+
+static void CNRelayAttachAll(void) {
+    NSMutableArray *ws = [NSMutableArray array];
+    if (@available(iOS 13.0, *)) {
+        for (__kindof UIScene *sc in UIApplication.sharedApplication.connectedScenes)
+            if ([sc isKindOfClass:[UIWindowScene class]]) [ws addObjectsFromArray:[(UIWindowScene *)sc windows]];
+    } else {
+        #pragma clang diagnostic push
+        #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        [ws addObjectsFromArray:UIApplication.sharedApplication.windows];
+        #pragma clang diagnostic pop
+    }
+    for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:CNRelayWanted()];
+}
+
+@implementation TGInAppTarget
+
++ (instancetype)shared {
+    static id s;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ s = [[self alloc] init]; });
+    return s;
+}
+
+- (UIGestureRecognizer *)recognizerFor:(int)idx {
+    UIGestureRecognizer *g = nil;
+    if (idx >= 10) {
+        g = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+    } else if (idx < 2) {
+        UITapGestureRecognizer *t = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        t.numberOfTouchesRequired = idx == 0 ? 2 : 3;
+        t.numberOfTapsRequired = 1;
+        g = t;
+    } else {
+        UISwipeGestureRecognizer *s = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        s.numberOfTouchesRequired = idx < 6 ? 2 : 3;
+        int k = (idx - 2) % 4;
+        s.direction = (k == 0) ? UISwipeGestureRecognizerDirectionUp
+                   : (k == 1) ? UISwipeGestureRecognizerDirectionDown
+                   : (k == 2) ? UISwipeGestureRecognizerDirectionLeft
+                              : UISwipeGestureRecognizerDirectionRight;
+        g = s;
+    }
+    g.delegate = self;
+    g.cancelsTouchesInView = NO;
+    g.delaysTouchesBegan = NO;
+    g.delaysTouchesEnded = NO;
+    objc_setAssociatedObject(g, "TGInAppIndex", @(idx), OBJC_ASSOCIATION_RETAIN);
+    return g;
+}
+
+- (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted {
+    if (!window) return;
+    for (UIGestureRecognizer *g in [window.gestureRecognizers copy]) {
+        NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+        if (!idxN) continue;
+        int idx = idxN.intValue;
+        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+        if (!(wanted & bit)) [window removeGestureRecognizer:g];
+    }
+    for (int idx = 0; idx < 12; idx++) {
+        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+        if (!(wanted & bit)) continue;
+        BOOL present = NO;
+        for (UIGestureRecognizer *g in window.gestureRecognizers) {
+            NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+            if (idxN && idxN.intValue == idx) { present = YES; break; }
+        }
+        if (!present) [window addGestureRecognizer:[self recognizerFor:idx]];
+    }
+}
+
+- (void)recognized:(UIGestureRecognizer *)g {
+    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+    int idx = idxN ? idxN.intValue : -1;
+    if (idx >= 0 && (idx & 0xfffffffe) == 10) {
+        if (g.state != UIGestureRecognizerStateEnded) return;
+        CGFloat scale = [(UIPinchGestureRecognizer *)g scale];
+        if (scale < 0.7) idx = 10;
+        else if (scale > 1.4) idx = 11;
+        else return;
+    } else {
+        if (g.state != UIGestureRecognizerStateEnded) return;
+    }
+    if (idx >= 0 && idx <= 11) {
+        NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
+        notify_post(nm.UTF8String);
+    }
+}
+
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+    if (!idxN) return NO;
+    int idx = idxN.intValue;
+    uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+    return (CNRelayWanted() & bit) != 0;
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return YES; // 2.0 实证：方向识别器共存的关键
+}
+
+@end
+
+%group InAppGestures
+%hook UIWindow
+- (void)didMoveToWindow {
+    %orig;
+    if (!self) return;
+    [[TGInAppTarget shared] refresh:self wanted:CNRelayWanted()];
+}
+%end
+%end
+
+%ctor {
+    // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
+    NSBundle *bundle = NSBundle.mainBundle;
+    if (![bundle.bundlePath hasSuffix:@".app"]) return;
+    %init(Shake);
+    BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
+    if (!springBoard) {
+        %init(StatusBar);
+        %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
+        %init(InAppGestures); // 多指手势（cn2.75b，2.0 逆向复刻）
+        CNRelayAttachAll();
+        [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
+            CNRelayAttachAll();
+        }];
+        // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
+        static int backToken = -1;
+        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
+ TGRelayDoBack();
+        });
+    }
+}
+
+
