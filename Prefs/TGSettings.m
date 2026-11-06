@@ -1374,7 +1374,7 @@ static NSString *TGCategoryOf(NSString *action) {
     cell.textLabel.font = body;
     // 条件行（如果/否则/结束条件）统一紫色。
     cell.textLabel.textColor = [spec propertyForKey:@"tgClear"] ? UIColor.systemRedColor
-        : addOnly ? UIColor.secondaryLabelColor
+        : addOnly ? UIColor.labelColor
         : TGStepIsDirective(picked) ? UIColor.systemPurpleColor
         : [picked hasPrefix:TGPausePrefix] ? UIColor.secondaryLabelColor : UIColor.labelColor;
     cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
