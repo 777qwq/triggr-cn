@@ -895,7 +895,7 @@ static NSString *TGCategoryOf(NSString *action) {
 
 // Runs what's picked, right now, the way the trigger would.
 - (void)test {
-    if (!_selection.count) return;
+    if (!TGStepsWithoutOnly(_selection).count) return;
     PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
     [storage setProperty:TGDomain forKey:@"defaults"];
     [storage setProperty:TGTestKey forKey:@"key"];
@@ -907,7 +907,8 @@ static NSString *TGCategoryOf(NSString *action) {
 }
 
 - (void)updateTestButton {
-    self.navigationItem.rightBarButtonItem.enabled = _selection.count > 0;
+    // 只有仅当、没有动作时没有可测的东西。
+    self.navigationItem.rightBarButtonItem.enabled = TGStepsWithoutOnly(_selection).count > 0;
 }
 
 #pragma mark Recently used
@@ -959,17 +960,19 @@ static NSString *TGCategoryOf(NSString *action) {
 - (NSMutableArray *)categorySpecifiers {
     NSMutableArray *specs = [NSMutableArray array];
     NSMutableArray *notes = [NSMutableArray array];
+    // 执行流不含仅当：条件不是动作，空状态和顺序页都按真正会跑的动作算。
+    NSArray<NSString *> *flow = TGStepsWithoutOnly(_selection);
     // Assignments outside Anywhere only work in their place; say so where it's picked.
     if (_mode && ![_mode isEqualToString:@"anywhere"]) [notes addObject:[NSString stringWithFormat:@"此指派仅在%@生效。", TGModePhrase(_mode)]];
     NSArray *anywhere = (!_mode || [_mode isEqualToString:@"anywhere"]) ? nil : TGReadAssignment(self, @"anywhere", _trigger);
     if (anywhere.count) [notes addObject:[NSString stringWithFormat:@"任意位置会为该触发器运行%@。此处选择的动作将在%@取代它；留空则沿用任意位置的指派。", TGListTitle(anywhere), TGModePhrase(_mode)]];
     NSString *warning = TGTriggerWarning(_trigger, [self replacesButtons]);
-    if (!_selection.count && TGDefaultActionTitle(_trigger)) warning = nil; // the empty-state note covers it
+    if (!flow.count && TGDefaultActionTitle(_trigger)) warning = nil; // the empty-state note covers it
     if (warning) [notes addObject:TGButtonText(warning)];
 
     // What's picked, in run order, so it's visible without opening each category.
-    PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
-    if (_selection.count) [notes insertObject:@"左滑可移除。" atIndex:0];
+    PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:flow.count ? (_menuEditor ? @"本菜单包含" : flow.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
+    if (flow.count) [notes insertObject:@"左滑可移除。" atIndex:0];
     else if (!_menuEditor && TGDefaultActionTitle(_trigger))
         [notes insertObject:[NSString stringWithFormat:[self replacesButtons]
             ? @"未选择动作，因此保持默认行为（%@）。在下方选择一个动作来替代，或选「无操作」（系统类）来关闭它。"
@@ -980,7 +983,6 @@ static NSString *TGCategoryOf(NSString *action) {
     [specs addObject:picked];
     NSUInteger number = 0;
     // 仅当行不进「已选择」：它们是触发器的前置门，不是动作序列的一部分。
-    NSArray<NSString *> *flow = TGStepsWithoutOnly(_selection);
     NSUInteger index = _selection.count - flow.count;
     while (index < _selection.count) {
         NSString *item = _selection[index];
