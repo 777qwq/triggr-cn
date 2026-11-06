@@ -238,9 +238,19 @@ static inline BOOL TGStepIsIf(NSString *step) { return [step hasPrefix:TGIfPrefi
 static inline BOOL TGStepIsElse(NSString *step) { return [step isEqualToString:TGElseDirective]; }
 static inline BOOL TGStepIsEndIf(NSString *step) { return [step isEqualToString:TGEndIfDirective]; }
 
+// 「仅当」：触发器级前置条件，存在列表最前面，形如 "only:charging"。
+// 它不属于执行流——不参与 if/else/endif 的配对，也不出现在顺序页里。
+// 用独立前缀而不是 if:，是为了和用户自己写的「如果」块分开：
+// 两者都从列表开头开始时，光看行内容分不出谁是谁。
+static inline BOOL TGStepIsOnly(NSString *step) {
+    return [step hasPrefix:TGOnlyPrefix];
+}
+
 // 在编辑器里显示、但自己不执行任何事的行。
+// only: 必须算在内：TGPerformable 会用它来放行「不执行但要保留」的行，
+// 漏掉它前置条件就会在取动作时被丢掉，执行器拿到的列表里没人守门。
 static inline BOOL TGStepIsDirective(NSString *step) {
-    return TGStepIsIf(step) || TGStepIsElse(step) || TGStepIsEndIf(step);
+    return TGStepIsIf(step) || TGStepIsElse(step) || TGStepIsEndIf(step) || TGStepIsOnly(step);
 }
 
 // ifIndex 那一行 if 对应的 else 或 endif 的下标，同一层；hasElse 说明是哪一个。
@@ -274,14 +284,6 @@ static inline NSInteger TGStepEndIf(NSArray<NSString *> *steps, NSInteger ifInde
         }
     }
     return -1;
-}
-
-// 「仅当」：触发器级前置条件，存在列表最前面，形如 "only:charging"。
-// 它不属于执行流——不参与 if/else/endif 的配对，也不出现在顺序页里。
-// 用独立前缀而不是 if:，是为了和用户自己写的「如果」块分开：
-// 两者都从列表开头开始时，光看行内容分不出谁是谁。
-static inline BOOL TGStepIsOnly(NSString *step) {
-    return [step hasPrefix:TGOnlyPrefix];
 }
 
 // 列表开头连续的 only: 行就是这条触发器的全部前置条件，全部 AND。

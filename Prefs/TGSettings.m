@@ -44,8 +44,8 @@ static NSString *TGOnlyTitle(NSString *encoded) {
 }
 
 static NSString *TGDisplayTitle(NSString *action) {
-    if (TGStepIsDirective(action)) return TGStepTitle(action); // 如果/否则/结束条件
     if (TGStepIsOnly(action)) return TGOnlyTitle([action substringFromIndex:TGOnlyPrefix.length]);
+    if (TGStepIsDirective(action)) return TGStepTitle(action); // 如果/否则/结束条件
     if ([action hasPrefix:TGMenuPrefix]) {
         NSString *menuID = [action substringFromIndex:TGMenuPrefix.length];
         for (NSDictionary *menu in TGReadMenus()) if ([menu[@"id"] isEqualToString:menuID]) return [@"菜单：" stringByAppendingString:[menu[@"name"] description]];
