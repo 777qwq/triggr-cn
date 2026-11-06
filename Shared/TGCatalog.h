@@ -212,8 +212,13 @@ static const TGGroup TGActionGroups[] = {
 #define TGElseAction @"else"
 #define TGEndIfAction @"endif"
 #define TGIfCustomAction @"if:custom"
-// 「仅当」：触发器级前置条件，存在动作列表最前面，全部 AND。
-// 独立前缀，不参与 if/else/endif 的配对，也不进顺序页。
+// 「仅当」：触发器级前置条件，全部 AND。存在独立键里，不进动作数组：
+//     anywhere/lock.double     动作列表   ["if:locked", "密码解锁", …]
+//     if:anywhere/lock.double  仅当条件   ["music", "!charging"]
+// 键名只差一个 if: 前缀。和动作行前缀是同一个字符串、两个域：一个在偏好键空间，
+// 一个在数组元素里，永远碰不到一起。放在独立键里，动作数组无论被谁重写都碰不到条件。
+#define TGOnlyKeyPrefix TGIfPrefix
+// cn4.15 之前的写法：条件作为 "only:" 行放在动作数组最前面，只用于一次性迁移。
 #define TGOnlyPrefix @"only:"
 #define TGMenuPrefix @"menu:"   // "menu:<id>" shows that menu
 #define TGMenuKeyPrefix @"menu/" // "menu/<id>" = the menu's items

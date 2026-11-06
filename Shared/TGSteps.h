@@ -238,17 +238,25 @@ static inline BOOL TGStepIsIf(NSString *step) { return [step hasPrefix:TGIfPrefi
 static inline BOOL TGStepIsElse(NSString *step) { return [step isEqualToString:TGElseDirective]; }
 static inline BOOL TGStepIsEndIf(NSString *step) { return [step isEqualToString:TGEndIfDirective]; }
 
-// 「仅当」：触发器级前置条件，存在列表最前面，形如 "only:charging"。
+// 「仅当」：触发器级前置条件，全部 AND，存在 if:<mode>/<trigger> 键里。
 // 它不属于执行流——不参与 if/else/endif 的配对，也不出现在顺序页里。
-// 用独立前缀而不是 if:，是为了和用户自己写的「如果」块分开：
-// 两者都从列表开头开始时，光看行内容分不出谁是谁。
+// 单独的 only: 前缀只用于迁移旧配置（cn4.15 之前条件写在动作数组最前面）。
 static inline BOOL TGStepIsOnly(NSString *step) {
     return [step hasPrefix:TGOnlyPrefix];
 }
 
+// 条件键的值：一个条件（字符串）或几个（数组）。空值等于没有条件。
+// 和 TGActionList 同构——CFPreferences 会把单元素数组降级成字符串。
+static inline NSArray<NSString *> *TGOnlyList(id value) {
+    NSMutableArray<NSString *> *conditions = [NSMutableArray array];
+    for (id item in [value isKindOfClass:NSArray.class] ? value : (value ? @[value] : @[]))
+        if ([item isKindOfClass:NSString.class] && [item length]) [conditions addObject:item];
+    return conditions;
+}
+
 // 在编辑器里显示、但自己不执行任何事的行。
-// only: 必须算在内：TGPerformable 会用它来放行「不执行但要保留」的行，
-// 漏掉它前置条件就会在取动作时被丢掉，执行器拿到的列表里没人守门。
+// only: 只在迁移前的旧数组里出现：TGPerformable 要放行它，否则旧配置的
+// 动作列表会被执行器当成「没有这一行」，迁移时就地少了一段参照。
 static inline BOOL TGStepIsDirective(NSString *step) {
     return TGStepIsIf(step) || TGStepIsElse(step) || TGStepIsEndIf(step) || TGStepIsOnly(step);
 }
@@ -286,8 +294,9 @@ static inline NSInteger TGStepEndIf(NSArray<NSString *> *steps, NSInteger ifInde
     return -1;
 }
 
-// 列表开头连续的 only: 行就是这条触发器的全部前置条件，全部 AND。
-static inline NSArray<NSString *> *TGOnlyConditions(NSArray<NSString *> *steps) {
+// cn4.15 之前：条件写在动作数组开头（"only:charging"）。只给一次性迁移用，
+// 新代码一律走 TGOnlyList(条件键的值)。
+static inline NSArray<NSString *> *TGLegacyOnlyConditions(NSArray<NSString *> *steps) {
     NSMutableArray<NSString *> *conditions = [NSMutableArray array];
     for (NSString *step in steps) {
         if (![step isKindOfClass:NSString.class] || !TGStepIsOnly(step)) break;
@@ -296,9 +305,9 @@ static inline NSArray<NSString *> *TGOnlyConditions(NSArray<NSString *> *steps) 
     return conditions;
 }
 
-// 去掉 only: 行之后剩下的执行流，给顺序页编辑。
+// 去掉旧数组开头的 only: 行，迁移时用。
 static inline NSArray<NSString *> *TGStepsWithoutOnly(NSArray<NSString *> *steps) {
-    NSUInteger skip = TGOnlyConditions(steps).count;
+    NSUInteger skip = TGLegacyOnlyConditions(steps).count;
     if (!skip) return steps;
     return [steps subarrayWithRange:NSMakeRange(skip, steps.count - skip)];
 }

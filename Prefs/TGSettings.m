@@ -92,6 +92,33 @@ static void TGConfigureStorage(PSSpecifier *spec, NSString *mode, NSString *trig
     [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
 }
 
+// 仅当条件存在 if:<mode>/<trigger>，和动作键并列但独立。
+// 这样动作列表里只有动作：谁重写列表都碰不到前置条件。
+static void TGConfigureConditionStorage(PSSpecifier *spec, NSString *mode, NSString *trigger) {
+    [spec setProperty:TGDomain forKey:@"defaults"];
+    [spec setProperty:[TGOnlyKeyPrefix stringByAppendingString:TGAssignmentKey(mode, trigger)] forKey:@"key"];
+    [spec setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+}
+
+static NSArray<NSString *> *TGReadConditions(PSListController *list, NSString *mode, NSString *trigger) {
+    if (!mode.length || !trigger.length) return @[];
+    PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
+    TGConfigureConditionStorage(spec, mode, trigger);
+    return TGOnlyList([list readPreferenceValue:spec]);
+}
+
+// 清掉一条指派：动作和它的仅当条件一起。
+// 只清动作会留下一个界面上看不见的门，下次配动作时把人拦住。
+static void TGClearAssignment(PSListController *list, PSSpecifier *spec) {
+    [list setPreferenceValue:@"" specifier:spec];
+    NSString *trigger = [spec propertyForKey:@"tgTrigger"];
+    NSString *mode = [spec propertyForKey:@"tgMode"];
+    if (!trigger.length || !mode.length) return;
+    PSSpecifier *condition = [PSSpecifier emptyGroupSpecifier];
+    TGConfigureConditionStorage(condition, mode, trigger);
+    [list setPreferenceValue:@"" specifier:condition];
+}
+
 // A stored assignment is one action (string) or several run in order (array).
 static NSArray<NSString *> *TGActionList(id value) {
     NSMutableArray *actions = [NSMutableArray array];
@@ -895,7 +922,7 @@ static NSString *TGCategoryOf(NSString *action) {
 
 // Runs what's picked, right now, the way the trigger would.
 - (void)test {
-    if (!TGStepsWithoutOnly(_selection).count) return;
+    if (!_selection.count) return;
     PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
     [storage setProperty:TGDomain forKey:@"defaults"];
     [storage setProperty:TGTestKey forKey:@"key"];
@@ -907,8 +934,8 @@ static NSString *TGCategoryOf(NSString *action) {
 }
 
 - (void)updateTestButton {
-    // 只有仅当、没有动作时没有可测的东西。
-    self.navigationItem.rightBarButtonItem.enabled = TGStepsWithoutOnly(_selection).count > 0;
+    // 没有动作就没有可测的东西（仅当不算动作，它存在独立的键里）。
+    self.navigationItem.rightBarButtonItem.enabled = _selection.count > 0;
 }
 
 #pragma mark Recently used
@@ -950,6 +977,21 @@ static NSString *TGCategoryOf(NSString *action) {
         _trigger = [self.specifier propertyForKey:@"tgTrigger"];
         _menuEditor = [self.specifier propertyForKey:@"tgMenuEditor"] != nil;
         _selection = [TGActionList([self readPreferenceValue:self.specifier]) mutableCopy];
+        // cn4.15：旧配置把条件写成数组开头的 only: 行。搬进独立的条件键，
+        // 从此动作列表里只有动作。装完第一次打开这个页面时做一次，之后不再出现。
+        NSArray<NSString *> *legacy = _menuEditor ? @[] : TGLegacyOnlyConditions(_selection);
+        if (legacy.count) {
+            _selection = [TGStepsWithoutOnly(_selection) mutableCopy];
+            if (!TGReadConditions(self, _mode, _trigger).count) {
+                PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
+                TGConfigureConditionStorage(spec, _mode, _trigger);
+                [self setPreferenceValue:legacy specifier:spec];
+            }
+            // 直接写回，不走 save：save 会 reloadSpecifiers，而这里正在建 specifiers。
+            NSArray<NSString *> *tidy = TGTidySteps(_selection);
+            _selection = [tidy mutableCopy];
+            [self setPreferenceValue:TGStoredValue(_selection) specifier:self.specifier];
+        }
         self.title = self.specifier.name;
         _specifiers = _query ? [self searchSpecifiers] : [self categorySpecifiers];
         [self updateTestButton];
@@ -960,19 +1002,18 @@ static NSString *TGCategoryOf(NSString *action) {
 - (NSMutableArray *)categorySpecifiers {
     NSMutableArray *specs = [NSMutableArray array];
     NSMutableArray *notes = [NSMutableArray array];
-    // 执行流不含仅当：条件不是动作，空状态和顺序页都按真正会跑的动作算。
-    NSArray<NSString *> *flow = TGStepsWithoutOnly(_selection);
+    // 条件不是动作：它在独立的 if: 键里，_selection 本身就是执行流。
     // Assignments outside Anywhere only work in their place; say so where it's picked.
     if (_mode && ![_mode isEqualToString:@"anywhere"]) [notes addObject:[NSString stringWithFormat:@"此指派仅在%@生效。", TGModePhrase(_mode)]];
     NSArray *anywhere = (!_mode || [_mode isEqualToString:@"anywhere"]) ? nil : TGReadAssignment(self, @"anywhere", _trigger);
     if (anywhere.count) [notes addObject:[NSString stringWithFormat:@"任意位置会为该触发器运行%@。此处选择的动作将在%@取代它；留空则沿用任意位置的指派。", TGListTitle(anywhere), TGModePhrase(_mode)]];
     NSString *warning = TGTriggerWarning(_trigger, [self replacesButtons]);
-    if (!flow.count && TGDefaultActionTitle(_trigger)) warning = nil; // the empty-state note covers it
+    if (!_selection.count && TGDefaultActionTitle(_trigger)) warning = nil; // the empty-state note covers it
     if (warning) [notes addObject:TGButtonText(warning)];
 
     // What's picked, in run order, so it's visible without opening each category.
-    PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:flow.count ? (_menuEditor ? @"本菜单包含" : flow.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
-    if (flow.count) [notes insertObject:@"左滑可移除。" atIndex:0];
+    PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
+    if (_selection.count) [notes insertObject:@"左滑可移除。" atIndex:0];
     else if (!_menuEditor && TGDefaultActionTitle(_trigger))
         [notes insertObject:[NSString stringWithFormat:[self replacesButtons]
             ? @"未选择动作，因此保持默认行为（%@）。在下方选择一个动作来替代，或选「无操作」（系统类）来关闭它。"
@@ -982,14 +1023,13 @@ static NSString *TGCategoryOf(NSString *action) {
     [picked setProperty:[notes componentsJoinedByString:@"\n\n"] forKey:@"footerText"];
     [specs addObject:picked];
     NSUInteger number = 0;
-    // 仅当行不进「已选择」：它们是触发器的前置门，不是动作序列的一部分。
-    NSUInteger index = _selection.count - flow.count;
+    NSUInteger index = 0;
     while (index < _selection.count) {
         NSString *item = _selection[index];
         BOOL pause = [item hasPrefix:TGPausePrefix];
         NSString *title = TGDisplayTitle(item);
-        // 序号只数真正会执行的动作；条件行是结构，跟着它下面的动作走。
-        if (!pause && !TGStepIsDirective(item) && flow.count > 1) title = [NSString stringWithFormat:@"%lu.  %@", (unsigned long)++number, title];
+        // 序号只数真正会执行的动作；指令行是结构，跟着它下面的动作走。
+        if (!pause && !TGStepIsDirective(item) && _selection.count > 1) title = [NSString stringWithFormat:@"%lu.  %@", (unsigned long)++number, title];
         PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [row setProperty:item forKey:@"tgPicked"];
         // 同一个动作可以出现多次，indexOfObject: 只会命中第一份；左滑按这一屏的真实下标走。
@@ -997,8 +1037,8 @@ static NSString *TGCategoryOf(NSString *action) {
         [specs addObject:row];
         index++;
     }
-    // 只有一个动作时没有顺序可排；仅当不占顺序页。
-    if (flow.count > 1) {
+    // 只有一个动作时没有顺序可排。
+    if (_selection.count > 1) {
         PSSpecifier *order = [PSSpecifier preferenceSpecifierNamed:@"顺序、停顿与条件" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [order setProperty:@YES forKey:@"tgOrder"];
         [specs addObject:order];
@@ -1012,7 +1052,7 @@ static NSString *TGCategoryOf(NSString *action) {
         PSSpecifier *onlyGroup = [PSSpecifier groupSpecifierWithName:@"仅当"];
         [onlyGroup setProperty:@"这些条件必须全部成立才执行；任一不成立，触发器不会运行，也不会显示动作横幅。" forKey:@"footerText"];
         [specs addObject:onlyGroup];
-        NSArray<NSString *> *conditions = TGOnlyConditions(_selection);
+        NSArray<NSString *> *conditions = TGReadConditions(self, _mode, _trigger);
         for (NSUInteger i = 0; i < conditions.count; i++) {
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:TGOnlyTitle(conditions[i]) target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
             [row setProperty:@(i) forKey:@"tgOnly"];
@@ -1199,30 +1239,27 @@ static NSString *TGCategoryOf(NSString *action) {
 
 #pragma mark Only-if conditions
 
-// 仅当存在动作列表最前面（only: 行），不参与 if/else/endif。
-// 每次改动整体重排：先前置条件、再其余动作，顺序保持不变。
+// 仅当存在 if:<mode>/<trigger> 里，不进 _selection（动作列表）。
+// 条件不是动作：删动作、排顺序、补 endif 都碰不到它。
+// cn4.13 的门形同虚设，就是因为条件当初是数组里的一行，过滤动作时被一起扔了。
 - (void)applyOnlyConditions:(NSArray<NSString *> *)conditions {
-    NSMutableArray<NSString *> *rest = [_selection mutableCopy];
-    NSUInteger old = MIN(TGOnlyConditions(_selection).count, rest.count);
-    [rest removeObjectsInRange:NSMakeRange(0, old)];
-    NSMutableArray<NSString *> *next = [NSMutableArray array];
-    for (NSString *encoded in conditions) [next addObject:[TGOnlyPrefix stringByAppendingString:encoded]];
-    [next addObjectsFromArray:rest];
-    _selection = next;
-    [self save];
+    PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
+    TGConfigureConditionStorage(spec, _mode, _trigger);
+    [self setPreferenceValue:conditions.count ? (id)conditions : @"" specifier:spec];
+    [self reloadSpecifiers];
 }
 
 - (void)promptAddOnlyCondition {
     TGPresentConditionPicker(self, @"仅当", ^(NSString *encoded) {
         if (!encoded.length) return;
-        NSArray<NSString *> *conditions = TGOnlyConditions(self->_selection);
+        NSArray<NSString *> *conditions = TGReadConditions(self, self->_mode, self->_trigger);
         if ([conditions containsObject:encoded]) return; // 同一个条件加两次没有意义
         [self applyOnlyConditions:[conditions arrayByAddingObject:encoded]];
     });
 }
 
 - (void)promptOnlyConditionAt:(NSUInteger)index indexPath:(NSIndexPath *)indexPath {
-    NSArray<NSString *> *conditions = TGOnlyConditions(_selection);
+    NSArray<NSString *> *conditions = TGReadConditions(self, _mode, _trigger);
     if (index >= conditions.count) return;
     NSString *encoded = conditions[index];
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:TGOnlyTitle(encoded)
@@ -1230,13 +1267,13 @@ static NSString *TGCategoryOf(NSString *action) {
     [sheet addAction:[UIAlertAction actionWithTitle:@"更改条件…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         TGPresentConditionPicker(self, @"仅当", ^(NSString *newEncoded) {
             if (!newEncoded.length) return;
-            NSMutableArray *next = [TGOnlyConditions(self->_selection) mutableCopy];
+            NSMutableArray *next = [TGReadConditions(self, self->_mode, self->_trigger) mutableCopy];
             if (index < next.count) next[index] = newEncoded;
             [self applyOnlyConditions:next];
         });
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"移除条件" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        NSMutableArray *next = [TGOnlyConditions(self->_selection) mutableCopy];
+        NSMutableArray *next = [TGReadConditions(self, self->_mode, self->_trigger) mutableCopy];
         if (index < next.count) [next removeObjectAtIndex:index];
         [self applyOnlyConditions:next];
     }]];
@@ -1247,10 +1284,8 @@ static NSString *TGCategoryOf(NSString *action) {
 // None clears; any other action toggles, appended to the run order.
 - (void)toggle:(NSString *)action {
     if (action.length == 0) {
-        // 「全部移除」只清动作：仅当属于触发器，不该跟着动作一起消失。
-        NSArray<NSString *> *only = TGOnlyConditions(_selection);
+        // 「全部移除」只清动作：仅当存在独立的键里，本来就不在 _selection 里。
         _selection = [NSMutableArray array];
-        for (NSString *encoded in only) [_selection addObject:[TGOnlyPrefix stringByAppendingString:encoded]];
     }
     else if ([_selection containsObject:action]) {
         [_selection removeObject:action];
@@ -1287,7 +1322,7 @@ static NSString *TGCategoryOf(NSString *action) {
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
     NSNumber *only = [spec propertyForKey:@"tgOnly"];
     if (only) {
-        NSMutableArray *next = [TGOnlyConditions(_selection) mutableCopy];
+        NSMutableArray *next = [TGReadConditions(self, _mode, _trigger) mutableCopy];
         if (only.unsignedIntegerValue < next.count) [next removeObjectAtIndex:only.unsignedIntegerValue];
         [self applyOnlyConditions:next];
         return YES;
@@ -1626,17 +1661,13 @@ static NSString *TGCategoryOf(NSString *action) {
     }
     if ([spec propertyForKey:@"tgOrder"]) {
         TGSequenceController *editor = [TGSequenceController new];
-        // 仅当不进顺序页：条件属于触发器，不属于动作序列。
-        editor.items = [TGStepsWithoutOnly(_selection) mutableCopy];
-        NSArray<NSString *> *only = TGOnlyConditions(_selection);
+        // 条件不在 _selection 里，顺序页拿到的就是纯动作序列，存回去也只存动作。
+        editor.items = [_selection mutableCopy];
         __weak typeof(self) weakSelf = self;
         editor.onChange = ^(NSArray<NSString *> *items) {
             __strong typeof(self) strongSelf = weakSelf;
             if (!strongSelf) return;
-            NSMutableArray<NSString *> *next = [NSMutableArray array];
-            for (NSString *encoded in only) [next addObject:[TGOnlyPrefix stringByAppendingString:encoded]];
-            [next addObjectsFromArray:items];
-            strongSelf->_selection = [TGTidySteps(next) mutableCopy];
+            strongSelf->_selection = [TGTidySteps(items) mutableCopy];
             [strongSelf setPreferenceValue:TGStoredValue(strongSelf->_selection) specifier:strongSelf.specifier];
         };
         [self.navigationController pushViewController:editor animated:YES];
@@ -1840,7 +1871,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
 }
 
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
-    [self setPreferenceValue:@"" specifier:spec];
+    TGClearAssignment(self, spec);
     return TGIsCustomTrigger([spec propertyForKey:@"tgTrigger"]); // a button's row stays, now empty
 }
 
@@ -2055,8 +2086,17 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     void (^move)(void) = ^{
         __strong typeof(self) strongSelf = weakSelf;
         NSArray *actions = TGReadAssignment(strongSelf, mode, srcTrigger);
+        NSArray *conditions = TGReadConditions(strongSelf, mode, srcTrigger);
         PSSpecifier *dstSpec = TGTriggerRow(TGSettingsTriggerTitle(dst), strongSelf, @selector(assignedActionTitle:), mode, dst);
         [strongSelf setPreferenceValue:TGStoredValue(actions) specifier:dstSpec];
+        // 条件跟动作整条搬：源没有条件就等于把目标原有的条件清掉。
+        // 只搬动作的话，目标上残留的门会套到刚搬来的动作上，行为跟着变。
+        PSSpecifier *dstCondition = [PSSpecifier emptyGroupSpecifier];
+        TGConfigureConditionStorage(dstCondition, mode, dst);
+        [strongSelf setPreferenceValue:conditions.count ? (id)conditions : @"" specifier:dstCondition];
+        PSSpecifier *srcCondition = [PSSpecifier emptyGroupSpecifier];
+        TGConfigureConditionStorage(srcCondition, mode, srcTrigger);
+        [strongSelf setPreferenceValue:@"" specifier:srcCondition];
         [strongSelf setPreferenceValue:@"" specifier:strongSelf.srcSpec];
         [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
         [strongSelf.navigationController popViewControllerAnimated:YES];
@@ -2127,7 +2167,16 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         message:[NSString stringWithFormat:@"移除全部 %lu 项指派（%@）？这些触发器将恢复系统默认行为。", (unsigned long)count, TGModePhrase(_mode)]
         preferredStyle:UIAlertControllerStyleActionSheet];
     [sheet addAction:[UIAlertAction actionWithTitle:@"全部移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        for (PSSpecifier *row in self.specifiers.copy) if ([row propertyForKey:@"tgTrigger"]) [self setPreferenceValue:@"" specifier:row];
+        for (PSSpecifier *row in self.specifiers.copy) {
+            NSString *trigger = [row propertyForKey:@"tgTrigger"];
+            if (!trigger) continue;
+            [self setPreferenceValue:@"" specifier:row];
+            // 条件键一起清：留着的话，下次给这条触发器配动作，会被一个
+            // 界面上已经看不见的旧门拦住，而且找不到地方改。
+            PSSpecifier *condition = [PSSpecifier emptyGroupSpecifier];
+            TGConfigureConditionStorage(condition, [row propertyForKey:@"tgMode"] ?: _mode, trigger);
+            [self setPreferenceValue:@"" specifier:condition];
+        }
         [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
         [self reloadSpecifiers];
     }]];
@@ -2142,7 +2191,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
 }
 
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
-    [self setPreferenceValue:@"" specifier:spec];
+    TGClearAssignment(self, spec);
     return YES;
 }
 
@@ -2240,7 +2289,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
 }
 
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
-    [self setPreferenceValue:@"" specifier:spec];
+    TGClearAssignment(self, spec);
     return YES;
 }
 
@@ -2321,13 +2370,20 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
 // Removes every assignment this app has.
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
     NSString *prefix = [[spec propertyForKey:@"tgMode"] stringByAppendingString:@"/"];
-    for (NSString *key in TGAllAssignments()) {
-        if (![key hasPrefix:prefix]) continue;
+    NSMutableArray<NSString *> *keys = [NSMutableArray array];
+    for (NSString *key in TGAllAssignments()) if ([key hasPrefix:prefix]) [keys addObject:key];
+    for (NSString *key in keys) {
         PSSpecifier *storage = [PSSpecifier emptyGroupSpecifier];
         [storage setProperty:TGDomain forKey:@"defaults"];
         [storage setProperty:key forKey:@"key"];
         [storage setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
         [self setPreferenceValue:@"" specifier:storage];
+        // 条件键和动作键一一对应，一起清掉。
+        PSSpecifier *condition = [PSSpecifier emptyGroupSpecifier];
+        [condition setProperty:TGDomain forKey:@"defaults"];
+        [condition setProperty:[TGOnlyKeyPrefix stringByAppendingString:key] forKey:@"key"];
+        [condition setProperty:@TGPrefsChangedNotification forKey:@"PostNotification"];
+        [self setPreferenceValue:@"" specifier:condition];
     }
     return YES;
 }
@@ -2463,7 +2519,7 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
 // By trigger: clears the assignment. By action: takes just this action off the trigger; its other actions stay.
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
     if (![spec propertyForKey:@"tgListedAction"]) {
-        [self setPreferenceValue:@"" specifier:spec];
+        TGClearAssignment(self, spec);
         return YES;
     }
     NSMutableArray *actions = [TGActionList([self readPreferenceValue:spec]) mutableCopy];
@@ -2592,6 +2648,13 @@ static NSDictionary *TGSanitizedSetup(NSDictionary *input) {
         NSRange slash = [key rangeOfString:@"/"];
         if ([key hasPrefix:TGMenuKeyPrefix]) {
             if (TGIsStringList(value)) setup[key] = value;
+        } else if ([key hasPrefix:TGOnlyKeyPrefix]) {
+            // 仅当条件：if:<mode>/<trigger>。动作键之外的第二个键空间，
+            // 少了它，导出的配置会把所有前置门丢在家里。
+            NSString *actionKey = [key substringFromIndex:TGOnlyKeyPrefix.length];
+            NSRange s = [actionKey rangeOfString:@"/"];
+            if (s.location != NSNotFound && [modes containsObject:[actionKey substringToIndex:s.location]]
+                && TGIsKnownTrigger([actionKey substringFromIndex:s.location + 1]) && TGIsStringList(value)) setup[key] = value;
         } else if (slash.location != NSNotFound) {
             if ([modes containsObject:[key substringToIndex:slash.location]] && TGIsKnownTrigger([key substringFromIndex:slash.location + 1]) && TGIsStringList(value)) setup[key] = value;
         } else if ([key isEqualToString:TGEnabledKey] || [key isEqualToString:TGRequireUnlockKey] || [key isEqualToString:TGShowBannersKey]) {
@@ -2627,7 +2690,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
     BOOL personal = NO;
     for (NSString *key in setup) {
         if (!TGIsStringList(setup[key]) || [key isEqualToString:TGBlockedAppsKey]) continue;
-        if ([key containsString:@"/"] && ![key hasPrefix:TGMenuKeyPrefix]) assignments++;
+        if ([key containsString:@"/"] && ![key hasPrefix:TGMenuKeyPrefix] && ![key hasPrefix:TGOnlyKeyPrefix]) assignments++;
         if ([key containsString:TGWiFiJoinedPrefix] || [key containsString:TGWiFiLeftPrefix] || [key containsString:TGBTConnectedPrefix] || [key containsString:TGBTDisconnectedPrefix]) personal = YES;
         for (NSString *action in TGActionList(setup[key])) {
             if ([action hasPrefix:TGShellPrefix]) commands++;

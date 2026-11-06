@@ -23,7 +23,9 @@ static NSSet<NSString *> *TGAllowedActions(void) {
     NSDictionary *values = keys.count ? CFBridgingRelease(CFPreferencesCopyMultiple((__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) : @{};
     NSMutableSet *allowed = [NSMutableSet set];
     [values enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop) {
-        if (![key containsString:@"/"]) return; // "<mode>/<trigger>" and "menu/<id>" only
+        // "<mode>/<trigger>" and "menu/<id>" only. 仅当条件键（if:…）的值是条件，
+        // 不是可执行的动作，别把它们放进白名单。
+        if (![key containsString:@"/"] || [key hasPrefix:TGOnlyKeyPrefix]) return;
         for (id item in [value isKindOfClass:NSArray.class] ? value : @[value])
             if ([item isKindOfClass:NSString.class]) [allowed addObject:item];
     }];

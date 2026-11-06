@@ -46,6 +46,10 @@
 #pragma mark - Assignments
 
 static NSDictionary *tgAssignments;
+// 仅当条件，键是动作键去掉 if: 前缀（"anywhere/lock.double"），值是条件数组。
+// 单独存：条件不是动作，一旦混进 tgAssignments 就会被算成一条指派，
+// 出现在「这个触发器有没有配东西」的判断里。
+static NSDictionary<NSString *, NSArray<NSString *> *> *tgConditions;
 // Triggers with at least one assignment (any mode). Hooks check this first, so
 // an unassigned trigger costs one set lookup and nothing else.
 static NSSet<NSString *> *tgAssignedTriggers;
@@ -84,6 +88,7 @@ static void TGReadAssignments(void) {
     id enabled = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)TGEnabledKey, domain));
     if ([enabled respondsToSelector:@selector(boolValue)] && ![enabled boolValue]) {
         tgAssignments = @{};
+        tgConditions = @{};
         tgAssignedTriggers = [NSSet set];
         TGUpdateOtherEvents();
         TGUpdateAPI();
@@ -92,15 +97,28 @@ static void TGReadAssignments(void) {
     NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
     NSDictionary *values = keys.count ? CFBridgingRelease(CFPreferencesCopyMultiple((__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) : @{};
     NSMutableDictionary *assignments = [NSMutableDictionary dictionary];
+    NSMutableDictionary *conditions = [NSMutableDictionary dictionary];
     [values enumerateKeysAndObjectsUsingBlock:^(NSString *key, id action, BOOL *stop) {
+        // 仅当条件："if:<mode>/<trigger>"，和动作键同构但独立。
+        // 不进 assignments——它不是动作，也不该让触发器算作「已指派」。
+        if ([key hasPrefix:TGOnlyKeyPrefix]) {
+            NSArray *list = TGOnlyList(action);
+            if (list.count) conditions[[key substringFromIndex:TGOnlyKeyPrefix.length]] = list;
+            return;
+        }
         if (![key containsString:@"/"]) return;
         // One action (string) or several, run in order (array of strings).
         NSMutableArray *actions = [NSMutableArray array];
         for (id item in [action isKindOfClass:NSArray.class] ? action : @[action])
             if ([item isKindOfClass:NSString.class] && [item length]) [actions addObject:item];
         if (actions.count) assignments[key] = actions;
+        // cn4.15 之前仅当写在动作数组开头（"only:charging"）。读到就当成条件用，
+        // 不写盘：用户打开一次设置页，迁移会把它落到独立的 if: 键上。
+        NSArray *legacy = TGLegacyOnlyConditions(actions);
+        if (legacy.count && !conditions[key]) conditions[key] = legacy;
     }];
     tgAssignments = assignments;
+    tgConditions = conditions;
     tgHasAppAssignments = NO;
     for (NSString *key in assignments) if ([key hasPrefix:TGAppModePrefix]) tgHasAppAssignments = YES;
     // Without a Home button (Face ID) its triggers and Touch ID's, e.g. from an imported setup, never count.
@@ -152,7 +170,9 @@ static NSArray<NSString *> *TGPerformable(NSArray<NSString *> *actions) {
 }
 
 // The actions assigned to `trigger` in the current mode (else Anywhere), or nil.
-static NSArray<NSString *> *TGActionFor(NSString *trigger) {
+// outKey 带回命中的那个键：仅当条件跟动作同键，不单独回退——App 模式配了动作
+// 就用 App 模式的条件；动作回退到 Anywhere 时，条件也跟着回退。
+static NSArray<NSString *> *TGActionForKey(NSString *trigger, NSString **outKey) {
     if (![tgAssignedTriggers containsObject:trigger]) return nil; // fast path: nothing assigned
     NSString *mode = TGCurrentMode();
     if (tgBlockedApps && [mode isEqualToString:@"app"]) {
@@ -162,14 +182,35 @@ static NSArray<NSString *> *TGActionFor(NSString *trigger) {
         if ([identifier isKindOfClass:NSString.class] && [tgBlockedApps containsObject:identifier]) return nil;
     }
     NSArray *actions = nil;
+    NSString *key = nil;
     if (tgHasAppAssignments && [mode isEqualToString:@"app"]) {
         // In Specific Apps: this app's own assignment comes first.
         id front = [(SpringBoard *)UIApplication.sharedApplication _accessibilityFrontMostApplication];
         id identifier = [front respondsToSelector:@selector(bundleIdentifier)] ? [front performSelector:@selector(bundleIdentifier)] : nil;
-        if ([identifier isKindOfClass:NSString.class]) actions = TGPerformable(tgAssignments[TGAssignmentKey([TGAppModePrefix stringByAppendingString:identifier], trigger)]);
+        if ([identifier isKindOfClass:NSString.class]) {
+            key = TGAssignmentKey([TGAppModePrefix stringByAppendingString:identifier], trigger);
+            actions = TGPerformable(tgAssignments[key]);
+        }
     }
-    if (!actions) actions = TGPerformable(tgAssignments[TGAssignmentKey(mode, trigger)]) ?: TGPerformable(tgAssignments[TGAssignmentKey(@"anywhere", trigger)]);
+    if (!actions) {
+        key = TGAssignmentKey(mode, trigger);
+        actions = TGPerformable(tgAssignments[key]);
+        if (!actions) {
+            key = TGAssignmentKey(@"anywhere", trigger);
+            actions = TGPerformable(tgAssignments[key]);
+        }
+    }
+    if (actions && outKey) *outKey = key;
     return actions;
+}
+
+static NSArray<NSString *> *TGActionFor(NSString *trigger) {
+    return TGActionForKey(trigger, NULL);
+}
+
+// 这条指派的仅当条件（没配就是 nil，nil 视为放行）。
+static NSArray<NSString *> *TGOnlyFor(NSString *actionKey) {
+    return actionKey ? tgConditions[actionKey] : nil;
 }
 
 // CoreFoundation exports this on iOS but the SDK doesn't declare it.
@@ -1396,8 +1437,9 @@ static BOOL TGConditionHolds(TGCondition condition) {
 
 // 仅当：触发器的前置门。所有条件 AND，全部成立才放行。
 // 条件读不懂按不成立处理——宁可不动，也不能把不该跑的动作放出去。
-static BOOL TGOnlyHolds(NSArray<NSString *> *steps) {
-    for (NSString *encoded in TGOnlyConditions(steps)) {
+// 入参就是条件键的值，和动作列表无关：动作怎么过滤都碰不到这里。
+static BOOL TGOnlyHolds(NSArray<NSString *> *conditions) {
+    for (NSString *encoded in conditions) {
         TGCondition condition;
         if (!TGConditionParse(encoded, &condition)) return NO;
         if (!TGConditionHolds(condition)) return NO;
@@ -1656,11 +1698,12 @@ static void TGShowMenu(NSString *menuID) {
 static BOOL TGCallBool(id target, SEL selector);
 
 static BOOL TGFire(NSString *trigger) {
-    NSArray *actions = TGActionFor(trigger);
+    NSString *key = nil;
+    NSArray *actions = TGActionForKey(trigger, &key);
     if (!actions) return NO;
     // 仅当是触发器级前置门：不成立就整条不执行，横幅也不出现。
     // 返回 NO 让手势调用方知道「这次没接管」，系统默认动作照旧。
-    if (!TGOnlyHolds(actions)) return NO;
+    if (!TGOnlyHolds(TGOnlyFor(key))) return NO;
     // 横幅只列这一次真正会执行的动作：条件不成立的动作不参与，
     // 一个都不成立时整条横幅都不出现——它说的是「刚运行了什么」，不是「配了什么」。
     if (tgShowBanners) {
@@ -3475,7 +3518,10 @@ static void TGUpdateOtherEvents(void) {
         if (actions.count) {
             // 测试也要走仅当：条件不成立时明确说一句，免得以为按钮坏了。
             // 真实触发不走这里，所以不会多出提示。
-            if (!TGOnlyHolds(actions)) TGShowBanner(@"仅当不成立，已跳过");
+            // 条件存在 if:<key>，测试通道没经过 TGActionForKey，自己读一次。
+            NSString *onlyKey = [TGOnlyKeyPrefix stringByAppendingString:key];
+            NSArray *conditions = TGOnlyList(CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)onlyKey, domain)));
+            if (!TGOnlyHolds(conditions)) TGShowBanner(@"仅当不成立，已跳过");
             else TGRunActions(actions);
         }
     });
