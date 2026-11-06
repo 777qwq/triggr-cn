@@ -34,8 +34,18 @@ static NSArray<NSDictionary *> *TGReadMenus(void) {
     return result;
 }
 
+// 仅当的一行：只显示条件本身（未在充电 / 已解锁），不带「如果」前缀。
+static NSString *TGOnlyTitle(NSString *encoded) {
+    TGCondition condition;
+    if (!TGConditionParse(encoded, &condition)) return encoded;
+    NSString *title = TGConditionTitle(&condition);
+    if (condition.wait > 0) title = [title stringByAppendingFormat:@"（%@ 秒后仍成立）", [NSString stringWithFormat:@"%g", condition.wait]];
+    return title;
+}
+
 static NSString *TGDisplayTitle(NSString *action) {
     if (TGStepIsDirective(action)) return TGStepTitle(action); // 如果/否则/结束条件
+    if (TGStepIsOnly(action)) return TGOnlyTitle([action substringFromIndex:TGOnlyPrefix.length]);
     if ([action hasPrefix:TGMenuPrefix]) {
         NSString *menuID = [action substringFromIndex:TGMenuPrefix.length];
         for (NSDictionary *menu in TGReadMenus()) if ([menu[@"id"] isEqualToString:menuID]) return [@"菜单：" stringByAppendingString:[menu[@"name"] description]];
@@ -660,9 +670,6 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
 }
 
 - (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath {
-    // 单动作条件是一个整体：拖 if 行或拖里面的动作都会把条件和动作拆开。
-    if (TGStepIsSingleIf(self.items, indexPath.row)) return NO;
-    if (TGStepSingleIfStart(self.items, indexPath.row + 1) >= 0) return NO;
     return !TGStepIsDirective(self.items[indexPath.row]); // 把「如果」拖离它的动作会改变块的含义
 }
 
@@ -682,14 +689,6 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
     // 删「如果」= 连它的「否则」「结束条件」一起删，里面的动作保留。
     if (TGStepIsIf(self.items[indexPath.row])) {
         [self removeIfAtRow:indexPath.row];
-        return;
-    }
-    // 删单动作条件里的动作 = 连它的条件一起删，不留空壳。
-    NSInteger onlyStart = TGStepSingleIfStart(self.items, indexPath.row + 1);
-    if (onlyStart >= 0) {
-        [self.items removeObjectsAtIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(onlyStart, 3)]];
-        [tableView reloadData];
-        [self changed];
         return;
     }
     [self.items removeObjectAtIndex:indexPath.row];
@@ -740,37 +739,6 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
         [self.tableView reloadData];
         [self changed];
     });
-}
-
-// 单动作条件：改条件，或把三行一起拆掉、动作留下。
-- (void)editSingleIfAtRow:(NSInteger)row {
-    if (!TGStepIsSingleIf(self.items, row)) return;
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:TGStepTitle(self.items[row])
-        message:@"条件不成立时，这个动作不会执行，也不会出现在动作横幅里。" preferredStyle:UIAlertControllerStyleActionSheet];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"更改条件…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        TGPresentConditionPicker(self, @"如果", ^(NSString *encoded) {
-            if (!encoded.length || !TGStepIsSingleIf(self.items, row)) return;
-            self.items[row] = TGStepIfDirective(encoded);
-            [self.tableView reloadData];
-            [self changed];
-        });
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"移除条件（保留动作）" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        [self removeSingleIfAtRow:row];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:[NSIndexPath indexPathForRow:row inSection:0]];
-    sheet.popoverPresentationController.sourceView = cell;
-    sheet.popoverPresentationController.sourceRect = cell.bounds;
-    [self presentViewController:sheet animated:YES completion:nil];
-}
-
-- (void)removeSingleIfAtRow:(NSInteger)row {
-    if (!TGStepIsSingleIf(self.items, row)) return;
-    [self.items removeObjectsAtIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(row, 3)]];
-    self.items = [TGTidySteps(TGTidyPauses(self.items)) mutableCopy];
-    [self.tableView reloadData];
-    [self changed];
 }
 
 // 点按「如果」：换条件、加「否则」、或拆掉条件但保留动作。
@@ -1011,28 +979,15 @@ static NSString *TGCategoryOf(NSString *action) {
     [picked setProperty:[notes componentsJoinedByString:@"\n\n"] forKey:@"footerText"];
     [specs addObject:picked];
     NSUInteger number = 0;
-    NSUInteger index = 0;
+    // 仅当行不进「已选择」：它们是触发器的前置门，不是动作序列的一部分。
+    NSArray<NSString *> *flow = TGStepsWithoutOnly(_selection);
+    NSUInteger index = _selection.count - flow.count;
     while (index < _selection.count) {
-        // 单动作条件：if + 动作 + endif 折成一行，条件写在动作的副标题上，
-        // 看起来就是动作自己的属性，而不是一段块。
-        if (TGStepIsSingleIf(_selection, index)) {
-            NSString *item = _selection[index + 1];
-            NSString *title = TGDisplayTitle(item);
-            if (_selection.count > 1) title = [NSString stringWithFormat:@"%lu.  %@", (unsigned long)++number, title];
-            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
-            [row setProperty:item forKey:@"tgPicked"];
-            [row setProperty:@(index + 1) forKey:@"tgPickedIndex"];
-            [row setProperty:@(index) forKey:@"tgSingleIf"];
-            [row setProperty:TGStepTitle(_selection[index]) forKey:@"tgSingleIfTitle"];
-            [specs addObject:row];
-            index += 3;
-            continue;
-        }
         NSString *item = _selection[index];
         BOOL pause = [item hasPrefix:TGPausePrefix];
         NSString *title = TGDisplayTitle(item);
         // 序号只数真正会执行的动作；条件行是结构，跟着它下面的动作走。
-        if (!pause && !TGStepIsDirective(item) && _selection.count > 1) title = [NSString stringWithFormat:@"%lu.  %@", (unsigned long)++number, title];
+        if (!pause && !TGStepIsDirective(item) && flow.count > 1) title = [NSString stringWithFormat:@"%lu.  %@", (unsigned long)++number, title];
         PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [row setProperty:item forKey:@"tgPicked"];
         // 同一个动作可以出现多次，indexOfObject: 只会命中第一份；左滑按这一屏的真实下标走。
@@ -1040,20 +995,30 @@ static NSString *TGCategoryOf(NSString *action) {
         [specs addObject:row];
         index++;
     }
-    // 只有一个动作时，它旁边也有一行「如果」：单动作的触发器没有顺序页。
-    if (!_menuEditor && _selection.count == 1
-        && !TGStepIsDirective(_selection[0]) && ![_selection[0] hasPrefix:TGPausePrefix]) {
-        PSSpecifier *only = [PSSpecifier preferenceSpecifierNamed:@"如果…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
-        [only setProperty:@0 forKey:@"tgAddIf"];
-        [specs addObject:only];
-    }
-    if (_selection.count > 1) {
+    // 只有一个动作时没有顺序可排；仅当不占顺序页。
+    if (flow.count > 1) {
         PSSpecifier *order = [PSSpecifier preferenceSpecifierNamed:@"顺序、停顿与条件" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [order setProperty:@YES forKey:@"tgOrder"];
         [specs addObject:order];
         PSSpecifier *clear = [PSSpecifier preferenceSpecifierNamed:@"全部移除" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
         [clear setProperty:@YES forKey:@"tgClear"];
         [specs addObject:clear];
+    }
+    // 仅当：触发器级前置门，放在动作之前。所有条件全部成立才放行，
+    // 任一不成立整条触发器都不执行，横幅也不出现。
+    if (!_menuEditor) {
+        PSSpecifier *onlyGroup = [PSSpecifier groupSpecifierWithName:@"仅当"];
+        [onlyGroup setProperty:@"这些条件必须全部成立才执行；任一不成立，触发器不会运行，也不会显示动作横幅。" forKey:@"footerText"];
+        [specs addObject:onlyGroup];
+        NSArray<NSString *> *conditions = TGOnlyConditions(_selection);
+        for (NSUInteger i = 0; i < conditions.count; i++) {
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:TGOnlyTitle(conditions[i]) target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+            [row setProperty:@(i) forKey:@"tgOnly"];
+            [specs addObject:row];
+        }
+        PSSpecifier *add = [PSSpecifier preferenceSpecifierNamed:@"添加条件…" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        [add setProperty:@YES forKey:@"tgAddOnly"];
+        [specs addObject:add];
     }
     [specs addObject:[PSSpecifier groupSpecifierWithName:@"动作"]];
     if ([self rowsForCategory:@"recent"].count) {
@@ -1230,45 +1195,61 @@ static NSString *TGCategoryOf(NSString *action) {
     [self reloadSpecifiers];
 }
 
-#pragma mark One action's condition
+#pragma mark Only-if conditions
 
-// 单个动作的「如果」：存 if + 动作 + endif，界面折成一行。
-- (void)promptSingleIfAt:(NSInteger)index indexPath:(NSIndexPath *)indexPath {
-    if (!TGStepIsSingleIf(_selection, index)) return;
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:TGStepTitle(_selection[index])
-        message:@"条件不成立时，这个动作不会执行，也不会出现在动作横幅里。" preferredStyle:UIAlertControllerStyleActionSheet];
+// 仅当存在动作列表最前面（only: 行），不参与 if/else/endif。
+// 每次改动整体重排：先前置条件、再其余动作，顺序保持不变。
+- (void)applyOnlyConditions:(NSArray<NSString *> *)conditions {
+    NSMutableArray<NSString *> *rest = [_selection mutableCopy];
+    NSUInteger old = MIN(TGOnlyConditions(_selection).count, rest.count);
+    [rest removeObjectsInRange:NSMakeRange(0, old)];
+    NSMutableArray<NSString *> *next = [NSMutableArray array];
+    for (NSString *encoded in conditions) [next addObject:[TGOnlyPrefix stringByAppendingString:encoded]];
+    [next addObjectsFromArray:rest];
+    _selection = next;
+    [self save];
+}
+
+- (void)promptAddOnlyCondition {
+    TGPresentConditionPicker(self, @"仅当", ^(NSString *encoded) {
+        if (!encoded.length) return;
+        NSArray<NSString *> *conditions = TGOnlyConditions(self->_selection);
+        if ([conditions containsObject:encoded]) return; // 同一个条件加两次没有意义
+        [self applyOnlyConditions:[conditions arrayByAddingObject:encoded]];
+    });
+}
+
+- (void)promptOnlyConditionAt:(NSUInteger)index indexPath:(NSIndexPath *)indexPath {
+    NSArray<NSString *> *conditions = TGOnlyConditions(_selection);
+    if (index >= conditions.count) return;
+    NSString *encoded = conditions[index];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:TGOnlyTitle(encoded)
+        message:@"条件不成立时，整条触发器都不执行，也不会显示动作横幅。" preferredStyle:UIAlertControllerStyleActionSheet];
     [sheet addAction:[UIAlertAction actionWithTitle:@"更改条件…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        TGPresentConditionPicker(self, @"如果", ^(NSString *encoded) {
-            if (!encoded.length || !TGStepIsSingleIf(self->_selection, index)) return;
-            self->_selection[index] = TGStepIfDirective(encoded);
-            [self save];
+        TGPresentConditionPicker(self, @"仅当", ^(NSString *newEncoded) {
+            if (!newEncoded.length) return;
+            NSMutableArray *next = [TGOnlyConditions(self->_selection) mutableCopy];
+            if (index < next.count) next[index] = newEncoded;
+            [self applyOnlyConditions:next];
         });
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"移除条件" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        [self removeSingleIfAt:index];
+        NSMutableArray *next = [TGOnlyConditions(self->_selection) mutableCopy];
+        if (index < next.count) [next removeObjectAtIndex:index];
+        [self applyOnlyConditions:next];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [self presentSheet:sheet fromRowAtIndexPath:indexPath];
 }
 
-- (void)promptAddIfTo:(NSInteger)index {
-    if (index < 0 || index >= (NSInteger)_selection.count) return;
-    TGPresentConditionPicker(self, @"如果", ^(NSString *encoded) {
-        if (!encoded.length || index >= (NSInteger)self->_selection.count) return;
-        [self->_selection insertObject:TGEndIfDirective atIndex:index + 1];
-        [self->_selection insertObject:TGStepIfDirective(encoded) atIndex:index];
-        [self save];
-    });
-}
-
-- (void)removeSingleIfAt:(NSInteger)index {
-    if (!TGStepIsSingleIf(_selection, index)) return;
-    [_selection removeObjectsAtIndexes:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(index, 3)]];
-    [self save];
-}
-
 // None clears; any other action toggles, appended to the run order.
-- (void)toggle:(NSString *)action {    if (action.length == 0) [_selection removeAllObjects];
+- (void)toggle:(NSString *)action {
+    if (action.length == 0) {
+        // 「全部移除」只清动作：仅当属于触发器，不该跟着动作一起消失。
+        NSArray<NSString *> *only = TGOnlyConditions(_selection);
+        _selection = [NSMutableArray array];
+        for (NSString *encoded in only) [_selection addObject:[TGOnlyPrefix stringByAppendingString:encoded]];
+    }
     else if ([_selection containsObject:action]) {
         [_selection removeObject:action];
         _selection = [TGTidySteps(TGTidyPauses(_selection)) mutableCopy];
@@ -1302,10 +1283,11 @@ static NSString *TGCategoryOf(NSString *action) {
 }
 
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
-    // 折行代表三行（if / 动作 / endif），移除要一起走，否则会留下空条件块。
-    NSNumber *only = [spec propertyForKey:@"tgSingleIf"];
+    NSNumber *only = [spec propertyForKey:@"tgOnly"];
     if (only) {
-        [self removeSingleIfAt:only.integerValue];
+        NSMutableArray *next = [TGOnlyConditions(_selection) mutableCopy];
+        if (only.unsignedIntegerValue < next.count) [next removeObjectAtIndex:only.unsignedIntegerValue];
+        [self applyOnlyConditions:next];
         return YES;
     }
     NSUInteger index = [self selectionIndexForSpecifier:spec];
@@ -1320,7 +1302,6 @@ static NSString *TGCategoryOf(NSString *action) {
 // 指令行是块结构，复制它们没有意义，所以只对真正的动作开放。
 - (BOOL)canDuplicateSpecifier:(PSSpecifier *)spec {
     NSString *item = [spec propertyForKey:@"tgPicked"];
-    if ([spec propertyForKey:@"tgSingleIf"]) return NO; // 复制一个带条件的开关没有意义
     return item.length > 0 && !TGStepIsDirective(item);
 }
 
@@ -1364,7 +1345,7 @@ static NSString *TGCategoryOf(NSString *action) {
 - (NSUInteger)positionOfItem:(NSString *)item {
     NSUInteger number = 0;
     for (NSString *picked in _selection) {
-        if ([picked hasPrefix:TGPausePrefix] || TGStepIsDirective(picked)) continue;
+        if ([picked hasPrefix:TGPausePrefix] || TGStepIsDirective(picked) || TGStepIsOnly(picked)) continue;
         number++;
         if ([picked isEqualToString:item]) return number;
     }
@@ -1385,32 +1366,33 @@ static NSString *TGCategoryOf(NSString *action) {
     NSString *prefix = [spec propertyForKey:@"tgCommandPrefix"], *name = [spec propertyForKey:@"tgSwitch"];
     UIFont *body = [UIFont preferredFontForTextStyle:UIFontTextStyleBody];
     NSString *picked = [spec propertyForKey:@"tgPicked"];
-    NSString *conditionTitle = [spec propertyForKey:@"tgSingleIfTitle"];
-    BOOL addIf = [spec propertyForKey:@"tgAddIf"] != nil;
+    NSNumber *onlyIndex = [spec propertyForKey:@"tgOnly"];
+    BOOL addOnly = [spec propertyForKey:@"tgAddOnly"] != nil;
+    BOOL conditionRow = onlyIndex != nil || addOnly;
     cell.textLabel.font = body;
     // 条件行（如果/否则/结束条件）统一紫色。
     cell.textLabel.textColor = [spec propertyForKey:@"tgClear"] ? UIColor.systemRedColor
-        : addIf ? UIColor.secondaryLabelColor
+        : addOnly ? UIColor.secondaryLabelColor
         : TGStepIsDirective(picked) ? UIColor.systemPurpleColor
         : [picked hasPrefix:TGPausePrefix] ? UIColor.secondaryLabelColor : UIColor.labelColor;
     cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
     cell.accessoryView = nil;
     cell.accessoryType = UITableViewCellAccessoryNone;
     // An open category's rows line up under its title, past the icon.
-    BOOL child = !_query && !picked && !category && ![spec propertyForKey:@"tgOrder"] && ![spec propertyForKey:@"tgClear"];
+    BOOL child = !_query && !picked && !category && !conditionRow && ![spec propertyForKey:@"tgOrder"] && ![spec propertyForKey:@"tgClear"];
     static UIImage *spacer;
     if (!spacer) spacer = [[[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(29, 29)] imageWithActions:^(UIGraphicsImageRendererContext *context) {}];
-    if (child) cell.imageView.image = spacer;
+    if (conditionRow) {
+        // 和系统设置里的勾选一致：已选绿色对勾，未选绿色加号。
+        cell.imageView.image = [UIImage systemImageNamed:addOnly ? @"plus.circle.fill" : @"checkmark.circle.fill"
+            withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:29 weight:UIImageSymbolWeightRegular]];
+        cell.imageView.tintColor = UIColor.systemGreenColor;
+    } else if (child) cell.imageView.image = spacer;
     else if (!category) cell.imageView.image = nil;
     cell.separatorInset = UIEdgeInsetsMake(0, child ? 60 : (category ? 60 : 16), 0, 0);
     NSString *detail = nil;
     if (picked) {
-        if (conditionTitle.length) {
-            detail = conditionTitle;
-            cell.detailTextLabel.textColor = UIColor.systemPurpleColor;
-        } else if (TGCategoryOf(picked)) detail = [self titleForCategory:TGCategoryOf(picked)];
-    } else if (addIf) {
-        detail = @"未设置";
+        if (TGCategoryOf(picked)) detail = [self titleForCategory:TGCategoryOf(picked)];
     } else if (category) {
         BOOL open = [_expanded isEqualToString:category];
         UIImage *chevron = [UIImage systemImageNamed:open ? @"chevron.down" : @"chevron.right"
@@ -1604,14 +1586,13 @@ static NSString *TGCategoryOf(NSString *action) {
         }
         return;
     }
-    NSNumber *onlyStart = [spec propertyForKey:@"tgSingleIf"];
-    if (onlyStart) {
-        [self promptSingleIfAt:onlyStart.integerValue indexPath:indexPath];
+    NSNumber *onlyIndex = [spec propertyForKey:@"tgOnly"];
+    if (onlyIndex) {
+        [self promptOnlyConditionAt:onlyIndex.unsignedIntegerValue indexPath:indexPath];
         return;
     }
-    NSNumber *addOnly = [spec propertyForKey:@"tgAddIf"];
-    if (addOnly) {
-        [self promptAddIfTo:addOnly.integerValue];
+    if ([spec propertyForKey:@"tgAddOnly"]) {
+        [self promptAddOnlyCondition];
         return;
     }
     NSString *picked = [spec propertyForKey:@"tgPicked"];
@@ -1643,12 +1624,17 @@ static NSString *TGCategoryOf(NSString *action) {
     }
     if ([spec propertyForKey:@"tgOrder"]) {
         TGSequenceController *editor = [TGSequenceController new];
-        editor.items = [_selection mutableCopy];
+        // 仅当不进顺序页：条件属于触发器，不属于动作序列。
+        editor.items = [TGStepsWithoutOnly(_selection) mutableCopy];
+        NSArray<NSString *> *only = TGOnlyConditions(_selection);
         __weak typeof(self) weakSelf = self;
         editor.onChange = ^(NSArray<NSString *> *items) {
             __strong typeof(self) strongSelf = weakSelf;
             if (!strongSelf) return;
-            strongSelf->_selection = [TGTidySteps(items) mutableCopy];
+            NSMutableArray<NSString *> *next = [NSMutableArray array];
+            for (NSString *encoded in only) [next addObject:[TGOnlyPrefix stringByAppendingString:encoded]];
+            [next addObjectsFromArray:items];
+            strongSelf->_selection = [TGTidySteps(next) mutableCopy];
             [strongSelf setPreferenceValue:TGStoredValue(strongSelf->_selection) specifier:strongSelf.specifier];
         };
         [self.navigationController pushViewController:editor animated:YES];

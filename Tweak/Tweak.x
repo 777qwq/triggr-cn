@@ -1394,6 +1394,17 @@ static BOOL TGConditionHolds(TGCondition condition) {
     return condition.negated ? !holds : holds;
 }
 
+// 仅当：触发器的前置门。所有条件 AND，全部成立才放行。
+// 条件读不懂按不成立处理——宁可不动，也不能把不该跑的动作放出去。
+static BOOL TGOnlyHolds(NSArray<NSString *> *steps) {
+    for (NSString *encoded in TGOnlyConditions(steps)) {
+        TGCondition condition;
+        if (!TGConditionParse(encoded, &condition)) return NO;
+        if (!TGConditionHolds(condition)) return NO;
+    }
+    return YES;
+}
+
 // 只求值、不执行：算出这一次真正会跑哪些动作，给横幅用。
 // 与 TGRunSteps 同构，但不含停顿与 @秒 的等待——停顿只延后，不改「跑不跑」。
 // 用同一份条件求值逻辑，横幅才不会把条件不成立的动作也写上去。
@@ -1403,6 +1414,7 @@ static NSArray<NSString *> *TGPlanActions(NSArray<NSString *> *steps) {
     BOOL running = YES;
     for (NSString *step in steps) {
         if (![step isKindOfClass:NSString.class] || !step.length) continue;
+        if (TGStepIsOnly(step)) continue; // 仅当在执行前已经判过，不参与执行流
         if (TGStepIsIf(step)) {
             TGCondition condition;
             if (!TGConditionParse([step substringFromIndex:TGIfPrefix.length], &condition)) {
@@ -1442,6 +1454,7 @@ static void TGRunSteps(NSArray<NSString *> *steps, NSUInteger index, NSArray<NSN
     BOOL running = stack.count ? (stack.lastObject.intValue & 1) != 0 : YES;
     for (NSUInteger i = index; i < steps.count; i++) {
         NSString *step = steps[i];
+        if (TGStepIsOnly(step)) continue; // 前置条件已在 TGFire 判过
         if (TGStepIsIf(step)) {
             NSString *encoded = [step substringFromIndex:TGIfPrefix.length];
             TGCondition condition;
@@ -1645,6 +1658,9 @@ static BOOL TGCallBool(id target, SEL selector);
 static BOOL TGFire(NSString *trigger) {
     NSArray *actions = TGActionFor(trigger);
     if (!actions) return NO;
+    // 仅当是触发器级前置门：不成立就整条不执行，横幅也不出现。
+    // 返回 NO 让手势调用方知道「这次没接管」，系统默认动作照旧。
+    if (!TGOnlyHolds(actions)) return NO;
     // 横幅只列这一次真正会执行的动作：条件不成立的动作不参与，
     // 一个都不成立时整条横幅都不出现——它说的是「刚运行了什么」，不是「配了什么」。
     if (tgShowBanners) {
@@ -3456,7 +3472,12 @@ static void TGUpdateOtherEvents(void) {
         NSMutableArray *actions = [NSMutableArray array];
         for (id item in [value isKindOfClass:NSArray.class] ? value : (value ? @[value] : @[]))
             if ([item isKindOfClass:NSString.class] && [item length]) [actions addObject:item];
-        if (actions.count) TGRunActions(actions);
+        if (actions.count) {
+            // 测试也要走仅当：条件不成立时明确说一句，免得以为按钮坏了。
+            // 真实触发不走这里，所以不会多出提示。
+            if (!TGOnlyHolds(actions)) TGShowBanner(@"仅当不成立，已跳过");
+            else TGRunActions(actions);
+        }
     });
     int tapToken;
     int airPlayListToken;

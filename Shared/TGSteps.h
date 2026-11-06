@@ -276,20 +276,29 @@ static inline NSInteger TGStepEndIf(NSArray<NSString *> *steps, NSInteger ifInde
     return -1;
 }
 
-// 单个动作的条件：if + 一个动作 + endif，三行、无 else、不嵌套。
-// 它只是普通条件块的一种形态（给一个动作加「如果」），执行器和存储都不特殊。
-static inline BOOL TGStepIsSingleIf(NSArray<NSString *> *steps, NSInteger index) {
-    if (index < 0 || index + 2 >= (NSInteger)steps.count) return NO;
-    if (!TGStepIsIf(steps[index])) return NO;
-    NSString *body = steps[index + 1];
-    if (TGStepIsDirective(body) || [body hasPrefix:TGPausePrefix]) return NO;
-    return TGStepIsEndIf(steps[index + 2]);
+// 「仅当」：触发器级前置条件，存在列表最前面，形如 "only:charging"。
+// 它不属于执行流——不参与 if/else/endif 的配对，也不出现在顺序页里。
+// 用独立前缀而不是 if:，是为了和用户自己写的「如果」块分开：
+// 两者都从列表开头开始时，光看行内容分不出谁是谁。
+static inline BOOL TGStepIsOnly(NSString *step) {
+    return [step hasPrefix:TGOnlyPrefix];
 }
 
-// 这一行是某个单动作条件的收尾 endif 时返回开头 if 的下标，否则 -1。
-static inline NSInteger TGStepSingleIfStart(NSArray<NSString *> *steps, NSInteger index) {
-    if (index < 2 || index >= (NSInteger)steps.count || !TGStepIsEndIf(steps[index])) return -1;
-    return TGStepIsSingleIf(steps, index - 2) ? index - 2 : -1;
+// 列表开头连续的 only: 行就是这条触发器的全部前置条件，全部 AND。
+static inline NSArray<NSString *> *TGOnlyConditions(NSArray<NSString *> *steps) {
+    NSMutableArray<NSString *> *conditions = [NSMutableArray array];
+    for (NSString *step in steps) {
+        if (![step isKindOfClass:NSString.class] || !TGStepIsOnly(step)) break;
+        [conditions addObject:[step substringFromIndex:TGOnlyPrefix.length]];
+    }
+    return conditions;
+}
+
+// 去掉 only: 行之后剩下的执行流，给顺序页编辑。
+static inline NSArray<NSString *> *TGStepsWithoutOnly(NSArray<NSString *> *steps) {
+    NSUInteger skip = TGOnlyConditions(steps).count;
+    if (!skip) return steps;
+    return [steps subarrayWithRange:NSMakeRange(skip, steps.count - skip)];
 }
 
 // 这一行嵌在几层块里，编辑器用来缩进。

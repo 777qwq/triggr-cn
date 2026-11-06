@@ -212,6 +212,9 @@ static const TGGroup TGActionGroups[] = {
 #define TGElseAction @"else"
 #define TGEndIfAction @"endif"
 #define TGIfCustomAction @"if:custom"
+// 「仅当」：触发器级前置条件，存在动作列表最前面，全部 AND。
+// 独立前缀，不参与 if/else/endif 的配对，也不进顺序页。
+#define TGOnlyPrefix @"only:"
 #define TGMenuPrefix @"menu:"   // "menu:<id>" shows that menu
 #define TGMenuKeyPrefix @"menu/" // "menu/<id>" = the menu's items
 // Custom event prefixes (see TGIsCustomTrigger).
