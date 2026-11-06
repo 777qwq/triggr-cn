@@ -276,6 +276,22 @@ static inline NSInteger TGStepEndIf(NSArray<NSString *> *steps, NSInteger ifInde
     return -1;
 }
 
+// 单个动作的条件：if + 一个动作 + endif，三行、无 else、不嵌套。
+// 它只是普通条件块的一种形态（给一个动作加「如果」），执行器和存储都不特殊。
+static inline BOOL TGStepIsSingleIf(NSArray<NSString *> *steps, NSInteger index) {
+    if (index < 0 || index + 2 >= (NSInteger)steps.count) return NO;
+    if (!TGStepIsIf(steps[index])) return NO;
+    NSString *body = steps[index + 1];
+    if (TGStepIsDirective(body) || [body hasPrefix:TGPausePrefix]) return NO;
+    return TGStepIsEndIf(steps[index + 2]);
+}
+
+// 这一行是某个单动作条件的收尾 endif 时返回开头 if 的下标，否则 -1。
+static inline NSInteger TGStepSingleIfStart(NSArray<NSString *> *steps, NSInteger index) {
+    if (index < 2 || index >= (NSInteger)steps.count || !TGStepIsEndIf(steps[index])) return -1;
+    return TGStepIsSingleIf(steps, index - 2) ? index - 2 : -1;
+}
+
 // 这一行嵌在几层块里，编辑器用来缩进。
 static inline NSInteger TGStepDepth(NSArray<NSString *> *steps, NSInteger index) {
     NSInteger depth = 0;
@@ -346,3 +362,5 @@ static inline NSString *TGStepTitle(NSString *step) {
     }
     return step;
 }
+
+

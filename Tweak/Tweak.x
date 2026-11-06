@@ -1394,6 +1394,47 @@ static BOOL TGConditionHolds(TGCondition condition) {
     return condition.negated ? !holds : holds;
 }
 
+// 只求值、不执行：算出这一次真正会跑哪些动作，给横幅用。
+// 与 TGRunSteps 同构，但不含停顿与 @秒 的等待——停顿只延后，不改「跑不跑」。
+// 用同一份条件求值逻辑，横幅才不会把条件不成立的动作也写上去。
+static NSArray<NSString *> *TGPlanActions(NSArray<NSString *> *steps) {
+    NSMutableArray<NSString *> *plan = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *stack = [NSMutableArray array];
+    BOOL running = YES;
+    for (NSString *step in steps) {
+        if (![step isKindOfClass:NSString.class] || !step.length) continue;
+        if (TGStepIsIf(step)) {
+            TGCondition condition;
+            if (!TGConditionParse([step substringFromIndex:TGIfPrefix.length], &condition)) {
+                [stack addObject:@(running ? 1 : 0)];
+                running = NO;
+                continue;
+            }
+            if (!running) {
+                [stack addObject:@0];
+                continue;
+            }
+            BOOL taken = TGConditionHolds(condition);
+            [stack addObject:@(1 | (taken ? 2 : 0))];
+            running = taken;
+        } else if (TGStepIsElse(step)) {
+            if (!stack.count) continue;
+            int frame = stack.lastObject.intValue;
+            running = (frame & 1) && !(frame & 2);
+            stack[stack.count - 1] = @(frame | 2);
+        } else if (TGStepIsEndIf(step)) {
+            if (!stack.count) continue;
+            running = (stack.lastObject.intValue & 1) != 0;
+            [stack removeLastObject];
+        } else if ([step hasPrefix:TGPausePrefix]) {
+            continue;
+        } else if (running) {
+            if (TGCanPerform(step) && ![step isEqualToString:@"system.nothing"]) [plan addObject:step];
+        }
+    }
+    return plan;
+}
+
 // 执行一整个列表。帧用 NSNumber 存：bit 0 = 外层块在跑，bit 1 = 本块的 if 被选中。
 // 停顿（以及条件的 @秒）之后靠 dispatch_after 把帧快照带过去，重入时状态不丢。
 static void TGRunSteps(NSArray<NSString *> *steps, NSUInteger index, NSArray<NSNumber *> *frames) {
@@ -1604,10 +1645,11 @@ static BOOL TGCallBool(id target, SEL selector);
 static BOOL TGFire(NSString *trigger) {
     NSArray *actions = TGActionFor(trigger);
     if (!actions) return NO;
+    // 横幅只列这一次真正会执行的动作：条件不成立的动作不参与，
+    // 一个都不成立时整条横幅都不出现——它说的是「刚运行了什么」，不是「配了什么」。
     if (tgShowBanners) {
         NSMutableArray *titles = [NSMutableArray array];
-        for (NSString *action in actions)
-            if (![action hasPrefix:TGPausePrefix] && ![action hasPrefix:TGMenuPrefix] && !TGStepIsDirective(action) && ![action isEqualToString:@"system.nothing"]) [titles addObject:TGSpringBoardTitle(action)];
+        for (NSString *action in TGPlanActions(actions)) [titles addObject:TGSpringBoardTitle(action)];
         if (titles.count) TGShowBanner([titles componentsJoinedByString:@" + "]);
     }
     TGRunActions(actions);
