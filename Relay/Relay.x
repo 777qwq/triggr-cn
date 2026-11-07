@@ -153,15 +153,25 @@ static BOOL TGEscapeIn(UIViewController *root) {
     return TGEscapeTree(root, 0);
 }
 
-// 页面身份：根类名 + 各子控制器的类名与子视图数。
+// 页面身份：可见链上每一层的类名与子视图数，nav 栈深和 tab 选中项再显式记一位。
 // 只用来判断「动作发出后页面有没有变」，不展示、不记录。
-static NSString *TGPageStamp(UIViewController *vc) {
-    if (!vc) return @"";
-    NSMutableString *s = [NSMutableString stringWithString:NSStringFromClass(vc.class)];
-    for (UIViewController *child in vc.childViewControllers)
-        [s appendFormat:@"/%@#%lu", NSStringFromClass(child.class),
-            (unsigned long)child.viewIfLoaded.subviews.count];
-    [s appendFormat:@"#%lu", (unsigned long)vc.viewIfLoaded.subviews.count];
+//
+// 不能只看根控制器的直接子控制器：微信的「根容器 → 内层导航 → 会话 → 文章」里，
+// 文章退回会话时根控制器的子控制器和子视图数都没变，戳就相同，0.35 秒后的复核会
+// 误判成「没动」，于是再补一次 pop——用户看到的就是一次按键退两层。
+// viewControllers.count / selectedIndex 必须显式拼：TGVisibleChain 只取 nav 栈顶、
+// 只走选中的 tab，换人时链的形状可能完全一样。
+static NSString *TGPageStamp(UIViewController *root) {
+    if (!root) return @"";
+    NSMutableString *s = [NSMutableString string];
+    for (UIViewController *vc in TGVisibleChain(root)) {
+        [s appendFormat:@"%@#%lu|", NSStringFromClass(vc.class),
+            (unsigned long)vc.viewIfLoaded.subviews.count];
+        if ([vc isKindOfClass:[UINavigationController class]])
+            [s appendFormat:@"nav%lu|", (unsigned long)((UINavigationController *)vc).viewControllers.count];
+        if ([vc isKindOfClass:[UITabBarController class]])
+            [s appendFormat:@"tab%ld|", (long)((UITabBarController *)vc).selectedIndex];
+    }
     return s;
 }
 
