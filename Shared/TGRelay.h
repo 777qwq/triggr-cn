@@ -10,5 +10,9 @@
 // A Darwin notification state set by SpringBoard: which events are assigned.
 #define TGRelayWanted "com.johndie.triggr/relay-wanted"
 #define TGRelayBack "com.johndie.triggr/back"
+// 实验（cn4.17-1）：屏幕级右滑的页面戳探针。SpringBoard 注入前问一句，
+// Relay 在 0.35 秒后比对页面身份，真变了才回 swipe-moved。
+#define TGRelaySwipeProbe "com.johndie.triggr/swipe-probe"
+#define TGRelaySwipeMoved "com.johndie.triggr/swipe-moved"
 #define TGRelayWantsStatusBar 1ULL
 #define TGRelayWantsShake 2ULL

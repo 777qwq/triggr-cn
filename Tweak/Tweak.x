@@ -32,6 +32,7 @@
 #import "../Shared/TGPaths.h"
 #import "../Shared/TGRelay.h"
 #import "../Shared/TGSteps.h"
+#import "TGSwipe.h"
 
 @interface SBLockScreenManager : NSObject
 + (instancetype)sharedInstance;
@@ -1074,7 +1075,9 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            notify_post(TGRelayBack); // Relay：App 内左滑返回手势常驻；此动作=程序化返回
+            // 实验分支 cn4.17-1：只做屏幕级右滑注入。原路径（SpringBoard 通知 Relay 走
+            // escape/pop）已摘除，Relay 的 EdgeBack 也一并关掉，免得两套机制互相干扰。
+            TGSwipeBackStart();
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

@@ -165,6 +165,40 @@ static NSString *TGPageStamp(UIViewController *vc) {
     return s;
 }
 
+// ---- 实验（cn4.17-1）：屏幕级右滑的页面戳探针 ----
+// 只用于诊断注入的滑动有没有让页面动起来，不参与任何返回逻辑（本分支已摘除 escape/pop）。
+// 和 TGPageStamp 的区别：走 TGVisibleChain，并把 nav 栈深、tab 选中项显式拼进戳——
+// 微信那种「根容器 → 内层 nav → 会话 → 文章」的层级，只看直接子控制器测不出变化。
+static NSString *TGSwipeStamp(UIViewController *root) {
+    if (!root) return @"";
+    NSMutableString *s = [NSMutableString string];
+    for (UIViewController *vc in TGVisibleChain(root)) {
+        [s appendFormat:@"%@#%lu|", NSStringFromClass(vc.class),
+            (unsigned long)vc.viewIfLoaded.subviews.count];
+        if ([vc isKindOfClass:[UINavigationController class]])
+            [s appendFormat:@"nav%lu|", (unsigned long)((UINavigationController *)vc).viewControllers.count];
+        if ([vc isKindOfClass:[UITabBarController class]])
+            [s appendFormat:@"tab%ld|", (long)((UITabBarController *)vc).selectedIndex];
+    }
+    return s;
+}
+
+static void TGInstallSwipeProbe(void) {
+    static int token = -1;
+    notify_register_dispatch(TGRelaySwipeProbe, &token, dispatch_get_main_queue(), ^(int t) {
+        UIWindow *win = TGRelayWindows().firstObject;
+        NSString *before = TGSwipeStamp(win.rootViewController);
+        // 探针在按下时就到了，右滑本身要 0.17 秒、转场还要落位，所以看两次：
+        // 0.30 秒多数还没走完（转场中 pop 尚未改栈），0.70 秒再补一次。
+        for (NSNumber *delay in @[@0.30, @0.70]) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                UIWindow *now = TGRelayWindows().firstObject;
+                if (![TGSwipeStamp(now.rootViewController) isEqualToString:before]) notify_post(TGRelaySwipeMoved);
+            });
+        }
+    });
+}
+
 // 容器级兜底：走 UINavigationController 的公开 pop。
 // 只此一条，不再先试私有 _popViewControllerWithTransition:allowPoppingLast:——
 // 私有那条只能猜成功（调用完 return YES），签名错位时读垃圾参数、行为随机，
@@ -216,6 +250,8 @@ static void TGBackStep(UIWindow *win) {
     });
 }
 
+// 实验分支：本分支不调用它（返回改由 SpringBoard 注入屏幕级滑动），保留以便回退。
+__attribute__((unused))
 static void TGRelayDoBack(void) {
     UIWindow *win = TGRelayWindows().firstObject;
     if (!win) return;
@@ -223,26 +259,15 @@ static void TGRelayDoBack(void) {
     TGBackStep(win);
 }
 
-// ---- 左滑返回（leftPan 核心方案）：hook 系统交互过渡类，让淘宝类禁用边缘返回的 App 复活原生边缘手势（全系统动画） ----
-%group EdgeBack
-%hook _UINavigationInteractiveTransition
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    BOOL r = %orig;
-    if (!r && [g isKindOfClass:NSClassFromString(@"UIScreenEdgePanGestureRecognizer")]) {
-        // cn4.9 守卫：只在"有级可返且没有转场进行中"才强制放行（淘宝类禁用返回的 App 照常复活）。
-        // 根页/转场中尊重原生 NO——此前的无条件放行会把交互式过渡打进半开状态，致原生左滑失效。
-        UINavigationController *nav = nil;
-        if ([(id)self respondsToSelector:@selector(navigationController)])
-            nav = ((UINavigationController *(*)(id, SEL))objc_msgSend)(self, @selector(navigationController));
-        if (nav && nav.viewControllers.count > 1 && !nav.transitionCoordinator) {
-            g.enabled = YES;
-            return YES;
-        }
-    }
-    return r;
-}
-%end
-%end
+// ---- 左滑返回（EdgeBack）----
+// 实验分支 cn4.17-1：整个 group 停用。它会强制放行系统边缘返回手势，本身也是一条
+// 返回路径，留着会和「屏幕级右滑注入」抢同一个手势，实验结果就分不清是谁生效。
+// 原实现见 cn4.17（git show 19ecbcf:Relay/Relay.x）。
+// %group EdgeBack
+// %hook _UINavigationInteractiveTransition
+// - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g { ... }
+// %end
+// %end
 
 static void CNRelayAttachAll(void);
 // ---- 多指手势（cn2.75b，严格按 2.0 Relay 反汇编复刻）----
@@ -386,17 +411,20 @@ static void CNRelayAttachAll(void) {
     BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
     if (!springBoard) {
         %init(StatusBar);
-        %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
+        // 实验分支 cn4.17-1：EdgeBack（强制放行系统边缘返回手势）已停用。
+        // 它本身就是一条返回路径，留着会和注入的滑动抢同一个手势，实验结果分不清是谁的。
         %init(InAppGestures); // 多指手势（cn2.75b，2.0 逆向复刻）
         CNRelayAttachAll();
         [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
             CNRelayAttachAll();
         }];
-        // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
-        static int backToken = -1;
-        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
- TGRelayDoBack();
-        });
+        // 实验分支 cn4.17-1：原有的返回链路（SpringBoard 通知 → escape/pop）已摘除，
+        // 只保留下面这个诊断探针，回答「注入的滑动到底有没有让页面动」。
+        // static int backToken = -1;
+        // notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
+        //     TGRelayDoBack();
+        // });
+        TGInstallSwipeProbe();
     }
 }
 
