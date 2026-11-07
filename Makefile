@@ -1,10 +1,11 @@
-# 本机 ld64.lld 不认 arm64e，也不支持 arm64e 的 chained fixups：
-#   - 直接 -arch arm64e → lld 报 unsupported，或静默按 arm64 链、留下 subtype 0；
-#   - 加 -fixup_chains 时对 arm64e 报「only supported on x86_64 and arm64」；
-#   - 不加则是旧式 bind 流，设备上 dyld 报 "bad bind opcode 0x00"，插件加载不出来。
-# 处理：ld 包装把 -arch arm64e 改写成 -arch arm64（代码相同），链接时统一开 chained fixups，
-# 再由 lipo 包装把 arm64e 切片的 cpusubtype 改成 0x80000002（arm64e + ptrauth ABI）。
-# 这就是 cn4.17 能用那版的实际形态。
+# 工具链（2026-11-07 起，与原作者 README 的 Building 一节对齐）：
+#   作者：Theos + iOS 16.5 SDK + rootless；Makefile 默认 arm64，release 加 arm64e，
+#   arm64e 需要 Xcode 的 clang 或上游 LLVM 20+。
+#   本机没有 Xcode，所以：
+#     clang   → clang-20（上游 LLVM 20，arm64e 目标文件带 0x80000002 / ptrauth ABI）
+#     ld      → 自建 cctools-port ld64-956.6（支持 arm64e + chained fixups）
+#     .tbd    → /opt/tgstub 下的 arm64e 占位库（ld64 未编入 libtapi，读不了 .tbd）
+#   产出的 arm64e 切片与 cn4.17 同构：subtype 0x80000002，pointer_format 12。
 export ARCHS = arm64 arm64e
 export TARGET = iphone:clang:16.5:15.0
 
@@ -29,9 +30,7 @@ ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 export ADDITIONAL_CFLAGS += -DTG_ROOTHIDE
 endif
 
-# 关掉 chained fixups 会让 dyld 去读旧式 bind 流，这台机器上的 ld64.lld 写出来的
-# bind 段末尾是 0 填充，iOS 报 "bad bind opcode 0x00"（cn4.17-1 首次打包踩到）。
-export ADDITIONAL_LDFLAGS += -Wl,-fixup_chains
+# -fixup_chains 由工具链的 ld 包装统一追加，这里不要再加链接参数。
 
 include $(THEOS)/makefiles/common.mk
 
