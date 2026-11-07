@@ -32,7 +32,6 @@
 #import "../Shared/TGPaths.h"
 #import "../Shared/TGRelay.h"
 #import "../Shared/TGSteps.h"
-#import "TGSwipe.h"
 
 @interface SBLockScreenManager : NSObject
 + (instancetype)sharedInstance;
@@ -1075,9 +1074,10 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // 实验分支 cn4.17-1：只做屏幕级右滑注入。原路径（SpringBoard 通知 Relay 走
-            // escape/pop）已摘除，Relay 的 EdgeBack 也一并关掉，免得两套机制互相干扰。
-            TGSwipeBackStart();
+            // 实验分支 cn4.17-7：SpringBoard 只负责递话，注入本身在 App 进程里做
+            //（Relay 收到 swipe-go 后用 _enqueueHIDEvent: 塞一次左缘右滑）。
+            // cn4.17-6 在 SpringBoard 里直接 dispatch，事件到不了前台 App，页面纹丝不动。
+            notify_post(TGRelaySwipeGo);
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

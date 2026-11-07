@@ -199,6 +199,242 @@ static void TGInstallSwipeProbe(void) {
     });
 }
 
+// ---- 实验（cn4.17-7）：在 App 自己进程里注入「左缘 → 右滑」 ----
+// cn4.17-6 是在 SpringBoard 里 IOHIDEventSystemClientDispatchEvent，日志显示注入执行了、
+// 页面不动：SpringBoard 发出的合成触摸不会跨进程进到前台 App 的事件队列。
+// 改成在 App 进程内构造 IOHIDEvent，用 UIApplication 的 _enqueueHIDEvent: 直接入队，
+// 不经过 IPC，也不需要猜 SpringBoard 往哪个 mach port 转发。
+//
+// 坐标单位、是否带 window contextID 各机型/版本有差异，一次按键按顺序试几种组合，
+// 哪种让页面戳变了就停；也可以用 SwipeVariant（1..N）钉死只跑其中一种。
+
+#import <dlfcn.h>
+#import <mach/mach_time.h>
+
+typedef struct __IOHIDEvent *IOHIDEventRef;
+typedef struct __IOHIDEventSystemClient *IOHIDEventSystemClientRef;
+
+typedef IOHIDEventRef (*TGDigitizerFn)(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t,
+                                       uint32_t, uint32_t, double, double, double, double,
+                                       double, unsigned char, unsigned char, uint32_t);
+typedef IOHIDEventRef (*TGFingerFn)(CFAllocatorRef, uint64_t, uint32_t, uint32_t, uint32_t,
+                                    uint32_t, double, double, double, double, double,
+                                    unsigned char, unsigned char, uint32_t);
+typedef void (*TGAppendFn)(IOHIDEventRef, IOHIDEventRef, uint32_t);
+typedef IOHIDEventSystemClientRef (*TGClientFn)(CFAllocatorRef);
+typedef void (*TGDispatchFn)(IOHIDEventSystemClientRef, IOHIDEventRef);
+typedef void (*TGSetInfoFn)(IOHIDEventRef, uint32_t, unsigned char, unsigned char,
+                            CFStringRef, uint64_t, uint32_t);
+
+static TGDigitizerFn tgHIDDigitizer;
+static TGFingerFn tgHIDFinger;
+static TGAppendFn tgHIDAppend;
+static TGClientFn tgHIDClientCreate;
+static TGDispatchFn tgHIDDispatch;
+static TGSetInfoFn tgHIDSetInfo;
+
+// IOHIDDigitizerEventMask：range=在感应范围内，touch=接触，position=坐标有效。
+enum { TGHIDRange = 1, TGHIDTouch = 2, TGHIDPosition = 4 };
+// kIOHIDDigitizerTransducerTypeHand
+enum { TGHIDHand = 3 };
+
+static BOOL TGHIDLoad(void) {
+    static BOOL ok;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        void *h = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_LAZY);
+        if (h) {
+            tgHIDDigitizer = (TGDigitizerFn)dlsym(h, "IOHIDEventCreateDigitizerEvent");
+            tgHIDFinger = (TGFingerFn)dlsym(h, "IOHIDEventCreateDigitizerFingerEvent");
+            tgHIDAppend = (TGAppendFn)dlsym(h, "IOHIDEventAppendEvent");
+            tgHIDClientCreate = (TGClientFn)dlsym(h, "IOHIDEventSystemClientCreate");
+            tgHIDDispatch = (TGDispatchFn)dlsym(h, "IOHIDEventSystemClientDispatchEvent");
+        }
+        // BKSHIDEventSetDigitizerInfo：给事件标上目标窗口，UIApplication 才知道投给谁。
+        void *b = dlopen("/System/Library/PrivateFrameworks/BackBoardServices.framework/BackBoardServices", RTLD_LAZY);
+        if (b) tgHIDSetInfo = (TGSetInfoFn)dlsym(b, "BKSHIDEventSetDigitizerInfo");
+        ok = tgHIDDigitizer && tgHIDFinger && tgHIDAppend;
+    });
+    return ok;
+}
+
+static void TGSwipeLog(NSString *line) {
+    NSString *dir = @"/var/mobile/Library/Logs";
+    NSString *path = [dir stringByAppendingPathComponent:@"TriggrSwipe.log"];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    [fm createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:NULL];
+    NSDictionary *attrs = [fm attributesOfItemAtPath:path error:NULL];
+    if (attrs && [attrs fileSize] > 64 * 1024) [fm removeItemAtPath:path error:NULL];
+    NSData *data = [[NSString stringWithFormat:@"%@ %@\n", [NSDate date], line]
+                    dataUsingEncoding:NSUTF8StringEncoding];
+    if (![fm fileExistsAtPath:path]) {
+        [data writeToFile:path atomically:YES];
+        return;
+    }
+    NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
+    [fh seekToEndOfFile];
+    [fh writeData:data];
+    [fh closeFile];
+}
+
+static IOHIDEventRef TGHIDEvent(CGPoint p, BOOL down, BOOL normalized, CGSize size) {
+    uint64_t now = mach_absolute_time();
+    uint32_t mask = down ? (TGHIDRange | TGHIDTouch | TGHIDPosition)
+                         : (TGHIDTouch | TGHIDPosition);
+    double x = p.x, y = p.y;
+    if (normalized && size.width > 1 && size.height > 1) {
+        x /= size.width;
+        y /= size.height;
+    }
+    IOHIDEventRef hand = tgHIDDigitizer(kCFAllocatorDefault, now, TGHIDHand, 0, 0, mask, 0,
+                                        0, 0, 0, 0, 0, down, down, 0);
+    IOHIDEventRef finger = tgHIDFinger(kCFAllocatorDefault, now, 0, 2, mask, 0,
+                                       x, y, 0, down ? 1.0 : 0.0, 0, down, down, 0);
+    if (hand && finger) tgHIDAppend(hand, finger, 0);
+    if (finger) CFRelease(finger);
+    return hand;
+}
+
+static uint32_t TGWindowContext(UIWindow *w) {
+    if (!w) return 0;
+    for (NSString *name in @[@"_contextId", @"contextID", @"_windowContextID"]) {
+        SEL sel = NSSelectorFromString(name);
+        if ([w respondsToSelector:sel])
+            return ((uint32_t (*)(id, SEL))objc_msgSend)(w, sel);
+    }
+    return 0;
+}
+
+static BOOL TGSwipePost(IOHIDEventRef e, int via, uint32_t context) {
+    if (!e) return NO;
+    if (via == 0) {
+        static SEL sel;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ sel = NSSelectorFromString(@"_enqueueHIDEvent:"); });
+        // 不能缓存 respondsToSelector 的结果：Relay 构造时 sharedApplication 可能还没建好。
+        UIApplication *app = UIApplication.sharedApplication;
+        if (!app || ![app respondsToSelector:sel]) return NO;
+        if (context && tgHIDSetInfo) tgHIDSetInfo(e, context, 0, 0, NULL, 0, 0);
+        ((void (*)(id, SEL, IOHIDEventRef))objc_msgSend)(app, sel, e);
+        return YES;
+    }
+    static IOHIDEventSystemClientRef client;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        if (tgHIDClientCreate) client = tgHIDClientCreate(kCFAllocatorDefault);
+    });
+    if (!client || !tgHIDDispatch) return NO;
+    tgHIDDispatch(client, e);
+    return YES;
+}
+
+static const int TGSwipeSteps = 10;
+
+static void TGSwipeRun(int step, CGPoint from, CGPoint to, BOOL normalized, int via,
+                       uint32_t context, void (^done)(void)) {
+    CGSize size = UIScreen.mainScreen.bounds.size;
+    if (step > TGSwipeSteps) {
+        IOHIDEventRef up = TGHIDEvent(to, NO, normalized, size);
+        TGSwipePost(up, via, context);
+        if (up) CFRelease(up);
+        if (done) done();
+        return;
+    }
+    CGFloat t = (CGFloat)step / TGSwipeSteps;
+    CGPoint p = CGPointMake(from.x + (to.x - from.x) * t, from.y + (to.y - from.y) * t);
+    IOHIDEventRef e = TGHIDEvent(p, YES, normalized, size);
+    TGSwipePost(e, via, context);
+    if (e) CFRelease(e);
+    // 起点按下后多停 60ms，模拟「手指落定再拖」，太快容易被判成轻扫而不是返回手势。
+    int64_t gap = (step == 0) ? (60 * NSEC_PER_MSEC) : (14 * NSEC_PER_MSEC);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, gap), dispatch_get_main_queue(), ^{
+        TGSwipeRun(step + 1, from, to, normalized, via, context, done);
+    });
+}
+
+static void TGSwipeTryVariants(NSArray<NSDictionary *> *variants, NSUInteger idx) {
+    if (idx >= variants.count) {
+        TGSwipeLog(@"所有组合都没让页面动");
+        return;
+    }
+    NSDictionary *v = variants[idx];
+    BOOL normalized = [v[@"normalized"] boolValue];
+    int via = [v[@"via"] intValue];
+    uint32_t context = [v[@"context"] unsignedIntValue];
+    UIWindow *win = TGRelayWindows().firstObject;
+    if (context) {
+        context = TGWindowContext(win);
+        if (!context) {
+            TGSwipeLog([NSString stringWithFormat:@"组合 %lu 取不到窗口 contextID，跳过",
+                        (unsigned long)idx + 1]);
+            TGSwipeTryVariants(variants, idx + 1);
+            return;
+        }
+    }
+    NSString *before = TGSwipeStamp(win.rootViewController);
+    TGSwipeLog([NSString stringWithFormat:@"组合 %lu：%@ %@%@", (unsigned long)idx + 1,
+                normalized ? @"归一化" : @"点数",
+                via == 0 ? @"enqueue" : @"dispatch",
+                context ? @" +context" : @""]);
+    CGSize size = UIScreen.mainScreen.bounds.size;
+    CGPoint from = CGPointMake(3, size.height * 0.55);
+    CGPoint to = CGPointMake(size.width * 0.72, size.height * 0.55);
+    TGSwipeRun(0, from, to, normalized, via, context, ^{
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.55 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            NSString *now = TGSwipeStamp(TGRelayWindows().firstObject.rootViewController);
+            if (![now isEqualToString:before]) {
+                TGSwipeLog([NSString stringWithFormat:@"组合 %lu 生效，页面已变化", (unsigned long)idx + 1]);
+                return;
+            }
+            TGSwipeLog([NSString stringWithFormat:@"组合 %lu 页面未变化", (unsigned long)idx + 1]);
+            TGSwipeTryVariants(variants, idx + 1);
+        });
+    });
+}
+
+static void TGSwipeInject(void) {
+    static BOOL running;
+    if (running) {
+        TGSwipeLog(@"上一次注入还没结束，忽略");
+        return;
+    }
+    if (!TGHIDLoad()) {
+        TGSwipeLog(@"IOKit 符号取不到，注入不可用");
+        return;
+    }
+    NSString *domain = @"com.johndie.triggr";
+    CFPreferencesAppSynchronize((__bridge CFStringRef)domain);
+    id wantVariant = CFBridgingRelease(CFPreferencesCopyAppValue(CFSTR("SwipeVariant"), (__bridge CFStringRef)domain));
+
+    NSMutableArray<NSDictionary *> *variants = [NSMutableArray array];
+    NSArray *all = @[
+        @{@"normalized": @YES, @"via": @0, @"context": @NO},  // 归一化 + enqueue
+        @{@"normalized": @NO,  @"via": @0, @"context": @NO},  // 点数 + enqueue
+        @{@"normalized": @YES, @"via": @0, @"context": @YES}, // 归一化 + context + enqueue
+        @{@"normalized": @NO,  @"via": @0, @"context": @YES}, // 点数 + context + enqueue
+        @{@"normalized": @YES, @"via": @1, @"context": @NO},  // 归一化 + dispatch（-6 的老路）
+    ];
+    int pick = [wantVariant respondsToSelector:@selector(intValue)] ? [wantVariant intValue] : 0;
+    if (pick >= 1 && pick <= (int)all.count) [variants addObject:all[pick - 1]];
+    else [variants addObjectsFromArray:all];
+
+    running = YES;
+    // 一组约 0.2 秒手势 + 0.55 秒观察；留足余量再放开，避免连按叠加成两次滑动。
+    double budget = 0.9 * variants.count + 0.5;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(budget * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ running = NO; });
+    TGSwipeLog([NSString stringWithFormat:@"注入开始，共 %lu 组", (unsigned long)variants.count]);
+    TGSwipeTryVariants(variants, 0);
+}
+
+static void TGInstallSwipeInject(void) {
+    static int token = -1;
+    notify_register_dispatch(TGRelaySwipeGo, &token, dispatch_get_main_queue(), ^(int t) {
+        TGSwipeInject();
+    });
+}
+
 // 容器级兜底：走 UINavigationController 的公开 pop。
 // 只此一条，不再先试私有 _popViewControllerWithTransition:allowPoppingLast:——
 // 私有那条只能猜成功（调用完 return YES），签名错位时读垃圾参数、行为随机，
@@ -425,6 +661,7 @@ static void CNRelayAttachAll(void) {
         //     TGRelayDoBack();
         // });
         TGInstallSwipeProbe();
+        TGInstallSwipeInject();
     }
 }
 
