@@ -1,11 +1,8 @@
-# 工具链（2026-11-07 起，与原作者 README 的 Building 一节对齐）：
-#   作者：Theos + iOS 16.5 SDK + rootless；Makefile 默认 arm64，release 加 arm64e，
-#   arm64e 需要 Xcode 的 clang 或上游 LLVM 20+。
-#   本机没有 Xcode，所以：
-#     clang   → clang-20（上游 LLVM 20，arm64e 目标文件带 0x80000002 / ptrauth ABI）
-#     ld      → 自建 cctools-port ld64-956.6（支持 arm64e + chained fixups）
-#     .tbd    → /opt/tgstub 下的 arm64e 占位库（ld64 未编入 libtapi，读不了 .tbd）
-#   产出的 arm64e 切片与 cn4.17 同构：subtype 0x80000002，pointer_format 12。
+# 构建环境与原作者 README 的 Building 一节一致：Theos + iOS 16.5 SDK + rootless。
+# arm64e 必须用 Xcode 的 clang 产（上游 LLVM 20+ 也可以）——它决定 ObjC 指针的
+# ptrauth 编码；Linux 上的开源链接器写不出 iOS 16 认可的 arm64e 类数据，
+# 产物会在 SpringBoard 注入时崩在 readClass。所以统一在 GitHub Actions
+# 的 macos-15 runner 上出包，见 .github/workflows/build.yml。
 export ARCHS = arm64 arm64e
 export TARGET = iphone:clang:16.5:15.0
 
@@ -30,7 +27,7 @@ ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 export ADDITIONAL_CFLAGS += -DTG_ROOTHIDE
 endif
 
-# -fixup_chains 由工具链的 ld 包装统一追加，这里不要再加链接参数。
+# chained fixups 由 Xcode 的 ld64 默认开启，不需要额外链接参数。
 
 include $(THEOS)/makefiles/common.mk
 
