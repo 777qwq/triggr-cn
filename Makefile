@@ -1,4 +1,9 @@
-export ARCHS = arm64 arm64e
+# 本机工具链（Ubuntu clang18 + ld64.lld-18 + 自建 ld/lipo 包装）编不出可用的 arm64e 切片：
+# 加 -fixup_chains 时 ld 直接报「only supported on x86_64 and arm64」，不加则回落到旧式
+# bind 流，装到设备上 dyld 报 "bad bind opcode 0x00"（设置插件直接加载不出来）。
+# 这里只出 arm64 单切片：arm64 代码在 arm64e 进程里照常加载，格式是现代的 chained fixups。
+# 有完整 cctools 的环境可以改回 "arm64 arm64e"。
+export ARCHS = arm64
 export TARGET = iphone:clang:16.5:15.0
 
 # 无根包丢了 arm64e 切片 = 装上去什么都不会发生（cn4.11 出包时踩到）：
@@ -21,6 +26,10 @@ INSTALL_TARGET_PROCESSES = Preferences SpringBoard
 ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 export ADDITIONAL_CFLAGS += -DTG_ROOTHIDE
 endif
+
+# 关掉 chained fixups 会让 dyld 去读旧式 bind 流，这台机器上的 ld64.lld 写出来的
+# bind 段末尾是 0 填充，iOS 报 "bad bind opcode 0x00"（cn4.17-1 首次打包踩到）。
+export ADDITIONAL_LDFLAGS += -Wl,-fixup_chains
 
 include $(THEOS)/makefiles/common.mk
 
