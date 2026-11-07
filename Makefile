@@ -1,9 +1,11 @@
-# 本机工具链（Ubuntu clang18 + ld64.lld-18 + 自建 ld/lipo 包装）编不出可用的 arm64e 切片：
-# 加 -fixup_chains 时 ld 直接报「only supported on x86_64 and arm64」，不加则回落到旧式
-# bind 流，装到设备上 dyld 报 "bad bind opcode 0x00"（设置插件直接加载不出来）。
-# 这里只出 arm64 单切片：arm64 代码在 arm64e 进程里照常加载，格式是现代的 chained fixups。
-# 有完整 cctools 的环境可以改回 "arm64 arm64e"。
-export ARCHS = arm64
+# 本机 ld64.lld 不认 arm64e，也不支持 arm64e 的 chained fixups：
+#   - 直接 -arch arm64e → lld 报 unsupported，或静默按 arm64 链、留下 subtype 0；
+#   - 加 -fixup_chains 时对 arm64e 报「only supported on x86_64 and arm64」；
+#   - 不加则是旧式 bind 流，设备上 dyld 报 "bad bind opcode 0x00"，插件加载不出来。
+# 处理：ld 包装把 -arch arm64e 改写成 -arch arm64（代码相同），链接时统一开 chained fixups，
+# 再由 lipo 包装把 arm64e 切片的 cpusubtype 改成 0x80000002（arm64e + ptrauth ABI）。
+# 这就是 cn4.17 能用那版的实际形态。
+export ARCHS = arm64 arm64e
 export TARGET = iphone:clang:16.5:15.0
 
 # 无根包丢了 arm64e 切片 = 装上去什么都不会发生（cn4.11 出包时踩到）：
