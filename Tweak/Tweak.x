@@ -2068,11 +2068,6 @@ static BOOL TGVolumeEnded(int which) {
 // triple, and so how long a press waits when Double or Triple is assigned.
 // Real quick presses on an iPhone 7 came 216-313 ms apart.
 static const CFTimeInterval TGLockPressWindow = 0.4;
-// 暗屏时第一下要先点亮背光，人看到亮屏再按第二下，间隔比亮屏连按长得多；
-// 0.4s 在那个场景里几乎必然把双击拆成两串。按一串的起点分档：亮屏仍是
-// 0.4s（不改变已有手感），暗屏用 0.7s。只作用于 Face ID 的按下计数。
-static const CFTimeInterval TGLockWakeWindow = 0.7;
-static CFTimeInterval tgLockFaceIDWindow = TGLockPressWindow;
 static NSUInteger tgLockPresses;
 static CFTimeInterval tgLockLastPress;
 static NSUInteger tgLockGeneration;
@@ -2152,12 +2147,12 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
     CFTimeInterval reportedAt = CACurrentMediaTime();
     __block void (^settle)(void);
     void (^wait)(void) = ^{
-        CFTimeInterval left = tgLockFaceIDWindow - (CACurrentMediaTime() - tgLockLastDown);
+        CFTimeInterval left = TGLockPressWindow - (CACurrentMediaTime() - tgLockLastDown);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(MAX(left, 0.02) * NSEC_PER_SEC)), dispatch_get_main_queue(), settle);
     };
     settle = ^{
         if (generation != tgLockFaceIDGeneration) { settle = nil; return; }
-        if (CACurrentMediaTime() - tgLockLastDown < tgLockFaceIDWindow) { wait(); return; } // another press came
+        if (CACurrentMediaTime() - tgLockLastDown < TGLockPressWindow) { wait(); return; } // another press came
         NSUInteger count = tgLockDowns;
         // iOS's own reaction: replayed right away it still works; after a wait
         // iOS ignores the stale press, so ask its actions object directly.
@@ -2181,7 +2176,7 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
     };
     // iOS reports a lone press only after its own wait for a second one, so the
     // presses have usually stopped already: decide now.
-    if (CACurrentMediaTime() - tgLockLastDown >= tgLockFaceIDWindow) settle();
+    if (CACurrentMediaTime() - tgLockLastDown >= TGLockPressWindow) settle();
     else wait();
     return YES;
 }
@@ -2192,13 +2187,11 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
 - (void)buttonDown:(UIGestureRecognizer *)recognizer {
     if ([recognizer respondsToSelector:@selector(state)] && recognizer.state == UIGestureRecognizerStateBegan) {
         CFTimeInterval now = CACurrentMediaTime();
-        // 用上一串的窗口判断这一下是否还属于它：暗屏串宽，亮屏串窄。
-        // 两者的宽度必须与 settle 等的一致，否则会出现「算同一串但单击已结算」。
-        if (now - tgLockLastDown < tgLockFaceIDWindow) tgLockDowns++;
+        // 亮屏、暗屏用同一个窗口，按键手感一致。
+        if (now - tgLockLastDown < TGLockPressWindow) tgLockDowns++;
         else {
             tgLockDowns = 1;
             tgLockBurstScreenOn = TGScreenIsOn(); // before iOS wakes it for this press
-            tgLockFaceIDWindow = tgLockBurstScreenOn ? TGLockPressWindow : TGLockWakeWindow;
             tgLockBurstHandled = NO;
         }
         tgLockLastDown = now;

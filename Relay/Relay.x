@@ -165,31 +165,11 @@ static NSString *TGPageStamp(UIViewController *vc) {
     return s;
 }
 
-// 私有 pop：_popViewControllerWithTransition:allowPoppingLast:
-// transition 2 = pop；allowPoppingLast:NO 保证栈只剩一页时不弹——弹空栈会崩。
-// 只对真正的 UINavigationController 子类动手：自绘容器没有这个方法，也不该猜。
-static BOOL TGPrivatePop(UIWindow *win) {
-    UIViewController *root = win.rootViewController;
-    if (!root) return NO;
-    SEL sel = NSSelectorFromString(@"_popViewControllerWithTransition:allowPoppingLast:");
-    for (UIViewController *vc in TGVisibleChain(root).reverseObjectEnumerator) {
-        if (![vc isKindOfClass:[UINavigationController class]]) continue;
-        UINavigationController *nav = (UINavigationController *)vc;
-        if (nav.viewControllers.count < 2) continue;
-        if (nav.transitionCoordinator) continue; // 转场中不碰，打断动画会留半开的界面
-        if (![nav respondsToSelector:sel]) continue;
-        @try {
-            ((id (*)(id, SEL, int, BOOL))objc_msgSend)(nav, sel, 2, NO);
-        } @catch (NSException *e) {
-            // 私有方法抛什么都不能带崩宿主
-        }
-        return YES;
-    }
-    return NO;
-}
-
-// 公开 pop：私有方法被系统改签名或整个消失时的最后一级。
-// 只走 UINavigationController 的公开 API，落到哪一页由业务自己决定。
+// 容器级兜底：走 UINavigationController 的公开 pop。
+// 只此一条，不再先试私有 _popViewControllerWithTransition:allowPoppingLast:——
+// 私有那条只能猜成功（调用完 return YES），签名错位时读垃圾参数、行为随机，
+// 而 @try 抓不到「参数个数变了」这种不抛异常的失败；公开 API 有 ABI 承诺，
+// 还能拿返回值判断到底弹没弹。兜底必须是可判、无副作用的最后一步。
 static BOOL TGPublicPop(UIWindow *win) {
     UIViewController *root = win.rootViewController;
     if (!root) return NO;
@@ -210,12 +190,6 @@ static BOOL TGPublicPop(UIWindow *win) {
     return NO;
 }
 
-// 容器级兜底：先私有，私有没人应答再公开。
-static void TGPopContainer(UIWindow *win) {
-    if (TGPrivatePop(win)) return;
-    TGPublicPop(win);
-}
-
 static void TGBackStep(UIWindow *win) {
     UIViewController *root = win.rootViewController;
     if (!root) return;
@@ -228,7 +202,7 @@ static void TGBackStep(UIWindow *win) {
         acted = NO;
     }
     if (!acted) { // 没人应答，直接交给容器
-        TGPopContainer(win);
+        TGPublicPop(win);
         return;
     }
 
@@ -238,7 +212,7 @@ static void TGBackStep(UIWindow *win) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         UIWindow *w = weakWin;
         if (!w) return;
-        if ([TGPageStamp(w.rootViewController) isEqualToString:stamp]) TGPopContainer(w);
+        if ([TGPageStamp(w.rootViewController) isEqualToString:stamp]) TGPublicPop(w);
     });
 }
 
