@@ -82,6 +82,15 @@ static NSString *TGButtonText(NSString *text) {
 
 #pragma mark - Storage
 
+// SpringBoard 写的诊断键：已配置、但当前系统上跑不起来的动作。只读，不参与配置。
+// 只读不写：设置页没有能力判断私有 API（它不在 SpringBoard 进程里），也不该去改配置。
+static NSArray<NSString *> *TGUnavailableActions(void) {
+    CFStringRef domain = (__bridge CFStringRef)TGDomain;
+    CFPreferencesAppSynchronize(domain);
+    id value = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)TGUnavailableKey, domain));
+    return [value isKindOfClass:[NSArray class]] ? value : @[];
+}
+
 // Each assignment is its own key ("<mode>/<trigger>" = action id, "" = none),
 // saved through PSListController's own preference API (setPreferenceValue: with
 // the specifier's defaults/key/PostNotification), which is what persists
@@ -982,10 +991,15 @@ static NSString *TGCategoryOf(NSString *action) {
         NSArray<NSString *> *legacy = _menuEditor ? @[] : TGLegacyOnlyConditions(_selection);
         if (legacy.count) {
             _selection = [TGStepsWithoutOnly(_selection) mutableCopy];
-            if (!TGReadConditions(self, _mode, _trigger).count) {
+            // 新键已有条件时也要写回：只删旧行不落库（原来只在「新键为空」时写）会把旧
+            // 条件直接丢掉——升级到一半、或手动改过 plist 的用户，触发器从此无条件执行。
+            // 两边合并、去重，谁也不覆盖谁。
+            NSMutableArray<NSString *> *merged = [TGReadConditions(self, _mode, _trigger) mutableCopy];
+            for (NSString *condition in legacy) if (![merged containsObject:condition]) [merged addObject:condition];
+            if (merged.count) {
                 PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
                 TGConfigureConditionStorage(spec, _mode, _trigger);
-                [self setPreferenceValue:legacy specifier:spec];
+                [self setPreferenceValue:merged specifier:spec];
             }
             // 直接写回，不走 save：save 会 reloadSpecifiers，而这里正在建 specifiers。
             NSArray<NSString *> *tidy = TGTidySteps(_selection);
@@ -1010,6 +1024,16 @@ static NSString *TGCategoryOf(NSString *action) {
     NSString *warning = TGTriggerWarning(_trigger, [self replacesButtons]);
     if (!_selection.count && TGDefaultActionTitle(_trigger)) warning = nil; // the empty-state note covers it
     if (warning) [notes addObject:TGButtonText(warning)];
+
+    // 已配置、但当前系统跑不起来的动作。不可用等于没配（触发器会退回系统行为），
+    // 这是对的——但如果不说话，用户只会觉得「我配的东西没了」。这里只提示，不清配置。
+    NSArray<NSString *> *unavailable = TGUnavailableActions();
+    if (unavailable.count && _selection.count) {
+        NSMutableArray *names = [NSMutableArray array];
+        for (NSString *item in _selection)
+            if ([unavailable containsObject:item]) [names addObject:TGDisplayTitle(item)];
+        if (names.count) [notes addObject:[NSString stringWithFormat:@"当前系统上不可用，触发时会被跳过：%@。配置本身没有丢，通常是系统版本改了私有接口。", [names componentsJoinedByString:@"、"]]];
+    }
 
     // What's picked, in run order, so it's visible without opening each category.
     PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];

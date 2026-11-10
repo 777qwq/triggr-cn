@@ -24,6 +24,7 @@
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <dlfcn.h>
+#import <mach/mach_time.h>
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import <CallKit/CallKit.h>
@@ -57,6 +58,8 @@ static NSSet<NSString *> *tgAssignedTriggers;
 // Every "<mode>/<trigger>" key in the domain with a non-empty action id.
 static void TGUpdateOtherEvents(void);
 static void TGUpdateAPI(void);
+static BOOL TGCanPerform(NSString *action);
+static void TGSyncUnavailable(NSDictionary<NSString *, NSArray<NSString *> *> *assignments);
 static BOOL tgRequireUnlock = YES;
 static BOOL tgAllowAPI;
 static BOOL tgReplaces = YES; // assigned button triggers replace iOS's action; off = they run alongside
@@ -66,6 +69,29 @@ static BOOL tgShowBanners;
 static NSDictionary<NSString *, NSString *> *tgMenuNames; // id -> name
 
 static BOOL tgHasAppAssignments; // some "app:<bundle id>/…" assignment exists
+
+// 把「已配置、但当前系统上跑不起来」的动作写到偏好里，只给设置页看。
+//
+// 可用性检查本身是不能去掉的（不可用的动作等于没配，触发器退回系统行为，不会出现
+// 「按了没反应」的按键黑洞），但它对用户完全不可诊断：私有 API 在某个 iOS 版本改名，
+// 用户看到的是「我配的双击电源键突然恢复成锁屏了」，配置还在，却没有任何解释。
+// 这条通道就是那句解释。只在集合真的变化时写盘，避免每次读偏好都刷一次偏好文件。
+static void TGSyncUnavailable(NSDictionary<NSString *, NSArray<NSString *> *> *assignments) {
+    NSMutableSet<NSString *> *unavailable = [NSMutableSet set];
+    for (NSArray *actions in assignments.allValues)
+        for (NSString *action in actions) {
+            if (TGStepIsDirective(action) || [action hasPrefix:TGPausePrefix] || [action hasPrefix:TGMenuPrefix]) continue;
+            if (!TGCanPerform(action)) [unavailable addObject:action];
+        }
+    NSArray *sorted = [unavailable.allObjects sortedArrayUsingSelector:@selector(compare:)];
+    static NSArray *last;
+    if (last ? [last isEqualToArray:sorted] : sorted.count == 0) return;
+    last = sorted;
+    CFStringRef domain = (__bridge CFStringRef)TGDomain;
+    CFPreferencesSetAppValue((__bridge CFStringRef)TGUnavailableKey, (__bridge CFPropertyListRef)sorted, domain);
+    CFPreferencesAppSynchronize(domain);
+}
+
 static void TGReadAssignments(void) {
     CFStringRef domain = (__bridge CFStringRef)TGDomain;
     CFPreferencesAppSynchronize(domain);
@@ -92,6 +118,7 @@ static void TGReadAssignments(void) {
         tgAssignedTriggers = [NSSet set];
         TGUpdateOtherEvents();
         TGUpdateAPI();
+        TGSyncUnavailable(@{});
         return;
     }
     NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
@@ -131,6 +158,7 @@ static void TGReadAssignments(void) {
     tgAssignedTriggers = triggers;
     TGUpdateOtherEvents();
     TGUpdateAPI();
+    TGSyncUnavailable(assignments);
 }
 
 #pragma mark - Mode
@@ -330,10 +358,12 @@ static BOOL TGGetURL(NSString *string) {
 // Starts the jailbreak's sh with these arguments (mobile user's PATH, no I/O).
 // iOS 18's SpringBoard may refuse the jailbreak's sh by its symlinked path; the
 // same file by its real path is allowed, so that's tried next.
+// TGRunShell 在全局并发队列上跑，这条标记是唯一被多个线程读写的状态：
+// 用 __atomic 内建而不是普通 BOOL，避免「读到写了一半的值」这种只在高负载下出现的怪现象。
 static BOOL tgSpawnRefused; // SpringBoard may not start programs here (iOS 18): use triggrd
 
 static int TGSpawnShell(const char *const argv[], pid_t *pid) {
-    if (tgSpawnRefused) return EPERM;
+    if (__atomic_load_n(&tgSpawnRefused, __ATOMIC_RELAXED)) return EPERM;
     posix_spawn_file_actions_t actions;
     posix_spawn_file_actions_init(&actions);
     posix_spawn_file_actions_addopen(&actions, STDIN_FILENO, "/dev/null", O_RDONLY, 0);
@@ -348,7 +378,7 @@ static int TGSpawnShell(const char *const argv[], pid_t *pid) {
         if (realpath(shell, real)) {
             int second = posix_spawn(pid, real, &actions, NULL, (char *const *)argv, (char *const *)envp);
             error = second;
-            if (second == EPERM) tgSpawnRefused = YES;
+            if (second == EPERM) __atomic_store_n(&tgSpawnRefused, YES, __ATOMIC_RELAXED);
         }
     }
     posix_spawn_file_actions_destroy(&actions);
@@ -393,6 +423,19 @@ static id TGSpringBoardControl(SEL accessor) {
     if ([springBoard respondsToSelector:accessor]) return ((id (*)(id, SEL))objc_msgSend)(springBoard, accessor);
     id workspace = TGShared("SBMainWorkspace");
     return [workspace respondsToSelector:accessor] ? ((id (*)(id, SEL))objc_msgSend)(workspace, accessor) : nil;
+}
+
+// 私有 API 调用前的签名核对。respondsToSelector 只证明「方法名在」，不证明参数个数与
+// 类型：签名一变，下面的 objc_msgSend 强转读到的就是寄存器里的垃圾，表现为随机崩溃或
+// 随机行为，而 @try 抓不住（cn4.17 从 Relay 删掉私有 _popViewControllerWithTransition:
+// 就是这个原因）。这里用 runtime 的 method_getNumberOfArguments 核对参数个数，
+// 多一个少一个都不调，交回上层走兜底——「这个动作这次不可用」远好过随机崩。
+// 新增私有 API 调用请先过这一关，并在调用点注明验证过的 iOS 版本。
+static BOOL TGPrivateArity(id target, SEL selector, NSUInteger arity) {
+    if (!target || !selector || ![target respondsToSelector:selector]) return NO;
+    Class cls = object_getClass(target);
+    Method method = class_getInstanceMethod(cls, selector) ?: class_getClassMethod(cls, selector);
+    return method && method_getNumberOfArguments(method) == arity + 2; // self + _cmd
 }
 
 static BOOL TGCall(id target, SEL sel, BOOL dryRun) {
@@ -847,9 +890,9 @@ static void TGUnlockDevice(NSString *password) {
     if (!mgr) return;
     if ([mgr respondsToSelector:@selector(_wakeScreenForTapToWake)])
         ((void (*)(id, SEL))objc_msgSend)(mgr, @selector(_wakeScreenForTapToWake));
-    if ([mgr respondsToSelector:@selector(_attemptUnlockWithPasscode:finishUIUnlock:)]) {
-        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, @selector(_attemptUnlockWithPasscode:finishUIUnlock:), password, YES);
-    } else {
+    SEL unlock = @selector(_attemptUnlockWithPasscode:finishUIUnlock:);
+    if (TGPrivateArity(mgr, unlock, 2)) { // 2 参（verify: 16.7 / 18.x）
+        ((void (*)(id, SEL, NSString *, BOOL))objc_msgSend)(mgr, unlock, password, YES);
     }
 }
 
@@ -990,10 +1033,6 @@ static void TGRelaunchSpringBoard(id service, int attempt) {
     ((void (*)(id, SEL, BOOL))objc_msgSend)(service, @selector(exitAndRelaunch:), YES);
 }
 
-            #include <mach/mach_time.h>
-
-
-
 // cn4.9: 短触（transient）via CoreHaptics，强度/锐度可调；引擎不可用或启动失败时
 // 退回 UISelectionFeedbackGenerator 的 selection tick（同为短触，无冲击感）。
 // 主线程创建/调用；引擎按需 start，isAutoShutdownEnabled 交给系统管理。
@@ -1064,7 +1103,8 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.quitapp": ^BOOL(BOOL dry) {
                 id service = TGShared("FBSystemService");
                 SEL sel = @selector(terminateApplication:forReason:andReport:withDescription:completion:);
-                if (![service respondsToSelector:sel]) return NO;
+                // 5 参；iOS 16/17/18 上一致，签名改了就宁可不动（verify: 18.x）
+                if (!TGPrivateArity(service, sel, 5)) return NO;
                 if (!dry) {
                     NSString *app = TGFrontAppIdentifier();
                     if (app) ((void (*)(id, SEL, id, long long, BOOL, id, id))objc_msgSend)(service, sel, app, 1, NO, @"Triggr: Quit Current App", nil);
@@ -1383,6 +1423,9 @@ static BOOL TGConditionLocked(void) {
     return !TGScreenIsOn();
 }
 
+// 「正在播放」= 系统媒体控制器说在放，不看输出路由：AirPlay / 蓝牙音响在放也算。
+// 这是有意的语义——用户关心的是「音乐在放」，不是「声音从这台手机出」。
+// 若哪天要区分，加 AVAudioSession.currentRoute 的端口类型判断，别改这里的默认行为。
 static BOOL TGConditionMusicPlaying(void) {
     return TGCallBool(TGShared("SBMediaController"), @selector(isPlaying));
 }
@@ -1491,9 +1534,12 @@ static NSArray<NSString *> *TGPlanActions(NSArray<NSString *> *steps) {
 
 // 执行一整个列表。帧用 NSNumber 存：bit 0 = 外层块在跑，bit 1 = 本块的 if 被选中。
 // 停顿（以及条件的 @秒）之后靠 dispatch_after 把帧快照带过去，重入时状态不丢。
+// 重入时的「当前块跑不跑」必须看 bit 1（本块被选中），不能看 bit 0（外层在跑）：
+// @秒 等完发现条件已不成立时，会把 bit 1 清掉再重入，那时块内动作要跳过、配对的
+// else 要接上——按 bit 0 判断的话两者都会反过来。
 static void TGRunSteps(NSArray<NSString *> *steps, NSUInteger index, NSArray<NSNumber *> *frames) {
     NSMutableArray<NSNumber *> *stack = frames ? [frames mutableCopy] : [NSMutableArray array];
-    BOOL running = stack.count ? (stack.lastObject.intValue & 1) != 0 : YES;
+    BOOL running = stack.count ? (stack.lastObject.intValue & 2) != 0 : YES;
     for (NSUInteger i = index; i < steps.count; i++) {
         NSString *step = steps[i];
         if (TGStepIsOnly(step)) continue; // 前置条件已在 TGFire 判过
@@ -1521,7 +1567,18 @@ static void TGRunSteps(NSArray<NSString *> *steps, NSUInteger index, NSArray<NSN
                 NSUInteger next = i + 1;
                 dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(condition.wait * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
                     TGCondition again;
-                    if (TGConditionParse(encoded, &again) && TGConditionHolds(again)) TGRunSteps(steps, next, snapshot);
+                    BOOL still = TGConditionParse(encoded, &again) && TGConditionHolds(again);
+                    // 等待期间条件不再成立：把这一帧标成「本块未选中」再继续，让配对的
+                    // else 接上、endif 之后恢复。cn4.19 之前这里直接 return，结果是整段后
+                    // 续——else 分支、endif 之后的动作——全部不执行，表现为「偶尔按了没
+                    // 反应，后面配的动作一起消失」。
+                    NSArray *frames = snapshot;
+                    if (!still && snapshot.count) {
+                        NSMutableArray *cleared = [snapshot mutableCopy];
+                        cleared[cleared.count - 1] = @([cleared.lastObject intValue] & ~2);
+                        frames = cleared;
+                    }
+                    TGRunSteps(steps, next, frames);
                 });
                 return;
             }
@@ -1575,7 +1632,8 @@ static BOOL TGNeedsUnlock(NSArray<NSString *> *actions) {
 static void TGRunAfterUnlock(NSArray<NSString *> *actions) {
     id manager = TGShared("SBLockScreenManager");
     SEL setBlock = @selector(setUnlockActionBlock:), showPasscode = @selector(_setPasscodeVisible:animated:);
-    if (![manager respondsToSelector:setBlock] || ![manager respondsToSelector:showPasscode]) {
+    // setUnlockActionBlock: 1 参、_setPasscodeVisible:animated: 2 参（verify: 16.7 / 18.x）
+    if (!TGPrivateArity(manager, setBlock, 1) || !TGPrivateArity(manager, showPasscode, 2)) {
         return;
     }
     void (^run)(void) = ^{
@@ -1626,40 +1684,50 @@ static UIWindow *TGOverlayWindow(BOOL interactive) {
 }
 
 static UIWindow *tgBannerWindow;
+static UILabel *tgBannerLabel;
 static NSUInteger tgBannerGeneration;
 
 // A small pill at the top naming what ran; fades after ~1.3 s.
+// 窗口与标签只建一次，之后只换文本：连按触发器时每次都 new 一个 UIWindow，
+// SpringBoard 侧每建每销都是一轮完整布局，抖动就是在「刚跑完动作」的时候出现的。
 static void TGShowBanner(NSString *text) {
-    [tgBannerWindow setHidden:YES];
-    tgBannerWindow = TGOverlayWindow(NO);
-    if (!tgBannerWindow) return;
-    UIView *root = tgBannerWindow.rootViewController.view;
-    UILabel *label = [UILabel new];
-    label.text = [@"  " stringByAppendingString:[text stringByAppendingString:@"  "]];
-    label.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
-    label.textColor = UIColor.labelColor;
-    label.backgroundColor = UIColor.secondarySystemBackgroundColor;
-    label.layer.cornerRadius = 15;
-    label.layer.masksToBounds = YES;
-    label.textAlignment = NSTextAlignmentCenter;
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    [root addSubview:label];
-    [NSLayoutConstraint activateConstraints:@[
-        [label.topAnchor constraintEqualToAnchor:root.safeAreaLayoutGuide.topAnchor constant:6],
-        [label.centerXAnchor constraintEqualToAnchor:root.centerXAnchor],
-        [label.heightAnchor constraintEqualToConstant:30],
-        [label.widthAnchor constraintLessThanOrEqualToAnchor:root.widthAnchor constant:-32],
-    ]];
-    tgBannerWindow.alpha = 0;
+    UIWindowScene *scene = TGWindowScene();
+    if (tgBannerWindow && scene && tgBannerWindow.windowScene != scene) { // 场景换了：旧窗口不可用
+        tgBannerWindow.hidden = YES;
+        tgBannerWindow = nil;
+        tgBannerLabel = nil;
+    }
+    if (!tgBannerWindow) {
+        tgBannerWindow = TGOverlayWindow(NO);
+        if (!tgBannerWindow) return;
+        UIView *root = tgBannerWindow.rootViewController.view;
+        UILabel *label = [UILabel new];
+        label.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
+        label.textColor = UIColor.labelColor;
+        label.backgroundColor = UIColor.secondarySystemBackgroundColor;
+        label.layer.cornerRadius = 15;
+        label.layer.masksToBounds = YES;
+        label.textAlignment = NSTextAlignmentCenter;
+        label.translatesAutoresizingMaskIntoConstraints = NO;
+        [root addSubview:label];
+        [NSLayoutConstraint activateConstraints:@[
+            [label.topAnchor constraintEqualToAnchor:root.safeAreaLayoutGuide.topAnchor constant:6],
+            [label.centerXAnchor constraintEqualToAnchor:root.centerXAnchor],
+            [label.heightAnchor constraintEqualToConstant:30],
+            [label.widthAnchor constraintLessThanOrEqualToAnchor:root.widthAnchor constant:-32],
+        ]];
+        tgBannerLabel = label;
+    }
+    tgBannerLabel.text = [@"  " stringByAppendingString:[text stringByAppendingString:@"  "]];
     tgBannerWindow.hidden = NO;
     [UIView animateWithDuration:0.2 animations:^{ tgBannerWindow.alpha = 1; }];
     NSUInteger generation = ++tgBannerGeneration;
+    __weak UIWindow *weakWindow = tgBannerWindow;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if (generation != tgBannerGeneration) return;
-        [UIView animateWithDuration:0.3 animations:^{ tgBannerWindow.alpha = 0; } completion:^(BOOL done) {
+        [UIView animateWithDuration:0.3 animations:^{ weakWindow.alpha = 0; } completion:^(BOOL done) {
             if (generation != tgBannerGeneration) return;
-            tgBannerWindow.hidden = YES;
-            tgBannerWindow = nil;
+            weakWindow.hidden = YES; // 留着给下一次用，不再销毁
         }];
     });
 }
@@ -1924,10 +1992,8 @@ static BOOL TGAssignedPrefix(NSString *prefix);
 
 static void TGCheckSideChords(UIPressesEvent *event) {
     BOOL up = NO, down = NO, side = NO;
-    NSMutableArray *types = nil;
     for (UIPress *press in event.allPresses) {
         if (press.phase > UIPressPhaseStationary) continue;
-        [types addObject:@(press.type)];
         if (press.type == 102) up = YES;
         else if (press.type == 103) down = YES;
         else if (press.type == 104) side = YES;
@@ -2082,6 +2148,7 @@ static CFTimeInterval tgLockLastDown = -100;
 static BOOL tgLockBurstScreenOn = YES; // the screen was on at the first press of these
 static NSUInteger tgLockFaceIDGeneration;
 static void (^tgLockFaceIDSystem[4])(void); // iOS's own reaction for 1, 2, 3 presses, if it reported one
+static NSUInteger tgLockFaceIDSystemGen[4];  // 每个块属于哪一轮（见 TGLockFaceIDPress 的早退分支）
 static BOOL tgLockBurstHandled;               // these presses already ran (iOS may report its last one late)
 
 // Triple → Sleep can't run until the wait rules out a 4th press (Emergency SOS),
@@ -2091,7 +2158,8 @@ static BOOL tgLockBurstHandled;               // these presses already ran (iOS 
 static BOOL TGSetBacklight(float factor) {
     id backlight = TGShared("SBBacklightController");
     SEL animate = @selector(_animateBacklightToFactor:duration:source:silently:completion:);
-    if (![backlight respondsToSelector:animate]) return NO;
+    // 5 参（float, double, long long, BOOL, id），iOS 16/17/18 上一致（verify: 18.x）
+    if (!TGPrivateArity(backlight, animate, 5)) return NO;
     ((void (*)(id, SEL, float, double, long long, BOOL, id))objc_msgSend)(backlight, animate, factor, 0.18, 3, NO, nil);
     return YES;
 }
@@ -2123,12 +2191,14 @@ static __weak id tgLockActions;
 }
 %end
 
-// Face ID devices. Called when iOS reports 1, 2 or 3 presses; system is iOS's
+// Face ID devices. Called when iOS reports 1, 2 or 3 presses; iosAction is iOS's
 // own reaction to that. Returns NO when Triggr leaves the press to iOS (then the
 // caller runs it now). Otherwise Triggr waits until no press has come for the
 // press window, then runs Single / Double / Triple Press for the real number of
 // presses, or, with nothing assigned for it, what iOS reported last.
-static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
+//
+// 参数原来叫 system，遮蔽了 libc 的 system()：函数体里想调 libc 会静默调到这个 block。
+static BOOL TGLockFaceIDPress(NSUInteger reported, void (^iosAction)(void)) {
     if (tgLockBurstHandled && TGLockPressInUse() && tgReplaces) return YES; // part of presses that already ran
     if (!TGLockPressInUse()) return NO;
     // 从暗屏开始的一串：只有第一下（它负责点亮屏幕）交给 iOS，从第二下起接管。
@@ -2139,11 +2209,16 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
     BOOL replace = tgReplaces;
     if (!replace) {
         // Alongside iOS: iOS acts now; Triggr runs once the presses stop.
-        system();
-        system = nil;
+        iosAction();
+        iosAction = nil;
     }
-    if (reported < 4) tgLockFaceIDSystem[reported] = system;
     NSUInteger generation = ++tgLockFaceIDGeneration;
+    // 每块记下自己属于哪一轮：下一轮开始时旧 settle 才会提前退出，早退时只能
+    // 丢掉「不属于当前这一轮」的残留块，不能连新一轮刚存的一起清掉。
+    if (reported < 4) {
+        tgLockFaceIDSystem[reported] = iosAction;
+        tgLockFaceIDSystemGen[reported] = generation;
+    }
     CFTimeInterval reportedAt = CACurrentMediaTime();
     __block void (^settle)(void);
     void (^wait)(void) = ^{
@@ -2151,7 +2226,14 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(MAX(left, 0.02) * NSEC_PER_SEC)), dispatch_get_main_queue(), settle);
     };
     settle = ^{
-        if (generation != tgLockFaceIDGeneration) { settle = nil; return; }
+        if (generation != tgLockFaceIDGeneration) {
+            // 这一轮被下一轮接管了。原来直接 return，tgLockFaceIDSystem[] 里的块留在原地，
+            // 下一轮会按错误的 count 把它取出来执行一次（多跑一次 iOS 的动作）。
+            for (int n = 0; n < 4; n++)
+                if (tgLockFaceIDSystemGen[n] != tgLockFaceIDGeneration) tgLockFaceIDSystem[n] = nil;
+            settle = nil;
+            return;
+        }
         if (CACurrentMediaTime() - tgLockLastDown < TGLockPressWindow) { wait(); return; } // another press came
         NSUInteger count = tgLockDowns;
         // iOS's own reaction: replayed right away it still works; after a wait
@@ -2164,7 +2246,7 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
             id actions = tgLockActions;
             ios = late && [actions respondsToSelector:direct] ? ^{ ((void (*)(id, SEL))objc_msgSend)(actions, direct); } : tgLockFaceIDSystem[n];
         }
-        for (int n = 0; n < 4; n++) tgLockFaceIDSystem[n] = nil;
+        for (int n = 0; n < 4; n++) { tgLockFaceIDSystem[n] = nil; tgLockFaceIDSystemGen[n] = 0; }
         // 唤醒串没有可补的东西：唯一可能存下的是「第二下被 iOS 报成单击」时的
         // performSinglePressAction，补它会立刻把刚点亮的屏幕又锁上。
         if (!tgLockBurstScreenOn && count <= 3) ios = nil;
@@ -2230,7 +2312,10 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^system)(void)) {
     tgLockPresses = (now - tgLockLastPress < TGLockPressWindow) ? tgLockPresses + 1 : 1;
     tgLockLastPress = now;
     NSUInteger generation = ++tgLockGeneration;
-    if (replace && tgLockPresses == 3 && [TGActionFor(@"lock.triple").firstObject isEqualToString:@"system.sleep"]
+    // 用 TGPlanActions 取「这一次真正会跑的第一个动作」。直接看 firstObject 不够：
+    // 列表开头可能是 if:（如 if:charging）或 pause，那时判不中，三击就先熄屏、
+    // 等确认再睡眠的优化会静默失效——表现为三击要先黑一下再睡。
+    if (replace && tgLockPresses == 3 && [TGPlanActions(TGActionFor(@"lock.triple")).firstObject isEqualToString:@"system.sleep"]
         && [TGSleepWakeInteraction() respondsToSelector:@selector(_performSleep)] && TGSetBacklight(0)) {
         tgLockDimmed = YES;
     }
@@ -3131,7 +3216,9 @@ static void TGFireMatching(NSString *prefix, NSString *value) {
     if (!value.length) return;
     // iOS posts a device's connect / disconnect several times in a row (AirPods:
     // 5 within 50 ms on iOS 18): one connection runs its assignment once.
-    if ([prefix isEqualToString:TGBTConnectedPrefix] || [prefix isEqualToString:TGBTDisconnectedPrefix] || [prefix isEqualToString:TGNotificationAppPrefix]) {
+    // 通知类不去抖：同一个 App 3 秒内发两条通知是两件事，被合并成一次后用户
+    // 只会觉得「有时候第二条通知不触发」。
+    if ([prefix isEqualToString:TGBTConnectedPrefix] || [prefix isEqualToString:TGBTDisconnectedPrefix]) {
         static NSMutableDictionary<NSString *, NSNumber *> *last;
         if (!last) last = [NSMutableDictionary dictionary];
         NSString *key = [prefix stringByAppendingString:value.lowercaseString];
@@ -3164,7 +3251,11 @@ static int TGBatteryPercent(void) {
     NSArray *sources = blob ? CFBridgingRelease(IOPSCopyPowerSourcesList(blob)) : nil;
     for (id source in sources) {
         NSDictionary *description = (__bridge NSDictionary *)IOPSGetPowerSourceDescription(blob, (__bridge CFTypeRef)source);
-        id current = description[@"当前电量"], max = description[@"最大容量"];
+        // IOKit 的键是 C 常量字符串，不随系统语言变（同一文件 TGIOKitCharging 用的也是
+        // 英文键）。cn4.19 之前这里写成中文 "当前电量"/"最大容量"，恒取不到，percent 一直
+        // 是 -1，等于把 IOKit 这条通道整个跳过、只剩下面那个「不可靠」的 UIDevice 兜底。
+        id current = description[@"Current Capacity"] ?: description[@"CurrentCapacity"];
+        id max = description[@"Max Capacity"] ?: description[@"MaxCapacity"];
         if (![current respondsToSelector:@selector(doubleValue)] || ![max respondsToSelector:@selector(doubleValue)] || [max doubleValue] <= 0) continue;
         percent = (int)lround([current doubleValue] * 100.0 / [max doubleValue]);
         break;

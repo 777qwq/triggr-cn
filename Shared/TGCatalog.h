@@ -20,6 +20,9 @@
 #define TGRecentActionsKey @"RecentActions" // the last actions picked, newest first (Settings only)
 // Settings' Test button: SpringBoard runs the assignment stored at TGTestKey ("<mode>/<trigger>") now.
 #define TGTestKey @"TestAssignment"
+// 诊断：SpringBoard 写入「已配置、但当前系统上跑不起来」的动作（数组）。设置页只读，
+// 用来把「配了没反应」变成一句可见的说明。不是配置项，别写到用户可见的设置里。
+#define TGUnavailableKey @"UnavailableActions"
 #define TGTestNotification "com.johndie.triggr/test"
 // API: notify_post(TGAPIPrefix "run/<action>" | "trigger/<trigger>" | "menu/<id>").
 #define TGAPIPrefix "com.johndie.triggr/api/"

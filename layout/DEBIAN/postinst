@@ -1,9 +1,29 @@
 #!/bin/sh
+# roothide 的安装根每次都可能不同，只有 jbroot 知道；写死 /var/jb 在隐根上等于什么都没做，
+# 而且失败还被 2>/dev/null 吞掉——用户看到的就是「装好了，但 Run Command 没反应」。
+JB=""
+if command -v jbroot >/dev/null 2>&1; then
+	JB=$(jbroot 2>/dev/null)
+elif [ -d /var/jb ]; then
+	JB=/var/jb
+fi
+
 # Show (or refresh) the Triggr app on the Home Screen.
-for p in /var/jb/Applications/TriggrApp.app /Applications/TriggrApp.app; do
+for p in "$JB/Applications/TriggrApp.app" /var/jb/Applications/TriggrApp.app /Applications/TriggrApp.app; do
 	[ -d "$p" ] && uicache -p "$p" >/dev/null 2>&1
 done
+
 # (Re)start triggrd, which runs commands where SpringBoard can't (iOS 18).
-launchctl unload /var/jb/Library/LaunchDaemons/com.johndie.triggrd.plist 2>/dev/null
-launchctl load /var/jb/Library/LaunchDaemons/com.johndie.triggrd.plist 2>/dev/null
+# iOS 15+ 用 bootstrap / kickstart；老 launchctl load 留作兜底，但不再吞掉错误。
+LABEL=com.johndie.triggrd
+for plist in "$JB/Library/LaunchDaemons/$LABEL.plist" "/var/jb/Library/LaunchDaemons/$LABEL.plist" "/Library/LaunchDaemons/$LABEL.plist"; do
+	[ -f "$plist" ] || continue
+	launchctl bootout "system/$LABEL" >/dev/null 2>&1
+	launchctl unload "$plist" >/dev/null 2>&1
+	if ! launchctl bootstrap system "$plist" 2>/dev/null; then
+		launchctl load "$plist" || echo "triggrd: 启动失败（$plist），Run Command 将不可用" >&2
+	fi
+	launchctl kickstart -k "system/$LABEL" >/dev/null 2>&1
+	break
+done
 exit 0

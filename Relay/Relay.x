@@ -153,24 +153,31 @@ static BOOL TGEscapeIn(UIViewController *root) {
     return TGEscapeTree(root, 0);
 }
 
-// 页面身份：可见链上每一层的类名与子视图数，nav 栈深和 tab 选中项再显式记一位。
+// 页面身份：可见链上每一层的实例指针，nav 栈深、tab 选中项、容器子控制器类名再各记一位。
 // 只用来判断「动作发出后页面有没有变」，不展示、不记录。
 //
 // 不能只看根控制器的直接子控制器：微信的「根容器 → 内层导航 → 会话 → 文章」里，
 // 文章退回会话时根控制器的子控制器和子视图数都没变，戳就相同，0.35 秒后的复核会
 // 误判成「没动」，于是再补一次 pop——用户看到的就是一次按键退两层。
-// viewControllers.count / selectedIndex 必须显式拼：TGVisibleChain 只取 nav 栈顶、
-// 只走选中的 tab，换人时链的形状可能完全一样。
+//
+// 主键用实例指针，不用类名 + 子视图数：同类页面换实例（A 会话 → B 会话）时类名和
+// 子视图数可以完全一样，指针不会；而 subviews.count 会随骨架屏 / 广告位 / cell 复用
+// 抖动，页面其实没动却判成动了（于是不补 pop，按键无反应）——这是修好「退两层」之后
+// 才会暴露的反向失败。指针是「是不是同一屏」这件事的唯一稳定答案。
 static NSString *TGPageStamp(UIViewController *root) {
     if (!root) return @"";
     NSMutableString *s = [NSMutableString string];
     for (UIViewController *vc in TGVisibleChain(root)) {
-        [s appendFormat:@"%@#%lu|", NSStringFromClass(vc.class),
-            (unsigned long)vc.viewIfLoaded.subviews.count];
+        [s appendFormat:@"%p|", vc];
         if ([vc isKindOfClass:[UINavigationController class]])
             [s appendFormat:@"nav%lu|", (unsigned long)((UINavigationController *)vc).viewControllers.count];
         if ([vc isKindOfClass:[UITabBarController class]])
-            [s appendFormat:@"tab%ld|", (long)((UITabBarController *)vc).selectedIndex];
+            [s appendFormat:@"tab%lu|", (unsigned long)((UITabBarController *)vc).selectedIndex];
+        // 容器指纹：有的自绘容器把真正的内容页放在 childViewControllers 中间，链走的是
+        // lastObject，换页时链上看不出来。这里把这一层所有子控制器的类名拼进去（不递归），
+        // 成本可忽略，能兜住这种盲区。
+        for (UIViewController *child in vc.childViewControllers) [s appendFormat:@"%@,", NSStringFromClass(child.class)];
+        [s appendString:@"|"];
     }
     return s;
 }
@@ -195,6 +202,14 @@ static BOOL TGPublicPop(UIWindow *win) {
         } @catch (NSException *e) {
             // 同上：容器抛异常不能带崩宿主
         }
+        return YES;
+    }
+    // 纯 modal 页面（没有可弹的 nav）：dismiss 最上面那层，这就是系统意义上的「返回」。
+    // 原来只找 nav，以 modal 为主的 App 上「返回上级」完全没有反应。
+    UIViewController *top = root;
+    while (top.presentedViewController) top = top.presentedViewController;
+    if (top != root && !top.isBeingDismissed && !top.transitionCoordinator) {
+        [top dismissViewControllerAnimated:YES completion:nil];
         return YES;
     }
     return NO;
@@ -222,7 +237,12 @@ static void TGBackStep(UIWindow *win) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         UIWindow *w = weakWin;
         if (!w) return;
-        if ([TGPageStamp(w.rootViewController) isEqualToString:stamp]) TGPublicPop(w);
+        UIViewController *root = w.rootViewController;
+        // 转场还在跑就先别判：presentedViewController 要到动画结束才清空，这时的戳只是
+        // 「半路状态」，比对必然误判（0.35 秒和转场动画同量级）。宁可这次不补——下一按
+        // 用户的意图本来也还没走完；补错一次是「退两层」，代价大得多。
+        if (!root || root.isBeingDismissed || root.isBeingPresented || root.transitionCoordinator) return;
+        if ([TGPageStamp(root) isEqualToString:stamp]) TGPublicPop(w);
     });
 }
 

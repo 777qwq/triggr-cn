@@ -6,15 +6,25 @@ name: build
 on:
   workflow_dispatch:
   push:
-    branches: [main, 'exp/**']
+    branches: [main, 'cn*', 'exp/**']
     paths-ignore:
       - 'docs/**'
       - '**.md'
       - 'screenshots/**'
 
 jobs:
+  # 条件/分支语义的用例（scripts/check_conditions.py 是 TGRunSteps 的逐行复刻）。
+  # 它以前不在 CI 里跑，语义漂移时永远「全部通过」——把它放进门禁，漂移才会被拦下。
+  conditions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 条件语义用例
+        run: python3 scripts/check_conditions.py
+
   build:
     runs-on: macos-15
+    needs: conditions
     steps:
       - uses: actions/checkout@v4
 

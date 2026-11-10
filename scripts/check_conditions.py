@@ -105,7 +105,9 @@ def is_if(s):
 def run_steps(steps, index=0, frames=None, stopped=None):
     """返回实际执行的动作列表；停顿/等待终止循环（与 dispatch_after 一致）。"""
     stack = list(frames or [])
-    running = (stack[-1] & 1) != 0 if stack else True
+    # 重入时的「当前块跑不跑」看 bit 1（本块被选中），不是 bit 0（外层在跑）：
+    # @秒 等完不成立时，C 侧会清 bit 1 再重入，好让 else 接上。
+    running = (stack[-1] & 2) != 0 if stack else True
     ran = []
     for i in range(index, len(steps)):
         step = steps[i]
@@ -211,11 +213,30 @@ def _wait_case():
     assert kind == "wait" and cond["wait"] == 2 and frames == [3], stopped
     # 仍成立 → 跑块，然后继续块后
     assert run_steps(steps, nxt, frames) == ["a", "b"]
-    # 已不成立 → 延迟块里重判不过，什么都不跑
+    # 已不成立 → 清 bit 1 重入：块跳过，块后的动作照跑
     reset(charging=False)
-    again = parse("charging@2")
-    assert not holds(again)
-    assert [] == []
+    cleared = list(frames)
+    cleared[-1] &= ~2
+    assert run_steps(steps, nxt, cleared) == ["b"]
+    return True
+
+
+def _wait_else_case():
+    """@秒 等完不成立：else 要接上，endif 之后也要继续。
+
+    cn4.19 之前 C 侧直接 return，后面的 else 分支和 endif 之后的动作全部丢失，
+    表现为「偶尔触发后，后面配的动作一起消失」。
+    """
+    steps = ["if:charging@2", "a", "else", "b", "endif", "c"]
+    stopped = []
+    reset(charging=True)
+    assert run_steps(steps, 0, None, stopped) == []
+    kind, nxt, frames, _ = stopped[0]
+    assert kind == "wait" and nxt == 1, stopped
+    reset(charging=False)
+    cleared = list(frames)
+    cleared[-1] &= ~2
+    assert run_steps(steps, nxt, cleared) == ["b", "c"]
     return True
 
 
@@ -270,7 +291,7 @@ def main():
         ok = got == expect
         bad += not ok
         print(("PASS " if ok else "FAIL ") + name + ("" if ok else f"  期望 {expect} 实得 {got}"))
-    for fn in (_pause_case, _wait_case, _filter_case):
+    for fn in (_pause_case, _wait_case, _wait_else_case, _filter_case):
         try:
             fn()
             print(f"PASS {fn.__name__}")

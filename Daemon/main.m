@@ -40,9 +40,12 @@ static void TGRun(const char *const argv[]) {
     posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, "/dev/null", O_WRONLY, 0);
     posix_spawn_file_actions_addopen(&actions, STDERR_FILENO, "/dev/null", O_WRONLY, 0);
     pid_t pid = 0;
-    if (posix_spawn(&pid, TGJB(@"/bin/sh").fileSystemRepresentation, &actions, NULL, (char *const *)argv, (char *const *)envp) == 0) {
+    int error = posix_spawn(&pid, TGJB(@"/bin/sh").fileSystemRepresentation, &actions, NULL, (char *const *)argv, (char *const *)envp);
+    if (error == 0) {
         // Reaped on a background queue so a slow command never blocks the next.
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ int status; waitpid(pid, &status, 0); });
+    } else {
+        NSLog(@"[triggrd] 起不来 sh（errno %d），这条命令没执行", error);
     }
     posix_spawn_file_actions_destroy(&actions);
 }
@@ -52,6 +55,23 @@ static void TGPerform(NSString *action) {
         const char *argv[] = {"sh", "-c", [action substringFromIndex:TGShellPrefix.length].UTF8String, NULL};
         TGRun(argv);
     }
+}
+
+// 白名单里暂时没有这个动作时的退避重试。CFPreferences 的跨进程可见性不是立刻的，
+// 只等 0.5 s 再判一次，在偏好刚改完的那几秒里经常判不过——然后请求就被静默丢掉了，
+// 用户只看到「命令没跑」。这里最多再等约 1.5 s，仍不通过才写一行日志。
+static void TGRetry(NSString *action, int attempt) {
+    if ([TGAllowedActions() containsObject:action]) {
+        TGPerform(action);
+        return;
+    }
+    if (attempt >= 3) {
+        NSLog(@"[triggrd] 未执行：%@ 不在当前指派里（偏好未同步或已被删除）", action);
+        return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)((0.3 + 0.3 * attempt) * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        TGRetry(action, attempt + 1);
+    });
 }
 
 static void TGDrainQueue(void) {
@@ -69,19 +89,21 @@ static void TGDrainQueue(void) {
             TGPerform(action);
             continue;
         }
-        // A setting saved a moment ago may not have reached this process yet:
-        // look once more shortly before refusing.
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            if ([TGAllowedActions() containsObject:action]) TGPerform(action);
-        });
+        // A setting saved a moment ago may not have reached this process yet.
+        TGRetry(action, 0);
     }
 }
 
 int main(void) {
     @autoreleasepool {
         // Only the mobile user (SpringBoard) may drop requests here.
-        [NSFileManager.defaultManager createDirectoryAtPath:TGRunQueue withIntermediateDirectories:YES attributes:@{NSFilePosixPermissions: @0700} error:nil];
-        chmod(TGRunQueue.fileSystemRepresentation, 0700);
+        NSError *error = nil;
+        [NSFileManager.defaultManager createDirectoryAtPath:TGRunQueue withIntermediateDirectories:YES attributes:@{NSFilePosixPermissions: @0700} error:&error];
+        if (chmod(TGRunQueue.fileSystemRepresentation, 0700) != 0) {
+            // 队列目录建不起来 = 所有 Run Command 都会静默失败，必须留下痕迹。
+            NSLog(@"[triggrd] 队列目录不可用：%@（%d）", TGRunQueue, errno);
+            if (error) NSLog(@"[triggrd] %@", error);
+        }
         int token;
         notify_register_dispatch(TGRunRequestNotification, &token, dispatch_get_main_queue(), ^(int t) { TGDrainQueue(); });
         TGDrainQueue();
