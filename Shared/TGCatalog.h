@@ -131,7 +131,7 @@ static const TGItem TGStateChanges[] = {
 
 static const TGGroup TGTriggerGroups[] = {
     {"锁键", TGHomeButton, TG_COUNT(TGHomeButton), NULL},
-    {"Touch ID", TGTouchID, TG_COUNT(TGTouchID), "轻点两下是指不按下而轻触传感器两次。解锁状态下 iOS 不上报单次轻触和长按。手指停留与指纹匹配仅在锁屏界面生效，并与解锁并行。"},
+    {"触控 ID", TGTouchID, TG_COUNT(TGTouchID), "轻点两下是指不按下而轻触传感器两次。解锁状态下 iOS 不上报单次轻触和长按。手指停留与指纹匹配仅在锁屏界面生效，并与解锁并行。"},
     {"锁屏键", TGLockButton, TG_COUNT(TGLockButton), NULL},
     {"音量键", TGVolume, TG_COUNT(TGVolume), "U「音量加后音量减」（及反向）是两次快速连按；始终与系统并行执行，音量最终回到原位。"},
     {"锁键 + 音量键", TGSideCombos, TG_COUNT(TGSideCombos), "同时按住锁键与一个音量键。Up Hold / Down Hold 指同时按住半秒；动作与 iOS 并行运行，继续按住仍会照常出现关机滑条和紧急 SOS。"},
@@ -186,7 +186,7 @@ static const TGItem TGOffActions[] = { TG_SWITCHES(TG_SWITCH_OFF) };
 static const TGItem TGMediaActions[] = {
     {"media.playpause", "播放 / 暂停"}, {"media.next", "下一曲"}, {"media.previous", "上一曲"},
     {"media.volup", "音量加"}, {"media.voldown", "音量减"},
-    {"media.airplay", "AAirPlay 选择器"}, {"media.airplayiphone", "在本机播放"},
+    {"media.airplay", "AirPlay 选择器"}, {"media.airplayiphone", "在本机播放"},
 };
 
 static const TGGroup TGActionGroups[] = {
@@ -225,6 +225,72 @@ static const TGGroup TGActionGroups[] = {
 #define TGOnlyPrefix @"only:"
 #define TGMenuPrefix @"menu:"   // "menu:<id>" shows that menu
 #define TGMenuKeyPrefix @"menu/" // "menu/<id>" = the menu's items
+
+// 第三方动作扩展：别的包往 Library/Triggr/Extensions 放一个 plist，动作选择器里就多出
+// 一个分类，条目是某个目录下的文件。执行 <Program> <文件名>，文件名只作参数、永不进 shell。
+// 动作 id 是 "ext:<扩展名>:<条目名>"，和普通动作一样存在指派里，所以 daemon 的白名单
+// 不用为它开特例——用户配过什么，白名单里就有什么。
+#define TGExtensionPrefix @"ext:"
+
+static inline NSString *TGExtensionsDirectory(void) {
+    for (NSString *path in @[TGJB(@"/Library/Triggr/Extensions"), @"/Library/Triggr/Extensions"])
+        if ([NSFileManager.defaultManager fileExistsAtPath:path]) return path;
+    return nil;
+}
+
+// 没装扩展时这个目录不存在。绝不要把空路径交给 contentsOfDirectoryAtPath:——
+// NSFileManager 对 @"" 会抛异常，1.0.4 就因为这条让动作选择器在每个没装 EQELinker 的
+// 机器上崩（issue #2，RootHide 上复现）。
+static inline NSArray<NSString *> *TGExtensionNames(void) {
+    NSMutableArray *names = [NSMutableArray array];
+    NSString *dir = TGExtensionsDirectory();
+    if (!dir.length) return names;
+    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:nil])
+        if ([file.pathExtension isEqualToString:@"plist"]) [names addObject:file.stringByDeletingPathExtension];
+    return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
+// {Title, ItemTitle, Symbol, Color, ItemsDirectory, ItemsExtension, ItemsExclude, Program}
+static inline NSDictionary *TGExtension(NSString *name) {
+    NSString *dir = TGExtensionsDirectory();
+    if (!name.length || [name containsString:@"/"] || !dir.length) return nil;
+    NSDictionary *extension = [NSDictionary dictionaryWithContentsOfFile:
+        [[dir stringByAppendingPathComponent:name] stringByAppendingPathExtension:@"plist"]];
+    // Title 和 Program 缺一个就当这个扩展不存在：少 Program 会变成「配了没反应」。
+    return [extension[@"Title"] isKindOfClass:NSString.class] && [extension[@"Program"] isKindOfClass:NSString.class] ? extension : nil;
+}
+
+static inline NSArray<NSString *> *TGExtensionItems(NSDictionary *extension) {
+    NSString *directory = extension[@"ItemsDirectory"], *type = extension[@"ItemsExtension"];
+    NSArray *exclude = [extension[@"ItemsExclude"] isKindOfClass:NSArray.class] ? extension[@"ItemsExclude"] : @[];
+    if (![directory isKindOfClass:NSString.class] || !directory.length) return @[];
+    NSMutableArray *items = [NSMutableArray array];
+    for (NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:directory error:nil]) {
+        if ([type isKindOfClass:NSString.class] && type.length && ![file.pathExtension isEqualToString:type]) continue;
+        NSString *item = [type isKindOfClass:NSString.class] && type.length ? file.stringByDeletingPathExtension : file;
+        if (item.length && ![item hasPrefix:@"."] && ![exclude containsObject:item]) [items addObject:item];
+    }
+    return [items sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
+// "ext:eqe:Bass Boost" -> @[@"eqe", @"Bass Boost"]；不是扩展动作就是 nil。
+static inline NSArray<NSString *> *TGExtensionAction(NSString *action) {
+    if (![action hasPrefix:TGExtensionPrefix]) return nil;
+    NSString *rest = [action substringFromIndex:TGExtensionPrefix.length];
+    NSRange colon = [rest rangeOfString:@":"];
+    if (colon.location == NSNotFound || colon.location == 0 || colon.location + 1 >= rest.length) return nil;
+    return @[[rest substringToIndex:colon.location], [rest substringFromIndex:colon.location + 1]];
+}
+
+// 扩展动作的 Program 存在、且 sh 读得到，才算能用。iOS 18 的 SpringBoard 会把脚本
+// 报成「不可执行」，所以判可读不判可执行。
+static inline BOOL TGExtensionRunnable(NSString *action) {
+    NSArray *parts = TGExtensionAction(action);
+    if (!parts) return NO;
+    NSString *program = TGExtension(parts[0])[@"Program"];
+    return program && [NSFileManager.defaultManager isReadableFileAtPath:program];
+}
+
 // Custom event prefixes (see TGIsCustomTrigger).
 #define TGWiFiJoinedPrefix @"wifi.joined:"
 #define TGWiFiLeftPrefix @"wifi.left:"
@@ -533,6 +599,13 @@ static inline NSString *TGActionTitle(NSString *action) {
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
     if ([action hasPrefix:TGGetPrefix]) return [@"请求 URL: " stringByAppendingString:[action substringFromIndex:TGGetPrefix.length]];
     if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
+    if ([action hasPrefix:TGExtensionPrefix]) {
+        NSArray *parts = TGExtensionAction(action);
+        if (parts) {
+            id prefix = TGExtension(parts[0])[@"ItemTitle"];
+            return [NSString stringWithFormat:@"%@: %@", [prefix isKindOfClass:NSString.class] ? prefix : parts[0], parts[1]];
+        }
+    }
     if ([action hasPrefix:TGAppPrefix]) return [@"打开 " stringByAppendingString:[action substringFromIndex:TGAppPrefix.length]];
     if ([action hasPrefix:TGPausePrefix]) return [NSString stringWithFormat:@"停顿 %@", [action substringFromIndex:TGPausePrefix.length]];
     if ([action hasPrefix:TGMenuPrefix]) return @"菜单";

@@ -1,7 +1,7 @@
 // triggrd: runs Triggr's commands (Run Command) for SpringBoard where
 // SpringBoard itself isn't allowed to start programs (iOS 18).
 //
-// SpringBoard drops one plist per request ({Action = "shell:…"}) in
+// SpringBoard drops one plist per request ({Action = "shell:…" | "ext:…"}) in
 // TGRunQueue and posts TGRunRequestNotification. triggrd runs a request only
 // if that exact action is in one of the user's Triggr assignments or menus, so
 // nothing but what the user set up can be run through it. Runs as mobile.
@@ -54,6 +54,17 @@ static void TGPerform(NSString *action) {
     if ([action hasPrefix:TGShellPrefix]) {
         const char *argv[] = {"sh", "-c", [action substringFromIndex:TGShellPrefix.length].UTF8String, NULL};
         TGRun(argv);
+    } else if ([action hasPrefix:TGExtensionPrefix]) {
+        // 扩展动作：sh 跑 Program，条目名单独作一个参数。这里只按 plist 里写的程序走，
+        // 不拼接、不解释条目名——它在 plist 的目录里能出现，就已经是文件名了。
+        NSArray *parts = TGExtensionAction(action);
+        NSString *program = parts ? TGExtension(parts[0])[@"Program"] : nil;
+        if (!program) {
+            NSLog(@"[triggrd] 扩展未找到或缺少 Program：%@", action);
+            return;
+        }
+        const char *argv[] = {"sh", program.UTF8String, [parts[1] UTF8String], NULL};
+        TGRun(argv);
     }
 }
 
@@ -84,7 +95,8 @@ static void TGDrainQueue(void) {
         NSDictionary *request = [NSDictionary dictionaryWithContentsOfFile:path];
         [files removeItemAtPath:path error:nil];
         NSString *action = request[@"Action"];
-        if (![action isKindOfClass:NSString.class] || ![action hasPrefix:TGShellPrefix]) continue;
+        if (![action isKindOfClass:NSString.class]) continue;
+        if (![action hasPrefix:TGShellPrefix] && ![action hasPrefix:TGExtensionPrefix]) continue;
         if ([allowed containsObject:action]) {
             TGPerform(action);
             continue;

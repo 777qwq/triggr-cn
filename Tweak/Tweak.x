@@ -406,6 +406,28 @@ static void TGRunShell(NSString *command) {
     });
 }
 
+// 扩展动作：sh 跑扩展的 Program，条目名只作一个参数，永远不进 shell——
+// 文件名里带反引号、分号也只是文件名。
+static void TGRunExtension(NSString *action) {
+    NSArray *parts = TGExtensionAction(action);
+    if (!parts) return;
+    NSString *program = TGExtension(parts[0])[@"Program"];
+    if (!program || ![NSFileManager.defaultManager isReadableFileAtPath:program]) return;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        const char *argv[] = {"sh", program.UTF8String, [parts[1] UTF8String], NULL};
+        pid_t pid = 0;
+        int error = TGSpawnShell(argv, &pid);
+        if (error) {
+            // iOS 18 的 SpringBoard 起不了进程：整条动作交给 triggrd，它在自己的白名单里
+            // 再查一次。ext: 和 shell: 走同一条队列，所以这里不用拆开传。
+            TGRunViaDaemon(action);
+            return;
+        }
+        int status = 0;
+        waitpid(pid, &status, 0);
+    });
+}
+
 // Built-in actions. Each checks at runtime that the SpringBoard method it
 // needs exists (found by class dump on iOS 16.7); an action whose method is
 // missing counts as unassigned, so it can never take a button away.
@@ -1277,6 +1299,7 @@ static BOOL TGCanPerform(NSString *action) {
         return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
     }
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
+    if ([action hasPrefix:TGExtensionPrefix]) return TGExtensionRunnable(action);
     if ([action hasPrefix:TGUnlockPrefix]) return YES;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
     TGActionBlock block = TGActionTable()[action] ?: TGSwitchAction(action);
@@ -1298,6 +1321,8 @@ static void TGPerform(NSString *action) {
             TGGetURL([action substringFromIndex:TGGetPrefix.length]);
         } else if ([action hasPrefix:TGShellPrefix]) {
             TGRunShell([action substringFromIndex:TGShellPrefix.length]);
+        } else if ([action hasPrefix:TGExtensionPrefix]) {
+            TGRunExtension(action);
         } else if ([action hasPrefix:TGAppPrefix]) {
             TGOpenApp([action substringFromIndex:TGAppPrefix.length], NO);
         } else if ([action hasPrefix:TGMenuPrefix]) {

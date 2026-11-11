@@ -221,6 +221,21 @@ static NSString *TGCountTitle(NSUInteger count) {
     return count ? [NSString stringWithFormat:@"%lu", (unsigned long)count] : @"";
 }
 
+// 扩展 plist 的 Color 字段：认得出的名字用系统色，认不出就用中性灰。
+// 不返回 nil——TGSetIcon 会拿它填色，nil 等于画一个透明的方块。
+static UIColor *TGColorNamed(NSString *name) {
+    static NSDictionary<NSString *, UIColor *> *colors;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        colors = @{ @"blue": UIColor.systemBlueColor, @"green": UIColor.systemGreenColor,
+                    @"indigo": UIColor.systemIndigoColor, @"orange": UIColor.systemOrangeColor,
+                    @"pink": UIColor.systemPinkColor, @"purple": UIColor.systemPurpleColor,
+                    @"red": UIColor.systemRedColor, @"teal": UIColor.systemTealColor,
+                    @"yellow": UIColor.systemYellowColor, @"gray": UIColor.systemGrayColor };
+    });
+    return (name.length ? colors[name.lowercaseString] : nil) ?: UIColor.systemGrayColor;
+}
+
 // A Settings-style icon: a white SF Symbol on a rounded colour square.
 static void TGSetIcon(PSSpecifier *spec, NSString *symbol, UIColor *color) {
     UIImage *glyph = [UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightMedium]];
@@ -934,6 +949,8 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
 static NSString *TGCategoryOf(NSString *action) {
     if ([action isEqualToString:TGElseAction] || [action isEqualToString:TGEndIfAction] || [action hasPrefix:TGIfPrefix]) return @"conditions";
     if ([action hasPrefix:TGMenuPrefix]) return @"menus";
+    // 扩展动作的分类是 "ext:<扩展名>"：展开后要点到的那一行属于哪个扩展。
+    if (TGExtensionAction(action)) return [TGExtensionPrefix stringByAppendingString:TGExtensionAction(action)[0]];
     for (NSString *prefix in @[TGBrightnessPrefix, TGBrightnessUpPrefix, TGBrightnessDownPrefix, TGMediaVolumePrefix, TGRingerVolumePrefix]) if ([action hasPrefix:prefix]) return @"levels";
     for (NSString *prefix in @[TGAppPrefix, TGSettingsPrefix, TGShortcutPrefix, TGURLPrefix, TGGetPrefix]) if ([action hasPrefix:prefix]) return @"open";
     for (NSString *prefix in @[TGMessagePrefix, TGSpeakPrefix, TGShellPrefix]) if ([action hasPrefix:prefix]) return @"text";
@@ -1083,9 +1100,11 @@ static NSString *TGCategoryOf(NSString *action) {
     PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
     if (_selection.count) [notes insertObject:@"左滑可移除。" atIndex:0];
     else if (!_menuEditor && TGDefaultActionTitle(_trigger))
+        // 上游 2.1 的「Clearer button notes」：这里唯一要说清的是「原生功能还在」。
+        // 原本文案教人「选无操作来关闭它」，方向相反——多数人想留一部分，不是全关。
         [notes insertObject:[NSString stringWithFormat:[self replacesButtons]
-            ? @"未选择动作，因此保持默认行为（%@）。在下方选择一个动作来替代，或选「无操作」（系统类）来关闭它。"
-            : @"未选择动作，因此保持默认行为（%@）。在下方选择一个动作即可与它并行执行。", TGDefaultActionTitle(_trigger)] atIndex:0];
+            ? @"未选择动作，保持默认行为（%@）。选一个动作就会替代它；只想在某些时候替代，加「仅当」。"
+            : @"未选择动作，保持默认行为（%@）。选一个动作会与它同时执行；也可以加「仅当」限定什么时候执行。", TGDefaultActionTitle(_trigger)] atIndex:0];
     else [notes insertObject:_menuEditor ? @"本菜单还没有内容。打开下方分类，点按要收录的动作。"
         : @"还没有选择。打开下方分类点按动作；选择多个可按顺序执行。" atIndex:0];
     [picked setProperty:[notes componentsJoinedByString:@"\n\n"] forKey:@"footerText"];
@@ -1118,7 +1137,10 @@ static NSString *TGCategoryOf(NSString *action) {
     // 任一不成立整条触发器都不执行，横幅也不出现。
     if (!_menuEditor) {
         PSSpecifier *onlyGroup = [PSSpecifier groupSpecifierWithName:@"仅当"];
-        [onlyGroup setProperty:@"这些条件必须全部成立才执行；任一不成立，触发器不会运行，也不会显示动作横幅。" forKey:@"footerText"];
+        // 「否则它做原本的事」这句必须说。只说「不会运行」，用户会以为按键也失效了；
+        // 按键类触发器在条件不成立时是交还 iOS 的（cn4.20 起），事件类没有「原本的事」，
+        // 所以只对按键类承诺这一句。
+        [onlyGroup setProperty:@"可选。例如：只在手电筒打开时、只在家里的 Wi-Fi 上、只在夜间。\n全部成立才执行；任一不成立就跳过这次，不会显示动作横幅。按键类触发器这时仍按系统原本的方式响应。" forKey:@"footerText"];
         [specs addObject:onlyGroup];
         NSArray<NSString *> *conditions = TGReadConditions(self, _mode, _trigger);
         for (NSUInteger i = 0; i < conditions.count; i++) {
@@ -1147,6 +1169,22 @@ static NSString *TGCategoryOf(NSString *action) {
         [specs addObject:header];
         if ([_expanded isEqualToString:category[0]]) [specs addObjectsFromArray:rows];
     }
+    // 第三方扩展：每个装了 plist 的包一个分类。动态生成，所以不在 TGCategories() 里——
+    // 那张表是编译期常量，扩展是运行期才出现的。
+    for (NSString *name in TGExtensionNames()) {
+        NSDictionary *extension = TGExtension(name);
+        if (!extension) continue; // 缺 Title 或 Program，忽略
+        NSArray *rows = [self rowsForCategory:[TGExtensionPrefix stringByAppendingString:name]];
+        PSSpecifier *header = [PSSpecifier preferenceSpecifierNamed:extension[@"Title"] target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+        NSString *category = [TGExtensionPrefix stringByAppendingString:name];
+        [header setProperty:category forKey:@"tgCategory"];
+        [header setProperty:name forKey:@"tgExtension"];
+        // 图标和颜色由扩展自己声明；没声明就用一个中性的拼图块，别让分类看起来像内置的。
+        NSString *symbol = [extension[@"Symbol"] isKindOfClass:NSString.class] ? extension[@"Symbol"] : @"puzzlepiece.extension.fill";
+        TGSetIcon(header, symbol, TGColorNamed([extension[@"Color"] isKindOfClass:NSString.class] ? extension[@"Color"] : nil));
+        if (rows.count) [specs addObject:header];
+        if ([_expanded isEqualToString:category]) [specs addObjectsFromArray:rows];
+    }
     return specs;
 }
 
@@ -1156,6 +1194,14 @@ static NSString *TGCategoryOf(NSString *action) {
     int count = 0;
     if ([category isEqualToString:@"recent"]) {
         for (NSString *item in [self recentActions]) if (!_menuEditor || ![item hasPrefix:TGMenuPrefix]) [rows addObject:[self rowForAction:item title:TGDisplayTitle(item)]];
+        return rows;
+    }
+    if ([category hasPrefix:TGExtensionPrefix]) {
+        // "ext:<name>" 是分类，条目来自 plist 指定的目录。条目名直接用文件名，
+        // 分类头已经写了扩展名，这里再拼一遍只会更长。
+        NSString *name = [category substringFromIndex:TGExtensionPrefix.length];
+        for (NSString *item in TGExtensionItems(TGExtension(name)))
+            [rows addObject:[self rowForAction:[NSString stringWithFormat:@"%@%@:%@", TGExtensionPrefix, name, item] title:item]];
         return rows;
     }
     if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
@@ -1227,6 +1273,12 @@ static NSString *TGCategoryOf(NSString *action) {
             [rows addObject:[self rowForAction:@(TGActionGroups[g].items[i].identifier) title:@(TGActionGroups[g].items[i].title)]];
     }
     for (NSString *category in @[@"levels", @"open", @"text", @"menus"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
+    // 扩展条目在搜索里带上分类名，否则「Bass Boost」孤零零的，不知道属于谁。
+    for (NSString *name in TGExtensionNames())
+        for (NSString *item in TGExtensionItems(TGExtension(name))) {
+            NSString *action = [NSString stringWithFormat:@"%@%@:%@", TGExtensionPrefix, name, item];
+            [rows addObject:[self rowForAction:action title:TGDisplayTitle(action)]];
+        }
     NSMutableArray *specs = [NSMutableArray array];
     PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
     [specs addObject:group];
@@ -1442,6 +1494,10 @@ static NSString *TGCategoryOf(NSString *action) {
 #pragma mark Cells
 
 - (NSString *)titleForCategory:(NSString *)category {
+    if ([category hasPrefix:TGExtensionPrefix]) {
+        id title = TGExtension([category substringFromIndex:TGExtensionPrefix.length])[@"Title"];
+        if ([title isKindOfClass:NSString.class]) return title;
+    }
     for (NSArray<NSString *> *entry in TGCategories()) if ([entry[0] isEqualToString:category]) return entry[1];
     return nil;
 }
@@ -2307,7 +2363,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         if (anywhere) [group setProperty:@"此处指派在所有位置生效，除非其他位置对同一触发器另有指派。" forKey:@"footerText"];
         [specs addObject:group];
         NSDictionary<NSString *, NSArray *> *icons = @{
-            @"锁键": @[@"circle.circle", UIColor.systemGrayColor], @"Touch ID": @[@"touchid", UIColor.systemRedColor],
+            @"锁键": @[@"circle.circle", UIColor.systemGrayColor], @"触控 ID": @[@"touchid", UIColor.systemRedColor],
             @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor], @"锁键 + 音量键": @[@"plus.rectangle.on.rectangle", UIColor.systemPurpleColor],
             @"拨片开关": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
             @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
