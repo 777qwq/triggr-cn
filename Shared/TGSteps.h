@@ -16,12 +16,12 @@
 //
 // 二、条件词表
 //
-//     wifi:Home      已连 Wi-Fi「Home」；wifi: / wifi 表示任何网络
-//     bt:AirPods     已连蓝牙「AirPods」；bt: / bt 表示任何设备
+//     wifi:Home      已连接 Wi-Fi「Home」；wifi: / wifi 表示任何网络
+//     bt:AirPods     已连接蓝牙「AirPods」；bt: / bt 表示任何设备
 //     charging       充电中
 //     locked         已锁定
 //     music          音乐播放中
-//     headphones     连接了耳机
+//     headphones     已连接耳机
 //     lowpower       低电量模式已开启
 //     battery<20     电量低于 20%
 //     battery>20     电量高于 20%
@@ -60,7 +60,6 @@ typedef NS_ENUM(NSInteger, TGConditionKind) {
     TGConditionKindBatteryBelow,
     TGConditionKindBatteryAbove,
     TGConditionKindTime,        // time:HHMM-HHMM, overnight allowed
-    TGConditionKindFlashlight,  // flashlight / !flashlight（2.0/2.1 有，cn4.20 补）
     TGConditionKindNetwork,     // 裸 wifi / !wifi：有没有网（Wi-Fi 或蜂窝），与 wifi: 不是一回事
 };
 
@@ -178,9 +177,6 @@ static inline BOOL TGConditionParse(NSString *encoded, TGCondition *out) {
     } else if ([body isEqualToString:@"lowpower"]) {
         out->kind = TGConditionKindLowPower;
         body = @"";
-    } else if ([body isEqualToString:@"flashlight"]) {
-        out->kind = TGConditionKindFlashlight;
-        body = @"";
     } else {
         return NO;
     }
@@ -206,7 +202,6 @@ static inline NSString *TGConditionEncode(const TGCondition *condition) {
         case TGConditionKindMusic: body = @"music"; break;
         case TGConditionKindHeadphones: body = @"headphones"; break;
         case TGConditionKindLowPower: body = @"lowpower"; break;
-        case TGConditionKindFlashlight: body = @"flashlight"; break;
         // 裸形式，不带冒号：见 TGConditionParse 里为什么不能归一。
         case TGConditionKindNetwork: body = @"wifi"; break;
         default: return nil;
@@ -226,17 +221,16 @@ static inline NSString *TGConditionTitle(const TGCondition *condition) {
     NSString *name = TGArgumentString(condition);
     switch (condition->kind) {
         case TGConditionKindWiFi:
-            if (condition->negated) return name.length ? [NSString stringWithFormat:@"未在 Wi-Fi「%@」上", name] : @"未连接 Wi-Fi";
-            return name.length ? [NSString stringWithFormat:@"在 Wi-Fi「%@」上", name] : @"已连接 Wi-Fi";
+            if (condition->negated) return name.length ? [NSString stringWithFormat:@"未连接 Wi-Fi「%@」", name] : @"未连接 Wi-Fi";
+            return name.length ? [NSString stringWithFormat:@"已连接 Wi-Fi「%@」", name] : @"已连接 Wi-Fi";
         case TGConditionKindBluetooth:
-            if (condition->negated) return name.length ? [NSString stringWithFormat:@"未连接「%@」", name] : @"未连接蓝牙设备";
-            return name.length ? [NSString stringWithFormat:@"已连接「%@」", name] : @"已连接蓝牙设备";
-        case TGConditionKindCharging: return condition->negated ? @"未在充电" : @"充电中";
-        case TGConditionKindLocked: return condition->negated ? @"已解锁" : @"已锁定";
-        case TGConditionKindMusic: return condition->negated ? @"音乐未在播放" : @"音乐播放中";
+            if (condition->negated) return name.length ? [NSString stringWithFormat:@"未连接蓝牙「%@」", name] : @"未连接蓝牙设备";
+            return name.length ? [NSString stringWithFormat:@"已连接蓝牙「%@」", name] : @"已连接蓝牙设备";
+        case TGConditionKindCharging: return condition->negated ? @"未充电" : @"充电中";
+        case TGConditionKindLocked: return condition->negated ? @"未解锁" : @"已锁定";
+        case TGConditionKindMusic: return condition->negated ? @"音乐未播放" : @"音乐播放中";
         case TGConditionKindHeadphones: return condition->negated ? @"未连接耳机" : @"已连接耳机";
         case TGConditionKindLowPower: return condition->negated ? @"低电量模式已关闭" : @"低电量模式已开启";
-        case TGConditionKindFlashlight: return condition->negated ? @"手电筒已关闭" : @"手电筒已开启";
         case TGConditionKindNetwork: return condition->negated ? @"完全没有网络" : @"有网络（Wi-Fi 或蜂窝）";
         case TGConditionKindBatteryBelow: return [NSString stringWithFormat:@"电量低于 %d%%", condition->value];
         case TGConditionKindBatteryAbove: return [NSString stringWithFormat:@"电量高于 %d%%", condition->value];

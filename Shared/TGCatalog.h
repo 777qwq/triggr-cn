@@ -70,9 +70,9 @@ static const TGItem TGStatusBar[] = {
 static const TGItem TGMotion[] = { {"motion.shake", "摇晃设备"} };
 
 static const TGItem TGSeqConditions[] = {
-    {"if:wifi", "连着 Wi-Fi 网络"}, {"if:charging", "正在充电"},
-    {"if:locked", "设备已锁定"}, {"if:music", "正在播放音乐"},
-    {"if:headphones", "连着耳机"}, {"if:bt", "连着蓝牙设备"},
+    {"if:wifi", "有网络（Wi-Fi 或蜂窝）"}, {"if:charging", "充电中"},
+    {"if:locked", "已锁定"}, {"if:music", "音乐播放中"},
+    {"if:headphones", "已连接耳机"}, {"if:bt", "已连接蓝牙设备"},
     {"if:custom", "自定义条件…"}, {"else", "否则"}, {"endif", "结束条件"},
 };
 // A quick flick that starts on a Home Screen icon (see TGFlickRecognizer).
@@ -134,7 +134,7 @@ static const TGItem TGStateChanges[] = {
     {"wifi.on", "Wi-Fi 已开启"}, {"wifi.off", "Wi-Fi 已关闭"},
     {"wifi.joined", "加入 Wi-Fi 网络"}, {"wifi.left", "离开 Wi-Fi 网络"},
     {"bluetooth.on", "蓝牙已开启"}, {"bluetooth.off", "蓝牙已关闭"},
-    {"lowpower.on", "低电量模式开启"}, {"lowpower.off", "低电量模式关闭"},
+    {"lowpower.on", "低电量模式已开启"}, {"lowpower.off", "低电量模式已关闭"},
     {"device.locked", "设备已锁定"}, {"device.unlocked", "设备已解锁"},
     {"display.on", "屏幕点亮"}, {"display.off", "屏幕熄灭"},
 };
@@ -148,16 +148,16 @@ static const TGGroup TGTriggerGroups[] = {
     {"拨片开关", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。"},
     {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
     {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。"},
-    {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入，应用内、主屏幕和锁屏均有效。单指“从左侧滑入”会取代多数应用的返回手势；双指版（同 Activator）不会。"},
+    {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入，应用内、主屏幕和锁屏均有效。单指「从左侧滑入」会取代多数应用的返回手势；双指版（同 Activator）不会。"},
     {"主屏幕手势", TGHomeGestures, TG_COUNT(TGHomeGestures), "在主屏幕页面上（而非图标上）。双指滑动和捏合不影响单指滚动、聚焦搜索和今天视图；双击只在空白处生效。编辑主屏幕或打开文件夹时忽略。"},
     {"应用内手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "在应用内有效。原应用仍会收到同样的手势，所以挑它没占用的：两指/三指点按和滑动最安全。捏合是双指缩放，会与照片、Safari、地图等缩放冲突——每个手势只在有指派的应用里启用。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},
     {"CarPlay", TGCarPlay, TG_COUNT(TGCarPlay), "靠音频输出端口判断，有线和无线 CarPlay 都算。连接在建立会话时触发，断开在端口切回扬声器时触发。"},
     {"日出与日落", TGSun, TG_COUNT(TGSun), "用系统已有的位置算当天的日出日落，不持续定位、不联网。需要「定位服务」开着；算不出来（极昼、极夜）就不触发。"},
-    {"电话", TGCalls, TG_COUNT(TGCalls), "使用 CallKit 的电话、FaceTime 及其他通话应用。来电在响铃时触发，接听电话在接通时触发。开启“实时留言信箱”后，转入语音信箱的电话也算接听。"},
-    {"通知", TGNotifications, TG_COUNT(TGNotifications), "收到任意通知时触发，无论是否显示横幅。Triggr 只能看到是哪个应用发的，看不到内容。想只针对某个应用，用自定义事件中的“应用通知”。"},
-    {"音乐", TGMusic, TG_COUNT(TGMusic), "任何出现在“正在播放”里的应用：音乐、Spotify、YouTube、播客等。切歌每首新歌运行一次，含暂停后的第一首；Triggr 自身媒体动作引起的变化 1 秒内忽略，避免指派自我循环。"},
+    {"电话", TGCalls, TG_COUNT(TGCalls), "使用 CallKit 的电话、FaceTime 及其他通话应用。来电在响铃时触发，接听电话在接通时触发。开启「实时留言信箱」后，转入语音信箱的电话也算接听。"},
+    {"通知", TGNotifications, TG_COUNT(TGNotifications), "收到任意通知时触发，无论是否显示横幅。Triggr 只能看到是哪个应用发的，看不到内容。想只针对某个应用，用自定义事件中的「应用通知」。"},
+    {"音乐", TGMusic, TG_COUNT(TGMusic), "任何出现在「正在播放」里的应用：音乐、Spotify、YouTube、播客等。切歌每首新歌运行一次，含暂停后的第一首；Triggr 自身媒体动作引起的变化 1 秒内忽略，避免指派自我循环。"},
     {"距离传感器", TGProximity, TG_COUNT(TGProximity), "听筒旁的传感器。指派后屏幕亮着期间它会一直开启（略耗电）。「挥手」指遮挡不到半秒；指派了「挥手」后，「遮挡」会等这么久才执行。"},
     {"状态变化", TGStateChanges, TG_COUNT(TGStateChanges), "在变化发生后触发。控制中心的 Wi-Fi 开关只会断开网络（即「离开 Wi-Fi 网络」），Wi-Fi 本身保持开启。由 Triggr 自身动作引起的变化在一秒内被忽略，避免指派循环触发。"},
 };
@@ -166,7 +166,7 @@ static const TGItem TGSystemActions[] = {
     {"system.home", "回到主屏幕"}, {"system.switcher", "App 切换器"},
     {"system.lastapp", "上一个应用"}, {"system.quitapp", "退出当前应用"},
     {"system.cc", "控制中心"}, {"system.nc", "通知中心"}, {"system.spotlight", "聚焦搜索"},
-    {"system.reachability", "单手模式"}, {"system.siri", "唤醒Siri"}, {"system.dismisssiri", "关闭Siri"}, {"system.screenshot", "截屏"},
+    {"system.reachability", "单手模式"}, {"system.siri", "唤醒 Siri"}, {"system.dismisssiri", "关闭 Siri"}, {"system.screenshot", "截屏"},
     {"system.screenrecord", "屏幕录制"}, {"system.closeapps", "清理后台应用"},
     {"system.nothing", "无操作"},
 };
@@ -199,7 +199,6 @@ static const TGItem TGMediaActions[] = {
     {"media.playpause", "播放 / 暂停"}, {"media.next", "下一曲"}, {"media.previous", "上一曲"},
     {"media.volup", "音量加"}, {"media.voldown", "音量减"},
     {"media.airplay", "AirPlay 选择器"}, {"media.airplayiphone", "在本机播放"},
-    {"flashlight.up", "手电筒调亮"}, {"flashlight.down", "手电筒调暗"},
 };
 
 static const TGGroup TGActionGroups[] = {
@@ -394,7 +393,7 @@ static inline NSString *TGTriggerWarning(NSString *trigger, BOOL replaces) {
         @"lock.double": @"单击会稍作等待以判断是否还有下一次按压。",
         @"lock.triple": @"单击和双击会稍作等待以判断是否还有下一次按压。",
         @"lock.longhold": @"取代关机滑块。若仍想显示它，请添加「关机滑块」。",
-        @"combo.sideup": @"后按下的那颗键不会真正锁屏/调音量。无 Home 键设备上还会取代截屏；想两者都保留，另加“截屏”动作。若同时指派了 Up Hold，它会在你松手时运行。",
+        @"combo.sideup": @"后按下的那颗键不会真正锁屏/调音量。无 Home 键设备上还会取代截屏；想两者都保留，另加「截屏」动作。若同时指派了 Up Hold，它会在你松手时运行。",
         @"combo.sidedown": @"后按下的那颗键不会真正锁屏/调音量。若同时指派了 Down Hold，它会在你松手时运行。",
         @"combo.sideuphold": @"半秒后触发，与 iOS 并行：继续按住仍会照常出现关机滑条和紧急 SOS。",
         @"combo.sidedownhold": @"半秒后触发，与 iOS 并行：继续按住仍会照常出现关机滑条和紧急 SOS。",
@@ -505,8 +504,8 @@ static inline NSString *TGCustomTriggerTitle(NSString *trigger) {
     for (NSString *prefix in TGCustomPrefixes()) if ([trigger hasPrefix:prefix]) value = [trigger substringFromIndex:prefix.length];
     if ([trigger hasPrefix:TGWiFiJoinedPrefix]) return [NSString stringWithFormat:@"加入 Wi-Fi「%@」", value];
     if ([trigger hasPrefix:TGWiFiLeftPrefix]) return [NSString stringWithFormat:@"离开 Wi-Fi「%@」", value];
-    if ([trigger hasPrefix:TGBTConnectedPrefix]) return [NSString stringWithFormat:@"连接到“%@”", value];
-    if ([trigger hasPrefix:TGBTDisconnectedPrefix]) return [NSString stringWithFormat:@"从“%@”断开", value];
+    if ([trigger hasPrefix:TGBTConnectedPrefix]) return [NSString stringWithFormat:@"连接到「%@」", value];
+    if ([trigger hasPrefix:TGBTDisconnectedPrefix]) return [NSString stringWithFormat:@"从「%@」断开", value];
     if ([trigger hasPrefix:TGBatteryAbovePrefix]) return [NSString stringWithFormat:@"电量升破 %@%%", value];
     if ([trigger hasPrefix:TGBatteryBelowPrefix]) return [NSString stringWithFormat:@"电量跌破 %@%%", value];
     if ([trigger hasPrefix:TGAppLaunchedPrefix]) return [@"打开了 " stringByAppendingString:value];
@@ -570,25 +569,32 @@ static inline NSString *TGAssignmentKey(NSString *mode, NSString *trigger) {
 static inline NSString *TGSeqConditionTitle(NSString *cond) {
     BOOL neg = NO;
     if ([cond hasPrefix:@"!"]) { neg = YES; cond = [cond substringFromIndex:1]; }
-    NSString *base;
-    if ([cond isEqualToString:@"wifi"]) base = @"有网络（Wi-Fi 或蜂窝）";
-    else if ([cond hasPrefix:@"wifi:"]) base = [NSString stringWithFormat:@"连着 Wi-Fi「%@」", [cond substringFromIndex:5]];
-    else if ([cond hasPrefix:@"bt:"]) base = [NSString stringWithFormat:@"连着蓝牙「%@」", [cond substringFromIndex:3]];
-    else if ([cond isEqualToString:@"bt"]) base = @"连着蓝牙设备";
-    else if ([cond isEqualToString:@"charging"]) base = @"正在充电";
-    else if ([cond isEqualToString:@"locked"]) base = @"设备已锁定";
-    else if ([cond isEqualToString:@"music"]) base = @"正在播放音乐";
-    else if ([cond isEqualToString:@"headphones"]) base = @"连着耳机";
-    else if ([cond isEqualToString:@"lowpower"]) base = @"低电量模式开着";
-    else if ([cond isEqualToString:@"flashlight"]) base = @"手电筒开着";
+    // 正反两式一起给：同一条件的「不成立」必须说人话，不能拼成「不满足「已锁定」」。
+    NSString *base = nil, *opposite = nil;
+    if ([cond isEqualToString:@"wifi"]) { base = @"有网络（Wi-Fi 或蜂窝）"; opposite = @"完全没有网络"; }
+    else if ([cond hasPrefix:@"wifi:"]) {
+        base = [NSString stringWithFormat:@"已连接 Wi-Fi「%@」", [cond substringFromIndex:5]];
+        opposite = [NSString stringWithFormat:@"未连接 Wi-Fi「%@」", [cond substringFromIndex:5]];
+    }
+    else if ([cond hasPrefix:@"bt:"]) {
+        base = [NSString stringWithFormat:@"已连接蓝牙「%@」", [cond substringFromIndex:3]];
+        opposite = [NSString stringWithFormat:@"未连接蓝牙「%@」", [cond substringFromIndex:3]];
+    }
+    else if ([cond isEqualToString:@"bt"]) { base = @"已连接蓝牙设备"; opposite = @"未连接蓝牙设备"; }
+    else if ([cond isEqualToString:@"charging"]) { base = @"充电中"; opposite = @"未充电"; }
+    else if ([cond isEqualToString:@"locked"]) { base = @"已锁定"; opposite = @"未解锁"; }
+    else if ([cond isEqualToString:@"music"]) { base = @"音乐播放中"; opposite = @"音乐未播放"; }
+    else if ([cond isEqualToString:@"headphones"]) { base = @"已连接耳机"; opposite = @"未连接耳机"; }
+    else if ([cond isEqualToString:@"lowpower"]) { base = @"低电量模式已开启"; opposite = @"低电量模式已关闭"; }
     else if ([cond hasPrefix:@"battery<"]) base = [NSString stringWithFormat:@"电量低于 %@%%", [cond substringFromIndex:8]];
     else if ([cond hasPrefix:@"battery>"]) base = [NSString stringWithFormat:@"电量高于 %@%%", [cond substringFromIndex:8]];
     else if ([cond hasPrefix:@"time:"]) {
         NSArray *parts = [[cond substringFromIndex:5] componentsSeparatedByString:@"-"];
-        base = parts.count == 2 ? [NSString stringWithFormat:@"时间在 %@ 和 %@ 之间", parts[0], parts[1]] : [@"时间条件 " stringByAppendingString:cond];
+        base = parts.count == 2 ? [NSString stringWithFormat:@"%@ 到 %@ 之间", parts[0], parts[1]] : [@"时间条件 " stringByAppendingString:cond];
     }
     else base = cond;
-    return neg ? [NSString stringWithFormat:@"不满足「%@」", base] : base;
+    if (neg) return opposite ?: [NSString stringWithFormat:@"不满足「%@」", base];
+    return base;
 }
 
 static inline NSString *TGActionTitle(NSString *action) {

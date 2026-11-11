@@ -213,7 +213,7 @@ static NSString *TGPlaceTitle(NSString *mode) {
 }
 
 static NSString *TGModePhrase(NSString *mode) {
-    if ([mode hasPrefix:TGAppModePrefix]) return [NSString stringWithFormat:@"应用内“%@”", TGPlaceTitle(mode)];
+    if ([mode hasPrefix:TGAppModePrefix]) return [NSString stringWithFormat:@"应用内「%@」", TGPlaceTitle(mode)];
     return @{ @"anywhere": @"所有位置", @"home": @"主屏幕", @"app": @"应用内", @"lock": @"锁屏界面" }[mode] ?: @"该位置";
 }
 
@@ -600,10 +600,10 @@ static void TGAskNumber(UIViewController *host, NSString *title, NSString *messa
 
 static void TGPromptWiFi(UIViewController *host, BOOL negated, void (^done)(NSString *encoded)) {
     NSString *prefix = negated ? @"!wifi:" : @"wifi:";
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:negated ? @"未连 Wi-Fi" : @"已连 Wi-Fi" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:negated ? @"未连接 Wi-Fi" : @"已连接 Wi-Fi" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *name in TGSavedWiFiNetworks())
         [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done([prefix stringByAppendingString:name]); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:negated ? @"没有连 Wi-Fi" : @"任何网络" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(prefix); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:negated ? @"未连接任何 Wi-Fi" : @"任何 Wi-Fi 网络" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(prefix); }]];
     // 「没有连 Wi-Fi」和「完全没有网络」不是一回事：前者可以靠蜂窝，后者两个都没有。
     // 以前两项都写 !wifi:，文案说没网、实际只判了 Wi-Fi，断网类触发器经常误判。
     if (negated) [sheet addAction:[UIAlertAction actionWithTitle:@"完全没有网络（Wi-Fi 与蜂窝都没有）" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(@"!wifi"); }]];
@@ -624,10 +624,10 @@ static void TGPromptWiFi(UIViewController *host, BOOL negated, void (^done)(NSSt
 
 static void TGPromptBluetooth(UIViewController *host, BOOL negated, void (^done)(NSString *encoded)) {
     NSString *prefix = negated ? @"!bt:" : @"bt:";
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:negated ? @"未连接" : @"已连接" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:negated ? @"未连接蓝牙设备" : @"已连接蓝牙设备" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *name in TGPairedBluetoothDevices())
         [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done([prefix stringByAppendingString:name]); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:negated ? @"完全没有设备" : @"任何设备" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(prefix); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:negated ? @"未连接任何蓝牙设备" : @"任何蓝牙设备" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(prefix); }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     TGPresentSheet(host, sheet);
 }
@@ -659,22 +659,20 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
     void (^add)(NSString *, void (^)(void)) = ^(NSString *name, void (^handler)(void)) {
         [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { handler(); }]];
     };
-    add(@"已连 Wi-Fi", ^{ TGPromptWiFi(host, NO, done); });
-    add(@"未连 Wi-Fi", ^{ TGPromptWiFi(host, YES, done); });
+    add(@"已连接 Wi-Fi", ^{ TGPromptWiFi(host, NO, done); });
+    add(@"未连接 Wi-Fi", ^{ TGPromptWiFi(host, YES, done); });
     add(@"已连接蓝牙设备", ^{ TGPromptBluetooth(host, NO, done); });
     add(@"未连接蓝牙设备", ^{ TGPromptBluetooth(host, YES, done); });
     add(@"充电中", ^{ done(@"charging"); });
-    add(@"未在充电", ^{ done(@"!charging"); });
+    add(@"未充电", ^{ done(@"!charging"); });
     add(@"已锁定", ^{ done(@"locked"); });
-    add(@"已解锁", ^{ done(@"!locked"); });
+    add(@"未解锁", ^{ done(@"!locked"); });
     add(@"音乐播放中", ^{ done(@"music"); });
     add(@"音乐未播放", ^{ done(@"!music"); });
-    add(@"连接耳机", ^{ done(@"headphones"); });
-    add(@"耳机未连接", ^{ done(@"!headphones"); });
+    add(@"已连接耳机", ^{ done(@"headphones"); });
+    add(@"未连接耳机", ^{ done(@"!headphones"); });
     add(@"低电量模式已开启", ^{ done(@"lowpower"); });
-    add(@"关闭低电量模式", ^{ done(@"!lowpower"); });
-    add(@"手电筒已开启", ^{ done(@"flashlight"); });
-    add(@"手电筒已关闭", ^{ done(@"!flashlight"); });
+    add(@"低电量模式已关闭", ^{ done(@"!lowpower"); });
     add(@"电量低于…", ^{ TGPromptBattery(host, NO, done); });
     add(@"电量高于…", ^{ TGPromptBattery(host, YES, done); });
     add(@"时间段内…", ^{ TGPromptTimes(host, done); });
@@ -850,7 +848,7 @@ static void TGPromptWait(UIViewController *host, NSString *encoded, void (^done)
         });
     }]];
     if (match >= 0 && !hasElse) {
-        [sheet addAction:[UIAlertAction actionWithTitle:@"添加“否则”" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"添加「否则」" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             [self.items insertObject:TGElseDirective atIndex:(NSUInteger)match];
             [self.tableView reloadData];
             [self changed];
@@ -1140,7 +1138,7 @@ static NSString *TGCategoryOf(NSString *action) {
         // 「否则它做原本的事」这句必须说。只说「不会运行」，用户会以为按键也失效了；
         // 按键类触发器在条件不成立时是交还 iOS 的（cn4.20 起），事件类没有「原本的事」，
         // 所以只对按键类承诺这一句。
-        [onlyGroup setProperty:@"可选。例如：只在手电筒打开时、只在家里的 Wi-Fi 上、只在夜间。\n全部成立才执行；任一不成立就跳过这次，不会显示动作横幅。按键类触发器这时仍按系统原本的方式响应。" forKey:@"footerText"];
+        [onlyGroup setProperty:@"可选。例如：只在家里的 Wi-Fi 上、只在充电时、只在夜间。\n全部成立才执行；任一不成立就跳过这次，不会显示动作横幅。按键类触发器这时仍按系统原本的方式响应。" forKey:@"footerText"];
         [specs addObject:onlyGroup];
         NSArray<NSString *> *conditions = TGReadConditions(self, _mode, _trigger);
         for (NSUInteger i = 0; i < conditions.count; i++) {
@@ -1284,7 +1282,7 @@ static NSString *TGCategoryOf(NSString *action) {
     [specs addObject:group];
     for (PSSpecifier *row in rows)
         if ([row.name rangeOfString:_query options:NSCaseInsensitiveSearch | NSDiacriticInsensitiveSearch].location != NSNotFound) [specs addObject:row];
-    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"没有匹配“%@”的动作。", _query] forKey:@"footerText"];
+    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"没有匹配「%@」的动作。", _query] forKey:@"footerText"];
     return specs;
 }
 
@@ -1938,7 +1936,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [specs addObject:[PSSpecifier groupSpecifierWithName:@"添加事件"]];
             NSArray<NSArray<NSString *> *> *kinds = @[
                 @[@"加入 Wi-Fi 网络", TGWiFiJoinedPrefix], @[@"离开 Wi-Fi 网络", TGWiFiLeftPrefix],
-                @[@"蓝牙设备已连接", TGBTConnectedPrefix], @[@"蓝牙设备已断开", TGBTDisconnectedPrefix],
+                @[@"已连接蓝牙设备", TGBTConnectedPrefix], @[@"已断开蓝牙设备", TGBTDisconnectedPrefix],
                 @[@"电量高于", TGBatteryAbovePrefix], @[@"电量低于", TGBatteryBelowPrefix],
                 @[@"定时", TGTimePrefix],
             ];
@@ -2345,7 +2343,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             // Said up front: what's set here only works in this place.
             PSSpecifier *intro = [PSSpecifier groupSpecifierWithName:nil];
             [intro setProperty:oneApp
-                ? [NSString stringWithFormat:@"此处的指派只在%@生效，并取代同一触发器上“应用内”和“任意位置”的指派。", TGModePhrase(_mode)]
+                ? [NSString stringWithFormat:@"此处的指派只在%@生效，并取代同一触发器上「应用内」和「任意位置」的指派。", TGModePhrase(_mode)]
                 : [NSString stringWithFormat:@"此处指派仅在%@生效，并对同一触发器取代任意位置的指派；其他位置仍沿用任意位置的指派。", TGModePhrase(_mode)] forKey:@"footerText"];
             [specs addObject:intro];
         }
@@ -2367,7 +2365,8 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             @"锁屏键": @[@"lock.fill", UIColor.systemBlueColor], @"音量键": @[@"speaker.wave.2.fill", UIColor.systemPinkColor], @"锁键 + 音量键": @[@"plus.rectangle.on.rectangle", UIColor.systemPurpleColor],
             @"拨片开关": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
             @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
-            @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"应用内手势": @[@"hand.tap.fill", UIColor.systemMintColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
+            @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"CarPlay": @[@"car.fill", UIColor.systemBlueColor],
+            @"日出与日落": @[@"sun.horizon.fill", UIColor.systemOrangeColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"应用内手势": @[@"hand.tap.fill", UIColor.systemMintColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
         };
         for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
             if (!TGShowsTriggerGroup(&TGTriggerGroups[g])) continue;
@@ -2441,7 +2440,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         }
         NSMutableArray *specs = [NSMutableArray array];
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
-        [group setProperty:@"为单个应用单独指派：在该应用内，同触发器会取代“应用内”和“任意位置”的指派，其他地方不受影响。" forKey:@"footerText"];
+        [group setProperty:@"为单个应用单独指派：在该应用内，同触发器会取代「应用内」和「任意位置」的指派，其他地方不受影响。" forKey:@"footerText"];
         [specs addObject:group];
         NSArray *places = [counts.allKeys sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) { return [TGPlaceTitle(a) localizedStandardCompare:TGPlaceTitle(b)]; }];
         for (NSString *place in places) {
@@ -2604,7 +2603,7 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
                     [rows addObject:TGSubtitled(TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), place, trigger))];
                 }
                 if (!rows.count) continue;
-                [specs addObject:[PSSpecifier groupSpecifierWithName:[place hasPrefix:TGAppModePrefix] ? [NSString stringWithFormat:@"应用内“%@”", TGPlaceTitle(place)] : TGModeTitle(place)]];
+                [specs addObject:[PSSpecifier groupSpecifierWithName:[place hasPrefix:TGAppModePrefix] ? [NSString stringWithFormat:@"应用内「%@」", TGPlaceTitle(place)] : TGModeTitle(place)]];
                 [specs addObjectsFromArray:[rows sortedArrayUsingComparator:TGCatalogOrder]];
             }
             _specifiers = specs;
@@ -3091,7 +3090,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         [specs addObject:replace];
 
         PSSpecifier *api = [PSSpecifier groupSpecifierWithName:@"API"];
-        [api setProperty:@"允许其他插件和 triggr 命令运行你的触发器、菜单与内置动作（不会直接执行 shell 命令、URL 或打开应用）。任何应用都可能发起请求，不用就保持关闭。“triggr list”可查看 ID。" forKey:@"footerText"];
+        [api setProperty:@"允许其他插件和 triggr 命令运行你的触发器、菜单与内置动作（不会直接执行 shell 命令、URL 或打开应用）。任何应用都可能发起请求，不用就保持关闭。「triggr list」可查看 ID。" forKey:@"footerText"];
         [specs addObject:api];
         [specs addObject:TGSwitchRow(@"允许 API", TGAllowAPIKey, NO, self)];
         _specifiers = specs;
@@ -3168,7 +3167,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
             [specs addObject:TGSubtitled(TGTriggerRow(title, self, @selector(assignedActionTitle:), @"anywhere", trigger))];
         }
     }
-    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"没有匹配“%@”的触发器。", _query] forKey:@"footerText"];
+    if (specs.count == 1) [group setProperty:[NSString stringWithFormat:@"没有匹配「%@」的触发器。", _query] forKey:@"footerText"];
     else [group setProperty:@"只想对单一位置（主屏幕、应用内、锁屏）生效，请改在上方对应位置设置。" forKey:@"footerText"];
     return specs;
 }

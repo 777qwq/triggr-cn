@@ -507,36 +507,6 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
     return YES;
 }
 
-// 手电筒亮度步进，每次 10%。和开关动作共用 SBUIFlashlightController；
-// iOS 17 起 SpringBoard 只能通过它点灯，AVCaptureDevice 只作旧系统兜底。
-// 关着的时候「调亮」等于点亮到 10%，「调暗」到 0 就熄灯并 coolDown。
-static BOOL TGFlashlightStep(BOOL up, BOOL dryRun) {
-    id flashlight = TGShared("SBUIFlashlightController");
-    if ([flashlight respondsToSelector:@selector(setLevel:)] && [flashlight respondsToSelector:@selector(level)]) {
-        if (dryRun) return YES;
-        double level = [[flashlight valueForKey:@"level"] doubleValue];
-        double next = MIN(1.0, MAX(0.0, level + (up ? 0.1 : -0.1)));
-        if (level <= 0.001 && up) { // 关着时调亮＝先点灯
-            if ([flashlight respondsToSelector:@selector(warmUp)]) ((void (*)(id, SEL))objc_msgSend)(flashlight, @selector(warmUp));
-            next = 0.1;
-        }
-        [flashlight setValue:@(next) forKey:@"level"];
-        if (next <= 0.001 && [flashlight respondsToSelector:@selector(coolDown)]) ((void (*)(id, SEL))objc_msgSend)(flashlight, @selector(coolDown));
-        return YES;
-    }
-    AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
-    if (!device.hasTorch) return NO;
-    if (dryRun) return YES;
-    NSError *error = nil;
-    if (![device lockForConfiguration:&error]) return NO;
-    float level = device.torchMode == AVCaptureTorchModeOn ? device.torchLevel : 0.0f;
-    level = MIN(1.0f, MAX(0.0f, level + (up ? 0.1f : -0.1f)));
-    if (level > 0.0f) [device setTorchModeOnWithLevel:level error:&error];
-    else device.torchMode = AVCaptureTorchModeOff;
-    [device unlockForConfiguration];
-    return YES;
-}
-
 #pragma mark Switches (Toggle / On / Off)
 
 // A switch reads its state and sets it; nil when unavailable on this device.
@@ -1299,8 +1269,6 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.closeapps": ^BOOL(BOOL dry) { return TGCloseBackgroundApps(dry); },
             @"media.volup": ^BOOL(BOOL dry) { return TGVolumeStep(springBoard, YES, dry); },
             @"media.voldown": ^BOOL(BOOL dry) { return TGVolumeStep(springBoard, NO, dry); },
-            @"flashlight.up": ^BOOL(BOOL dry) { return TGFlashlightStep(YES, dry); },
-            @"flashlight.down": ^BOOL(BOOL dry) { return TGFlashlightStep(NO, dry); },
         };
     });
     return table;
@@ -1503,18 +1471,6 @@ static BOOL TGConditionMusicPlaying(void) {
     return TGCallBool(TGShared("SBMediaController"), @selector(isPlaying));
 }
 
-// 手电筒：和控制中心同一个控制器，level > 0 就是亮着。
-// iOS 17 起 SpringBoard 不能再用 AVCaptureDevice 点灯，动作侧（TGSwitchFor）也是这么读的。
-static BOOL TGFlashlightOn(void) {
-    id flashlight = TGShared("SBUIFlashlightController");
-    if (![flashlight respondsToSelector:@selector(level)]) return NO;
-    @try {
-        id level = [flashlight valueForKey:@"level"];
-        return [level respondsToSelector:@selector(doubleValue)] && [level doubleValue] > 0;
-    } @catch (__unused NSException *e) {
-        return NO;
-    }
-}
 
 // 蜂窝有没有注册上网：有 currentRadioAccessTechnology 就算有。
 // 只服务「完全没有网络」这一个条件——Wi-Fi 关着但插着卡的人不该被当成断网。
@@ -1566,7 +1522,6 @@ static BOOL TGConditionHolds(TGCondition condition) {
         case TGConditionKindMusic: holds = TGConditionMusicPlaying(); break;
         case TGConditionKindHeadphones: holds = TGRouteHasHeadphones(AVAudioSession.sharedInstance.currentRoute); break;
         case TGConditionKindLowPower: holds = NSProcessInfo.processInfo.isLowPowerModeEnabled; break;
-        case TGConditionKindFlashlight: holds = TGFlashlightOn(); break;
         // 有网 = 连着 Wi-Fi，或者蜂窝注册上了；negated 才是「完全没有网络」。
         case TGConditionKindNetwork: holds = TGConditionNetwork() != nil || TGConditionCellular(); break;
         case TGConditionKindBatteryBelow: {

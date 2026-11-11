@@ -56,7 +56,7 @@ def parse(encoded):
             return None
         cond.update(kind="time", start=start, end=end)
         body = ""
-    elif body in ("charging", "locked", "music", "headphones", "lowpower", "flashlight"):
+    elif body in ("charging", "locked", "music", "headphones", "lowpower"):
         cond["kind"] = body
         body = ""
     else:
@@ -68,7 +68,7 @@ def parse(encoded):
 
 
 STATE = {"wifi": None, "bt": None, "charging": False, "locked": False,
-         "music": False, "headphones": False, "lowpower": False, "flashlight": False,
+         "music": False, "headphones": False, "lowpower": False,
          "cellular": False, "battery": 50, "now": 1200}
 
 
@@ -88,8 +88,6 @@ def holds(c):
         v = STATE["headphones"]
     elif k == "lowpower":
         v = STATE["lowpower"]
-    elif k == "flashlight":
-        v = STATE["flashlight"]
     elif k == "network":
         v = STATE["wifi"] is not None or STATE["cellular"]
     elif k == "battery_below":
@@ -159,7 +157,7 @@ def run_steps(steps, index=0, frames=None, stopped=None):
 
 def reset(**kw):
     STATE.update({"wifi": None, "bt": None, "charging": False, "locked": False,
-                  "music": False, "headphones": False, "lowpower": False, "flashlight": False,
+                  "music": False, "headphones": False, "lowpower": False,
                   "cellular": False, "battery": 50, "now": 1200})
     STATE.update(kw)
 
@@ -194,8 +192,6 @@ case("电量阈值：10 < 20 成立", ["if:battery<20", "a", "endif"], ["a"], ba
 case("电量阈值：10 > 80 不成立", ["if:battery>80", "a", "endif"], [], battery=10)
 case("暂停跨块：外层不成立时不跑",
      ["if:charging", "a", "pause:1", "b", "endif"], [], charging=False)
-case("手电筒开着", ["if:flashlight", "a", "endif"], ["a"], flashlight=True)
-case("手电筒关着", ["if:!flashlight", "a", "endif"], ["a"], flashlight=False)
 # 「未连 Wi-Fi」与「完全没有网络」必须分开：前者有蜂窝也成立，后者才是断网。
 case("未连 Wi-Fi：有蜂窝仍成立", ["if:!wifi:", "a", "endif"], ["a"], wifi=None, cellular=True)
 case("完全没有网络：Wi-Fi 与蜂窝都没有", ["if:!wifi", "a", "endif"], ["a"], wifi=None, cellular=False)
