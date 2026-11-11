@@ -70,6 +70,15 @@ static NSDictionary<NSString *, NSString *> *tgMenuNames; // id -> name
 
 static BOOL tgHasAppAssignments; // some "app:<bundle id>/…" assignment exists
 
+// SpringBoard 的 UI 单例（SBUIController 一类）在启动完成前绝对不能碰。
+// 动作可用性探测会调用 TGShared()，也就是 [cls sharedInstance]；而 SBUIController
+// 的 init 里要取 UIScreen.mainScreen，此时屏幕还没就绪，UIKit 直接抛断言 abort。
+// 崩溃栈（iOS 16.3.1，隐根）：
+//   TGSyncUnavailable → TGCanPerform → TGShared("SBUIController")
+//   → -[SBUIController init] → +[UIScreen mainScreen] → NSAssertionHandler → abort
+// 所以 %ctor 里只读偏好，探测推迟到启动完成之后（见构造函数末尾）。
+static BOOL tgSpringBoardReady;
+
 // 把「已配置、但当前系统上跑不起来」的动作写到偏好里，只给设置页看。
 //
 // 可用性检查本身是不能去掉的（不可用的动作等于没配，触发器退回系统行为，不会出现
@@ -77,6 +86,7 @@ static BOOL tgHasAppAssignments; // some "app:<bundle id>/…" assignment exists
 // 用户看到的是「我配的双击电源键突然恢复成锁屏了」，配置还在，却没有任何解释。
 // 这条通道就是那句解释。只在集合真的变化时写盘，避免每次读偏好都刷一次偏好文件。
 static void TGSyncUnavailable(NSDictionary<NSString *, NSArray<NSString *> *> *assignments) {
+    if (!tgSpringBoardReady) return; // 启动完成前探测会实例化 SBUIController 并崩溃
     NSMutableSet<NSString *> *unavailable = [NSMutableSet set];
     for (NSArray *actions in assignments.allValues)
         for (NSString *action in actions) {
@@ -3723,6 +3733,12 @@ static void TGUpdateOtherEvents(void) {
     int shakeToken;
     notify_register_dispatch(TGRelayShake, &shakeToken, dispatch_get_main_queue(), ^(int t) { TGShaken(); });
     tgSpringBoardStarted = CACurrentMediaTime();
+    // 15 秒后再探测一次动作可用性：这时 SpringBoard 的 UI 已经就绪，取单例是安全的。
+    // 不用固定 15 秒也行，但这个值已经用于通知/媒体的启动期抑制，保持一致。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        tgSpringBoardReady = YES;
+        TGSyncUnavailable(tgAssignments);
+    });
     %init(_ungrouped);
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");
     Class uiBarWindow = objc_getClass("UIStatusBarWindow");

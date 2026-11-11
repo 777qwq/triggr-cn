@@ -3,6 +3,27 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.22
+
+修一个**启动即崩**的问题：配了「App 切换器」等动作后，SpringBoard 一启动就 abort。
+
+### 崩溃原因
+
+`%ctor` 里做动作可用性探测，而探测 `system.switcher` 时会取 `[SBUIController sharedInstance]`。那时 SpringBoard 的 UI 还没建好，`SBUIController init` 里的 `+[UIScreen mainScreen]` 直接抛断言：
+
+```
+TGSyncUnavailable → TGCanPerform → TGShared("SBUIController")
+→ -[SBUIController init] → +[UIScreen mainScreen] → NSAssertionHandler → abort
+```
+
+从 cn4.19 引入「不可用动作」同步起就存在，只是要**刚好配了会实例化 UI 单例的动作**才会踩到（`system.switcher`、`system.cc`、`system.reachability`、`system.lock` 等）。
+
+### 修法
+
+- 启动阶段只读偏好，不碰任何 SpringBoard UI 单例。
+- 可用性探测推迟到启动 15 秒后执行一次；之后改设置照常即时同步。
+- 探测结果（设置页的「当前系统上不可用」提示）不变，只是晚 15 秒出现。
+
 ## 1.5.0+cn4.21
 
 把上游 1.5.0 里被 cn4.15 分叉时漏掉的**动作扩展机制**补回来，顺手改三处文案和一个依赖。
