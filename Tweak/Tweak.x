@@ -1521,6 +1521,10 @@ static BOOL TGConditionHolds(TGCondition condition) {
 // 仅当：触发器的前置门。所有条件 AND，全部成立才放行。
 // 条件读不懂按不成立处理——宁可不动，也不能把不该跑的动作放出去。
 // 入参就是条件键的值，和动作列表无关：动作怎么过滤都碰不到这里。
+//
+// 这里不看 condition.wait：@秒 是「等 N 秒后再判一次」，属于动作级 if 的执行流
+// （由 TGRunSteps 的 dispatch_after 负责）。触发器级门必须先给答案再接管，
+// 等待会让按键被吞了 N 秒才发现不跑；带 @秒 的仅当条件按当前值判。
 static BOOL TGOnlyHolds(NSArray<NSString *> *conditions) {
     for (NSString *encoded in conditions) {
         TGCondition condition;

@@ -1340,13 +1340,6 @@ static NSString *TGCategoryOf(NSString *action) {
             [self applyOnlyConditions:next];
         });
     }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"要求持续 N 秒…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        TGPromptWait(self, encoded, ^(NSString *next) {
-            NSMutableArray *conditions = [TGReadConditions(self, self->_mode, self->_trigger) mutableCopy];
-            if (index < conditions.count) conditions[index] = next;
-            [self applyOnlyConditions:conditions];
-        });
-    }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"移除条件" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
         NSMutableArray *next = [TGReadConditions(self, self->_mode, self->_trigger) mutableCopy];
         if (index < next.count) [next removeObjectAtIndex:index];
