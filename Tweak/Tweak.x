@@ -28,6 +28,7 @@
 #import <LocalAuthentication/LocalAuthentication.h>
 #import <AudioToolbox/AudioToolbox.h>
 #import <CallKit/CallKit.h>
+#import <CoreLocation/CoreLocation.h>
 #import "../Shared/TGCatalog.h"
 #import "../Shared/TGHardware.h"
 #import "../Shared/TGPaths.h"
@@ -503,6 +504,36 @@ static BOOL TGVolumeStep(id springBoard, BOOL up, BOOL dryRun) {
         ((void (*)(id, SEL))objc_msgSend)(volume, start);
         ((void (*)(id, SEL))objc_msgSend)(volume, @selector(cancelVolumeEvent));
     }
+    return YES;
+}
+
+// 手电筒亮度步进，每次 10%。和开关动作共用 SBUIFlashlightController；
+// iOS 17 起 SpringBoard 只能通过它点灯，AVCaptureDevice 只作旧系统兜底。
+// 关着的时候「调亮」等于点亮到 10%，「调暗」到 0 就熄灯并 coolDown。
+static BOOL TGFlashlightStep(BOOL up, BOOL dryRun) {
+    id flashlight = TGShared("SBUIFlashlightController");
+    if ([flashlight respondsToSelector:@selector(setLevel:)] && [flashlight respondsToSelector:@selector(level)]) {
+        if (dryRun) return YES;
+        double level = [[flashlight valueForKey:@"level"] doubleValue];
+        double next = MIN(1.0, MAX(0.0, level + (up ? 0.1 : -0.1)));
+        if (level <= 0.001 && up) { // 关着时调亮＝先点灯
+            if ([flashlight respondsToSelector:@selector(warmUp)]) ((void (*)(id, SEL))objc_msgSend)(flashlight, @selector(warmUp));
+            next = 0.1;
+        }
+        [flashlight setValue:@(next) forKey:@"level"];
+        if (next <= 0.001 && [flashlight respondsToSelector:@selector(coolDown)]) ((void (*)(id, SEL))objc_msgSend)(flashlight, @selector(coolDown));
+        return YES;
+    }
+    AVCaptureDevice *device = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeVideo];
+    if (!device.hasTorch) return NO;
+    if (dryRun) return YES;
+    NSError *error = nil;
+    if (![device lockForConfiguration:&error]) return NO;
+    float level = device.torchMode == AVCaptureTorchModeOn ? device.torchLevel : 0.0f;
+    level = MIN(1.0f, MAX(0.0f, level + (up ? 0.1f : -0.1f)));
+    if (level > 0.0f) [device setTorchModeOnWithLevel:level error:&error];
+    else device.torchMode = AVCaptureTorchModeOff;
+    [device unlockForConfiguration];
     return YES;
 }
 
@@ -1268,6 +1299,8 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.closeapps": ^BOOL(BOOL dry) { return TGCloseBackgroundApps(dry); },
             @"media.volup": ^BOOL(BOOL dry) { return TGVolumeStep(springBoard, YES, dry); },
             @"media.voldown": ^BOOL(BOOL dry) { return TGVolumeStep(springBoard, NO, dry); },
+            @"flashlight.up": ^BOOL(BOOL dry) { return TGFlashlightStep(YES, dry); },
+            @"flashlight.down": ^BOOL(BOOL dry) { return TGFlashlightStep(NO, dry); },
         };
     });
     return table;
@@ -3019,6 +3052,141 @@ static void TGUpdateEdgeGestures(void) {
 }
 %end
 
+#pragma mark - Sunrise & Sunset
+
+// 用系统已有的位置算日出日落：取一次坐标，本地算时刻，不持续定位、不联网。
+// 算法是 NOAA 的常规公式（太阳赤纬 + 时角），误差一两分钟，做触发器够用。
+// 极昼/极夜时当天没有事件，直接不排——不是错误。
+//
+// 位置只用来算时刻，不记录、不上传；触发器取消后立刻停止定位。
+
+
+static BOOL tgSunWanted;
+static BOOL tgSunHasCoordinate;
+static CLLocationCoordinate2D tgSunCoordinate;
+static CLLocationManager *tgSunManager;
+static NSUInteger tgSunGeneration;
+static void TGSunReschedule(void);
+
+@interface TGSunLocator : NSObject <CLLocationManagerDelegate>
+@end
+
+@implementation TGSunLocator
+- (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations {
+    CLLocation *location = locations.lastObject;
+    if (location) {
+        tgSunCoordinate = location.coordinate;
+        tgSunHasCoordinate = YES;
+    }
+    [manager stopUpdatingLocation]; // 只要一个点
+    if (tgSunWanted) TGSunReschedule();
+}
+- (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
+    [manager stopUpdatingLocation];
+}
+- (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager {
+    CLAuthorizationStatus status = manager.authorizationStatus;
+    if (tgSunWanted && (status == kCLAuthorizationStatusAuthorizedWhenInUse || status == kCLAuthorizationStatusAuthorizedAlways))
+        [manager startUpdatingLocation];
+}
+@end
+
+static double TGRadians(double degrees) { return degrees * M_PI / 180.0; }
+static double TGDegrees(double radians) { return radians * 180.0 / M_PI; }
+
+// 某一天（UTC）的日出/日落绝对时刻；nil = 这天没有（极昼/极夜）。
+static NSDate *TGSunEventOnDay(NSDate *day, BOOL sunrise) {
+    static NSCalendar *utc;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        utc = [NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian];
+        utc.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
+    });
+    NSDateComponents *components = [utc components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:day];
+    NSDate *midnight = [utc dateFromComponents:components];
+    double n = (double)[utc ordinalityOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitYear forDate:midnight];
+    double latitude = tgSunCoordinate.latitude, longitude = tgSunCoordinate.longitude;
+
+    double lngHour = longitude / 15.0;
+    double t = n + ((sunrise ? 6.0 : 18.0) - lngHour) / 24.0;
+    double M = 0.9856 * t - 3.289;
+    double L = M + 1.916 * sin(TGRadians(M)) + 0.020 * sin(TGRadians(2 * M)) + 282.634;
+    L = fmod(L, 360.0);
+    if (L < 0) L += 360.0;
+
+    double RA = TGDegrees(atan(0.91764 * tan(TGRadians(L))));
+    RA = fmod(RA, 360.0);
+    if (RA < 0) RA += 360.0;
+    RA += floor(L / 90.0) * 90.0 - floor(RA / 90.0) * 90.0; // 同一象限
+    RA /= 15.0;
+
+    double sinDec = 0.39782 * sin(TGRadians(L));
+    double cosDec = cos(asin(sinDec));
+    double cosH = (cos(TGRadians(90.833)) - sinDec * sin(TGRadians(latitude))) / (cosDec * cos(TGRadians(latitude)));
+    if (cosH > 1.0 || cosH < -1.0) return nil; // 太阳整天在地平线下 / 上
+
+    double H = sunrise ? 360.0 - TGDegrees(acos(cosH)) : TGDegrees(acos(cosH));
+    H /= 15.0;
+    double T = H + RA - 0.06571 * t - 6.622;
+    double UT = fmod(T - lngHour, 24.0);
+    if (UT < 0) UT += 24.0;
+    return [midnight dateByAddingTimeInterval:UT * 3600.0];
+}
+
+static NSDate *TGSunNextEvent(BOOL sunrise, NSDate *from) {
+    for (int day = 0; day < 3; day++) {
+        NSDate *event = TGSunEventOnDay([from dateByAddingTimeInterval:day * 86400.0], sunrise);
+        if (event && [event timeIntervalSinceDate:from] > 1) return event;
+    }
+    return nil;
+}
+
+static void TGSunReschedule(void) {
+    NSUInteger generation = ++tgSunGeneration;
+    if (!tgSunWanted || !tgSunHasCoordinate || !tgSpringBoardReady) return;
+    NSDate *now = [NSDate date];
+    NSDate *sunrise = [tgAssignedTriggers containsObject:@"sunrise"] ? TGSunNextEvent(YES, now) : nil;
+    NSDate *sunset = [tgAssignedTriggers containsObject:@"sunset"] ? TGSunNextEvent(NO, now) : nil;
+    NSDate *next = nil;
+    BOOL isSunrise = NO;
+    if (sunrise && (!sunset || [sunrise compare:sunset] == NSOrderedAscending)) { next = sunrise; isSunrise = YES; }
+    else if (sunset) { next = sunset; }
+    if (!next) return;
+    NSTimeInterval delay = MAX(1.0, [next timeIntervalSinceNow]);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (generation != tgSunGeneration || !tgSunWanted) return;
+        TGFire(isSunrise ? @"sunrise" : @"sunset");
+        TGSunReschedule(); // 排下一个
+    });
+}
+
+static void TGSunUpdate(BOOL want) {
+    if (want != tgSunWanted) tgSunGeneration++;
+    tgSunWanted = want;
+    if (!want) {
+        [tgSunManager stopUpdatingLocation];
+        return;
+    }
+    if (!tgSpringBoardReady) return; // 启动就绪后 TGResyncAfterLaunch 会再调一次
+    if (!tgSunManager) {
+        static TGSunLocator *locator;
+        if (!locator) locator = [TGSunLocator new];
+        tgSunManager = [CLLocationManager new];
+        tgSunManager.delegate = locator;
+        tgSunManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers;
+    }
+    if (tgSunManager.location) { // 系统已有缓存位置，直接用
+        tgSunCoordinate = tgSunManager.location.coordinate;
+        tgSunHasCoordinate = YES;
+        TGSunReschedule();
+        return;
+    }
+    [tgSunManager startUpdatingLocation];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [tgSunManager stopUpdatingLocation]; // 十秒拿不到就不等了
+    });
+}
+
 #pragma mark - Notifications and calls
 
 // "Notification from <app>": only which app posted, never what it says. A
@@ -3248,7 +3416,7 @@ static NSString *tgFrontApp;
 // Public notifications only, observed only while one of these triggers is
 // assigned. Both run alongside the system.
 static id tgPowerObserver, tgRouteObserver;
-static BOOL tgPluggedIn, tgHeadphones;
+static BOOL tgPluggedIn, tgHeadphones, tgCarPlay;
 
 static BOOL TGIsPluggedIn(void) {
     UIDeviceBatteryState state = UIDevice.currentDevice.batteryState;
@@ -3263,6 +3431,13 @@ static BOOL TGIsHeadphonePort(AVAudioSessionPortDescription *port) {
 
 static BOOL TGRouteHasHeadphones(AVAudioSessionRouteDescription *route) {
     for (AVAudioSessionPortDescription *port in route.outputs) if (TGIsHeadphonePort(port)) return YES;
+    return NO;
+}
+
+// CarPlay 的有线、无线在音频层都是 CarAudio 端口（不是蓝牙 A2DP）。
+static BOOL TGRouteHasCarPlay(AVAudioSessionRouteDescription *route) {
+    for (AVAudioSessionPortDescription *port in route.outputs)
+        if ([port.portType isEqualToString:AVAudioSessionPortCarAudio]) return YES;
     return NO;
 }
 
@@ -3639,6 +3814,7 @@ static void TGUpdateOtherEvents(void) {
     TGUpdateProximity(TGAssignedPrefix(@"proximity."));
     TGUpdateMusic(TGAssignedPrefix(@"music."));
     TGUpdateCallWatcher(TGAssignedPrefix(@"call."));
+    TGSunUpdate(TGAssignedAny(@"sunrise", @"sunset"));
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
@@ -3694,19 +3870,28 @@ static void TGUpdateOtherEvents(void) {
     }
 
     BOOL wantRoute = TGAssignedAny(@"headphones.in", @"headphones.out");
-    if (wantRoute && !tgRouteObserver) {
+    BOOL wantCarPlay = TGAssignedAny(@"carplay.connected", @"carplay.disconnected");
+    if ((wantRoute || wantCarPlay) && !tgRouteObserver) {
         // AVAudioSession's own route-change notification doesn't reach SpringBoard;
         // SpringBoard's SBAudioRoutesChangedNotification does (verified on iOS 16.7),
         // and the public currentRoute is correct when it fires. It fires several
-        // times per change, so act only when headphones appear or disappear.
+        // times per change, so act only when a port actually appears or disappears.
         tgHeadphones = TGRouteHasHeadphones(AVAudioSession.sharedInstance.currentRoute);
+        tgCarPlay = TGRouteHasCarPlay(AVAudioSession.sharedInstance.currentRoute);
         tgRouteObserver = [center addObserverForName:@"SBAudioRoutesChangedNotification" object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *n) {
-            BOOL now = TGRouteHasHeadphones(AVAudioSession.sharedInstance.currentRoute);
-            if (now == tgHeadphones) return;
-            tgHeadphones = now;
-            TGFire(now ? @"headphones.in" : @"headphones.out");
+            AVAudioSessionRouteDescription *route = AVAudioSession.sharedInstance.currentRoute;
+            BOOL nowHeadphones = TGRouteHasHeadphones(route);
+            if (nowHeadphones != tgHeadphones) {
+                tgHeadphones = nowHeadphones;
+                TGFire(nowHeadphones ? @"headphones.in" : @"headphones.out");
+            }
+            BOOL nowCarPlay = TGRouteHasCarPlay(route);
+            if (nowCarPlay != tgCarPlay) {
+                tgCarPlay = nowCarPlay;
+                TGFire(nowCarPlay ? @"carplay.connected" : @"carplay.disconnected");
+            }
         }];
-    } else if (!wantRoute && tgRouteObserver) {
+    } else if (!wantRoute && !wantCarPlay && tgRouteObserver) {
         [center removeObserver:tgRouteObserver];
         tgRouteObserver = nil;
     }
@@ -3718,6 +3903,7 @@ static void TGResyncAfterLaunch(void) {
     TGRefreshWiFiState();
     TGRefreshMusicState();
     TGProximityScreenChanged();
+    TGSunUpdate(TGAssignedAny(@"sunrise", @"sunset"));
     TGSyncUnavailable(tgAssignments);
 }
 
