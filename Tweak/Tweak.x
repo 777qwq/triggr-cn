@@ -307,6 +307,7 @@ static void TGSpeak(NSString *text) {
 }
 
 static void TGOpenURL(NSString *string);
+static void TGOpenSettingsPage(NSString *page);
 
 // Actions with a value; YES when `action` is one of them (and available).
 static BOOL TGValueAction(NSString *action, BOOL dryRun) {
@@ -328,9 +329,7 @@ static BOOL TGValueAction(NSString *action, BOOL dryRun) {
         return name.length && TGAirPlayTo(name, dryRun);
     }
     if ([action hasPrefix:TGSettingsPrefix]) {
-        // "prefs:" no longer opens from SpringBoard on iOS 16; "App-prefs:root=" does,
-        // and the bare "App-prefs:<id>" form now stops at the Settings home page.
-        if (!dryRun) TGOpenURL([@"App-prefs:" stringByAppendingString:TGPageAnchor([action substringFromIndex:TGSettingsPrefix.length])]);
+        if (!dryRun) TGOpenSettingsPage([action substringFromIndex:TGSettingsPrefix.length]);
         return YES;
     }
     return NO;
@@ -343,6 +342,28 @@ static void TGOpenURL(NSString *string) {
     }
     [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL ok) {
     }];
+}
+
+// LSApplicationWorkspace 的私有打开接口：不过 scheme 白名单，URL 原样交给目标 App。
+// 设置 App 是这样收 prefs:root=<id> 的（iOS 16 起 UIApplication 那条路已经被系统拦掉）。
+static BOOL TGOpenSensitive(NSString *string) {
+    NSURL *url = [NSURL URLWithString:string];
+    Class cls = objc_getClass("LSApplicationWorkspace");
+    id workspace = (cls && [cls respondsToSelector:@selector(defaultWorkspace)])
+        ? ((id (*)(id, SEL))objc_msgSend)(cls, @selector(defaultWorkspace)) : nil;
+    SEL sel = @selector(openSensitiveURL:withOptions:);
+    if (!url || !workspace || ![workspace respondsToSelector:sel]) return NO;
+    return ((BOOL (*)(id, SEL, id, id))objc_msgSend)(workspace, sel, url, nil);
+}
+
+// 页面锚点的写法随系统版本反过来了：
+//   iOS 16 及更早 -> "App-prefs:WIFI"，写成 root= 会被设置 App 丢掉，停在首页；
+//   iOS 17 起    -> 必须 "prefs:root=WIFI"（App-prefs 形式反而落到首页）。
+// 所以按版本选，两条路都以「设置 App 收到和自己首页不同的锚点」为准。
+static void TGOpenSettingsPage(NSString *page) {
+    BOOL modern = NSProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 17;
+    if (modern && TGOpenSensitive([@"prefs:root=" stringByAppendingString:TGPageBare(page)])) return;
+    TGOpenURL([@"App-prefs:" stringByAppendingString:TGPageSuffix(page)]);
 }
 
 // 后台 GET：不经过 UIApplication，不创建任何界面，失败也不提示。

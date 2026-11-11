@@ -3,6 +3,13 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.28
+
+### 修复
+
+- **「打开设置页」不管选哪一项都停在设置首页**（iPad / iOS 16.3.1 实测）：cn4.27 统一改成了 `App-prefs:root=<id>`，但 iOS 16 上设置 App 会把 `root=` 丢掉，只把设置拉到前台——iPad 分栏默认选中的就是「通用」，所以看起来「全都停在通用」。
+  现在按系统版本分开：**iOS 16 及更早用 `App-prefs:<id>`（裸 id），iOS 17 起用 `prefs:root=<id>`**，后者走 `LSApplicationWorkspace` 的 `openSensitiveURL:withOptions:`，不受 scheme 白名单限制。
+
 ## 1.5.0+cn4.27
 
 ### 修复

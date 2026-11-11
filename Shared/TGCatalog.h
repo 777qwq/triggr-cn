@@ -346,15 +346,23 @@ static const TGItem TGSettingsPages[] = {
     {"BATTERY_USAGE", "电池"}, {"Privacy", "隐私与安全性"},
 };
 
-// iOS 16 起要写成 root=<id> 才会跳到具体页面（只写 id 会停在设置首页）。
-// 老配置里存的是不带 root= 的英文 id，以及被误翻成中文的那三个，统一在这里归一化。
-static inline NSString *TGPageAnchor(NSString *page) {
-    if (page.length == 0) return @"";
-    if ([page hasPrefix:@"root="]) return page;
-    if ([page isEqualToString:@"蓝牙"]) return @"root=Bluetooth";
-    if ([page isEqualToString:@"通用"]) return @"root=General";
-    if ([page isEqualToString:@"墙纸"]) return @"root=Wallpaper";
-    return [@"root=" stringByAppendingString:page];
+// 页面 id 归一化：存储里可能是裸英文 id、iOS 17 起要的 root=<id>，
+// 或者汉化时被误翻成中文的那三个（iOS 只认英文 id）。
+static inline NSString *TGPageBare(NSString *page) {
+    if ([page hasPrefix:@"root="]) page = [page substringFromIndex:5];
+    if ([page isEqualToString:@"蓝牙"]) return @"Bluetooth";
+    if ([page isEqualToString:@"通用"]) return @"General";
+    if ([page isEqualToString:@"墙纸"]) return @"Wallpaper";
+    return page;
+}
+
+// iOS 16 认「App-prefs:<id>」，17 起要「App-prefs:root=<id>」；
+// iOS 16 上写成 root= 反而会被忽略，一路停到设置首页。
+static inline NSString *TGPageSuffix(NSString *page) {
+    NSString *bare = TGPageBare(page);
+    if (bare.length == 0) return @"";
+    return NSProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 17
+        ? [@"root=" stringByAppendingString:bare] : bare;
 }
 #define TGPauseMax 30.0
 
@@ -653,9 +661,9 @@ static inline NSString *TGActionTitle(NSString *action) {
     if ([action hasPrefix:TGAirPlayPrefix]) return [@"AirPlay 到 " stringByAppendingString:[action substringFromIndex:TGAirPlayPrefix.length]];
     if ([action hasPrefix:TGSettingsPrefix]) {
         // 两侧都归一化，老配置里的裸 id / 中文 id 也能对上标题。
-        NSString *page = TGPageAnchor([action substringFromIndex:TGSettingsPrefix.length]);
+        NSString *page = TGPageBare([action substringFromIndex:TGSettingsPrefix.length]);
         for (int i = 0; i < TG_COUNT(TGSettingsPages); i++)
-            if ([page isEqualToString:TGPageAnchor(@(TGSettingsPages[i].identifier))]) return [@"设置：" stringByAppendingString:@(TGSettingsPages[i].title)];
+            if ([page isEqualToString:TGPageBare(@(TGSettingsPages[i].identifier))]) return [@"设置：" stringByAppendingString:@(TGSettingsPages[i].title)];
         return [@"设置：" stringByAppendingString:[action substringFromIndex:TGSettingsPrefix.length]];
     }
     for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++)
