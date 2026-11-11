@@ -3,6 +3,27 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.23
+
+把 cn4.22 的启动崩溃修复做成一次完整审计：**启动完成前，不取任何 SpringBoard 单例**。
+
+### 审计结论
+
+| 启动期会执行的东西 | 风险 | 处理 |
+|---|---|---|
+| `TGShared(...)` | 会实例化 `SBUIController`（崩溃源）、`SBWiFiManager`、`SBMediaController` 等 | 启动完成前一律返回 nil |
+| 动作可用性探测 | 经 `TGCanPerform` 走到 `TGShared` | 推迟到启动 15 秒后 |
+| 音乐状态基线 | 取 `SBMediaController sharedInstance` | 推迟；就绪后补读 |
+| 距离传感器 | 取 SpringBoard 的 `proximitySensorManager` | 启动完成前不碰 |
+| Wi-Fi 状态基线 | 取 `SBWiFiManager` | 就绪后重读，否则「本来连着 Wi-Fi」记成 NO，断开时 `wifi.left` 不触发 |
+| 图标轻扫 / 主屏手势 | 遍历 `connectedScenes`，启动时为空 | 安全：`didMoveToWindow` 会补挂 |
+| 屏幕边缘手势 | 取 `SBSystemGestureManager` | 已有 `tgGestureManagerReady` 守卫 |
+| 状态变化 / 通知 / 通话 | 只注册通知和 `CXCallObserver` | 安全，不动 |
+
+### 启动后补课
+
+15 秒后统一补一次：Wi-Fi 基线、音乐基线、距离传感器、不可用动作列表。各函数幂等，重复调用不会重复注册或重复触发。
+
 ## 1.5.0+cn4.22
 
 修一个**启动即崩**的问题：配了「App 切换器」等动作后，SpringBoard 一启动就 abort。

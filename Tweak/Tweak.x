@@ -443,7 +443,12 @@ static void TGRunExtension(NSString *action) {
 // missing counts as unassigned, so it can never take a button away.
 typedef BOOL (^TGActionBlock)(BOOL dryRun); // dryRun: only report availability
 
+// SpringBoard 的单例在启动完成前一律不取。构造它们可能连带初始化 UI：SBUIController
+// 的 init 里要取 UIScreen.mainScreen，而启动早期屏幕还没就绪，UIKit 直接 abort。
+// 启动期统一返回 nil，tgSpringBoardReady 置位后自然恢复；所有调用方都按「拿不到就跳过」
+// 处理，所以只是那十几秒里少了状态基线，不会崩。
 static id TGShared(const char *className) {
+    if (!tgSpringBoardReady) return nil;
     Class cls = objc_getClass(className);
     return [cls respondsToSelector:@selector(sharedInstance)] ? [cls performSelector:@selector(sharedInstance)] : nil;
 }
@@ -3114,12 +3119,17 @@ static void TGMusicInfoChanged(void) {
 }
 %end
 
+// 启动完成前不碰 SBMediaController：它的 init 会连到 MediaRemote，没必要在启动赛跑里做。
+// 就绪后由 TGResyncAfterLaunch 补一次基线。
+static void TGRefreshMusicState(void) {
+    if (!tgWatchMusic || !tgSpringBoardReady) return;
+    SBMediaController *media = [objc_getClass("SBMediaController") sharedInstance];
+    tgMusicPlaying = [media respondsToSelector:@selector(isPlaying)] && [media isPlaying];
+}
+
 static void TGUpdateMusic(BOOL want) {
-    if (want && !tgWatchMusic) {
-        SBMediaController *media = [objc_getClass("SBMediaController") sharedInstance];
-        tgMusicPlaying = [media respondsToSelector:@selector(isPlaying)] && [media isPlaying];
-    }
     tgWatchMusic = want;
+    TGRefreshMusicState();
 }
 
 #pragma mark - Proximity sensor
@@ -3149,6 +3159,7 @@ static void TGSetProximityDetection(BOOL on) {
 }
 
 static void TGProximityScreenChanged(void) {
+    if (!tgSpringBoardReady) return; // 启动期不碰 proximitySensorManager
     uint64_t blanked = 1;
     if (tgProximityScreenToken != -1) notify_get_state(tgProximityScreenToken, &blanked);
     TGSetProximityDetection(tgProximityWanted && !blanked);
@@ -3499,10 +3510,17 @@ static void TGObserveNote(BOOL want, id __strong *observer, NSString *name, void
     }
 }
 
+// 启动完成前 TGShared 返回 nil，TGReadWiFi 读不到东西；就绪后必须重读一次基线，
+// 否则「本来就连着 Wi-Fi」会被记成 NO，真断开时 wifi.left 不触发。
+static void TGRefreshWiFiState(void) {
+    if (!tgSpringBoardReady) return;
+    tgWiFiName = TGReadWiFi(&tgWiFiOn, &tgWiFiJoined);
+}
+
 static void TGUpdateStateEvents(void) {
     BOOL wantWiFi = TGAssignedAny(@"wifi.on", @"wifi.off") || TGAssignedAny(@"wifi.joined", @"wifi.left")
         || TGAssignedPrefix(TGWiFiJoinedPrefix) || TGAssignedPrefix(TGWiFiLeftPrefix);
-    if (wantWiFi && !tgWiFiObserver) tgWiFiName = TGReadWiFi(&tgWiFiOn, &tgWiFiJoined);
+    if (wantWiFi && !tgWiFiObserver) TGRefreshWiFiState();
     TGObserve(wantWiFi, &tgWiFiObserver, @"SBWifiManagerLinkDidChangeNotification", ^{
         BOOL on, joined;
         NSString *name = TGReadWiFi(&on, &joined);
@@ -3694,6 +3712,15 @@ static void TGUpdateOtherEvents(void) {
     }
 }
 
+// 启动完成后的补课：构造函数里为了不实例化 SpringBoard 的 UI 单例，状态基线一律读不到。
+// 这里补一遍；每个函数自己幂等，重复调用不会重复注册或重复触发。
+static void TGResyncAfterLaunch(void) {
+    TGRefreshWiFiState();
+    TGRefreshMusicState();
+    TGProximityScreenChanged();
+    TGSyncUnavailable(tgAssignments);
+}
+
 %ctor {
     if (![NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"]) return;
     TGReadAssignments();
@@ -3733,11 +3760,11 @@ static void TGUpdateOtherEvents(void) {
     int shakeToken;
     notify_register_dispatch(TGRelayShake, &shakeToken, dispatch_get_main_queue(), ^(int t) { TGShaken(); });
     tgSpringBoardStarted = CACurrentMediaTime();
-    // 15 秒后再探测一次动作可用性：这时 SpringBoard 的 UI 已经就绪，取单例是安全的。
+    // 15 秒后再做需要 SpringBoard 单例的事：这时 UI 已经就绪，取单例是安全的。
     // 不用固定 15 秒也行，但这个值已经用于通知/媒体的启动期抑制，保持一致。
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         tgSpringBoardReady = YES;
-        TGSyncUnavailable(tgAssignments);
+        TGResyncAfterLaunch();
     });
     %init(_ungrouped);
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");
