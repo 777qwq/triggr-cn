@@ -1574,8 +1574,6 @@ static NSString *TGCategoryOf(NSString *action) {
         if (selected) cell.accessoryType = UITableViewCellAccessoryCheckmark;
         // With several picked, show where this one runs in the list.
         if (selected && action.length && _selection.count > 1) detail = [NSString stringWithFormat:@"%lu", (unsigned long)[self positionOfItem:action]];
-        // 「无操作」看着像「停在这里」，其实只让这次触发什么都不做，后面的动作照常执行。
-        if (!detail.length && [action isEqualToString:@"system.nothing"]) detail = @"只接管这次触发，什么也不做；后面还有动作时照常继续。";
     } else if (name) {
         NSArray *verbs = [self verbsForSwitch:name];
         if (verbs.count) cell.accessoryType = UITableViewCellAccessoryCheckmark;

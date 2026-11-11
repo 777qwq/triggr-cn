@@ -585,8 +585,25 @@ static inline NSString *TGAssignmentKey(NSString *mode, NSString *trigger) {
 #define TGRunQueue @"/var/tmp/com.johndie.triggr-run"
 #define TGRunRequestNotification "com.johndie.triggr/run-request"
 
+// "2200" -> "22:00"。
+static inline NSString *TGClockString(int hhmm) {
+    return [NSString stringWithFormat:@"%02d:%02d", hhmm / 100, hhmm % 100];
+}
+
+// 时间条件的一端：界面存四位，老配置也可能已经写成 "22:00"。
+static inline NSString *TGTimeTokenTitle(NSString *token) {
+    if (token.length == 4) {
+        int packed = token.intValue;
+        if (packed / 100 <= 23 && packed % 100 <= 59) return TGClockString(packed);
+    }
+    return token;
+}
+
 // Display title for an action id ("无" when unassigned).
 // cn2.77：条件串人话（不含 if: 前缀；'!' 与 '@秒' 已在外层剥掉）
+//
+// 这里是条件文案的**唯一**一张表：触发器级「仅当」由 TGConditionTitle 编码成
+// 同样的字符串后借道本函数（见 TGSteps.h），两处不会再各说各话。
 static inline NSString *TGSeqConditionTitle(NSString *cond) {
     BOOL neg = NO;
     if ([cond hasPrefix:@"!"]) { neg = YES; cond = [cond substringFromIndex:1]; }
@@ -594,12 +611,15 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
     NSString *base = nil, *opposite = nil;
     if ([cond isEqualToString:@"wifi"]) { base = @"有网络（Wi-Fi 或蜂窝）"; opposite = @"完全没有网络"; }
     else if ([cond hasPrefix:@"wifi:"]) {
-        base = [NSString stringWithFormat:@"已连接 Wi-Fi「%@」", [cond substringFromIndex:5]];
-        opposite = [NSString stringWithFormat:@"未连接 Wi-Fi「%@」", [cond substringFromIndex:5]];
+        // "wifi:" 不带名字表示「任意网络」，不能写成「已连接 Wi-Fi「」」。
+        NSString *name = [cond substringFromIndex:5];
+        base = name.length ? [NSString stringWithFormat:@"已连接 Wi-Fi「%@」", name] : @"已连接 Wi-Fi";
+        opposite = name.length ? [NSString stringWithFormat:@"未连接 Wi-Fi「%@」", name] : @"未连接 Wi-Fi";
     }
     else if ([cond hasPrefix:@"bt:"]) {
-        base = [NSString stringWithFormat:@"已连接蓝牙「%@」", [cond substringFromIndex:3]];
-        opposite = [NSString stringWithFormat:@"未连接蓝牙「%@」", [cond substringFromIndex:3]];
+        NSString *name = [cond substringFromIndex:3];
+        base = name.length ? [NSString stringWithFormat:@"已连接蓝牙「%@」", name] : @"已连接蓝牙设备";
+        opposite = name.length ? [NSString stringWithFormat:@"未连接蓝牙「%@」", name] : @"未连接蓝牙设备";
     }
     else if ([cond isEqualToString:@"bt"]) { base = @"已连接蓝牙设备"; opposite = @"未连接蓝牙设备"; }
     else if ([cond isEqualToString:@"charging"]) { base = @"充电中"; opposite = @"未充电"; }
@@ -611,7 +631,7 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
     else if ([cond hasPrefix:@"battery>"]) base = [NSString stringWithFormat:@"电量高于 %@%%", [cond substringFromIndex:8]];
     else if ([cond hasPrefix:@"time:"]) {
         NSArray *parts = [[cond substringFromIndex:5] componentsSeparatedByString:@"-"];
-        base = parts.count == 2 ? [NSString stringWithFormat:@"%@ 到 %@ 之间", parts[0], parts[1]] : [@"时间条件 " stringByAppendingString:cond];
+        base = parts.count == 2 ? [NSString stringWithFormat:@"%@ 到 %@ 之间", TGTimeTokenTitle(parts[0]), TGTimeTokenTitle(parts[1])] : [@"时间条件 " stringByAppendingString:cond];
     }
     // 词表里没有的（例如 cn4.25 移除的 flashlight）不能就显示成裸标识符：
     // 那一行会永远判为不成立，用户却看不出原因。

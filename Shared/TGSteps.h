@@ -211,33 +211,16 @@ static inline NSString *TGConditionEncode(const TGCondition *condition) {
     return body;
 }
 
-// "22:00" for 2200.
-static inline NSString *TGClockString(int hhmm) {
-    return [NSString stringWithFormat:@"%02d:%02d", hhmm / 100, hhmm % 100];
-}
-
 // 行标题：在 Wi-Fi「家」上 / 未在充电 / 22:00 到 06:00 之间。
+//
+// 文案不在这里写第二遍：先编码成条件串，交给 TGCatalog.h 的 TGSeqConditionTitle。
+// 「仅当」和「如果」两种行共用一张表，改一处不会漏另一处——cn4.25 的
+// 「未解锁 / 未锁定」就是两边各写一遍、只改了一边留下的。
 static inline NSString *TGConditionTitle(const TGCondition *condition) {
-    NSString *name = TGArgumentString(condition);
-    switch (condition->kind) {
-        case TGConditionKindWiFi:
-            if (condition->negated) return name.length ? [NSString stringWithFormat:@"未连接 Wi-Fi「%@」", name] : @"未连接 Wi-Fi";
-            return name.length ? [NSString stringWithFormat:@"已连接 Wi-Fi「%@」", name] : @"已连接 Wi-Fi";
-        case TGConditionKindBluetooth:
-            if (condition->negated) return name.length ? [NSString stringWithFormat:@"未连接蓝牙「%@」", name] : @"未连接蓝牙设备";
-            return name.length ? [NSString stringWithFormat:@"已连接蓝牙「%@」", name] : @"已连接蓝牙设备";
-        case TGConditionKindCharging: return condition->negated ? @"未充电" : @"充电中";
-        case TGConditionKindLocked: return condition->negated ? @"未锁定" : @"已锁定";
-        case TGConditionKindMusic: return condition->negated ? @"音乐未播放" : @"音乐播放中";
-        case TGConditionKindHeadphones: return condition->negated ? @"未连接耳机" : @"已连接耳机";
-        case TGConditionKindLowPower: return condition->negated ? @"低电量模式已关闭" : @"低电量模式已开启";
-        case TGConditionKindNetwork: return condition->negated ? @"完全没有网络" : @"有网络（Wi-Fi 或蜂窝）";
-        case TGConditionKindBatteryBelow: return [NSString stringWithFormat:@"电量低于 %d%%", condition->value];
-        case TGConditionKindBatteryAbove: return [NSString stringWithFormat:@"电量高于 %d%%", condition->value];
-        case TGConditionKindTime:
-            return [NSString stringWithFormat:@"%@ 到 %@ 之间", TGClockString(condition->start), TGClockString(condition->end)];
-        default: return @"条件";
-    }
+    TGCondition bare = *condition;
+    bare.wait = 0; // 「@秒」由外层拼在标题末尾，不属于条件本体
+    NSString *encoded = TGConditionEncode(&bare);
+    return encoded.length ? TGSeqConditionTitle(encoded) : @"条件";
 }
 
 #pragma mark - Steps
