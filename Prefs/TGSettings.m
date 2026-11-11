@@ -588,7 +588,10 @@ static void TGPromptWiFi(UIViewController *host, BOOL negated, void (^done)(NSSt
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:negated ? @"未连 Wi-Fi" : @"已连 Wi-Fi" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
     for (NSString *name in TGSavedWiFiNetworks())
         [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done([prefix stringByAppendingString:name]); }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:negated ? @"完全没有网络" : @"任何网络" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(prefix); }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:negated ? @"没有连 Wi-Fi" : @"任何网络" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(prefix); }]];
+    // 「没有连 Wi-Fi」和「完全没有网络」不是一回事：前者可以靠蜂窝，后者两个都没有。
+    // 以前两项都写 !wifi:，文案说没网、实际只判了 Wi-Fi，断网类触发器经常误判。
+    if (negated) [sheet addAction:[UIAlertAction actionWithTitle:@"完全没有网络（Wi-Fi 与蜂窝都没有）" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { done(@"!wifi"); }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"输入名称…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"网络名称" message:nil preferredStyle:UIAlertControllerStyleAlert];
         [alert addTextFieldWithConfigurationHandler:nil];
@@ -655,11 +658,43 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
     add(@"耳机未连接", ^{ done(@"!headphones"); });
     add(@"低电量模式已开启", ^{ done(@"lowpower"); });
     add(@"关闭低电量模式", ^{ done(@"!lowpower"); });
+    add(@"手电筒已开启", ^{ done(@"flashlight"); });
+    add(@"手电筒已关闭", ^{ done(@"!flashlight"); });
     add(@"电量低于…", ^{ TGPromptBattery(host, NO, done); });
     add(@"电量高于…", ^{ TGPromptBattery(host, YES, done); });
     add(@"时间段内…", ^{ TGPromptTimes(host, done); });
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     TGPresentSheet(host, sheet);
+}
+
+#pragma mark - Still True After
+
+// 条件末尾的 @秒（2.0 的 "Still True After"）：要求连续成立 N 秒。
+// 改秒数时先剥掉旧的，否则会叠成 wifi:home@3@5——解析只认最后一个 @，
+// 前面的 @3 会留在网络名里，条件从此永远不成立。
+static NSString *TGWithWait(NSString *encoded, double seconds) {
+    NSRange at = [encoded rangeOfString:@"@" options:NSBackwardsSearch];
+    NSString *base = (at.location != NSNotFound && at.location > 0) ? [encoded substringToIndex:at.location] : encoded;
+    return seconds > 0 ? [base stringByAppendingFormat:@"@%g", seconds] : base;
+}
+
+static void TGPromptWait(UIViewController *host, NSString *encoded, void (^done)(NSString *)) {
+    TGCondition parsed;
+    double current = TGConditionParse(encoded, &parsed) ? parsed.wait : 0;
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"持续确认"
+        message:@"条件要连续成立这么多秒才执行；中途不成立就跳过这一段。填 0 表示立刻判定。"
+        preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.keyboardType = UIKeyboardTypeDecimalPad;
+        field.text = current > 0 ? [NSString stringWithFormat:@"%g", current] : @"3";
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        double seconds = [weakAlert.textFields.firstObject.text doubleValue];
+        done(TGWithWait(encoded, MAX(seconds, 0)));
+    }]];
+    [host presentViewController:alert animated:YES completion:nil];
 }
 
 #pragma mark - Order & Pauses
@@ -786,6 +821,15 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
         TGPresentConditionPicker(self, @"如果", ^(NSString *encoded) {
             if (!encoded.length) return;
             self.items[row] = TGStepIfDirective(encoded);
+            [self.tableView reloadData];
+            [self changed];
+        });
+    }]];
+    // 「如果 连上 Wi-Fi 3 秒后仍成立」：等待期间条件一旦不成立就整段跳过。
+    [sheet addAction:[UIAlertAction actionWithTitle:@"要求持续 N 秒…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *current = [self.items[row] substringFromIndex:TGIfPrefix.length];
+        TGPromptWait(self, current, ^(NSString *next) {
+            self.items[row] = TGStepIfDirective(next);
             [self.tableView reloadData];
             [self changed];
         });
@@ -1294,6 +1338,13 @@ static NSString *TGCategoryOf(NSString *action) {
             NSMutableArray *next = [TGReadConditions(self, self->_mode, self->_trigger) mutableCopy];
             if (index < next.count) next[index] = newEncoded;
             [self applyOnlyConditions:next];
+        });
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"要求持续 N 秒…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        TGPromptWait(self, encoded, ^(NSString *next) {
+            NSMutableArray *conditions = [TGReadConditions(self, self->_mode, self->_trigger) mutableCopy];
+            if (index < conditions.count) conditions[index] = next;
+            [self applyOnlyConditions:conditions];
         });
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"移除条件" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {

@@ -492,7 +492,7 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
     BOOL neg = NO;
     if ([cond hasPrefix:@"!"]) { neg = YES; cond = [cond substringFromIndex:1]; }
     NSString *base;
-    if ([cond isEqualToString:@"wifi"]) base = @"连着 Wi-Fi 网络";
+    if ([cond isEqualToString:@"wifi"]) base = @"有网络（Wi-Fi 或蜂窝）";
     else if ([cond hasPrefix:@"wifi:"]) base = [NSString stringWithFormat:@"连着 Wi-Fi「%@」", [cond substringFromIndex:5]];
     else if ([cond hasPrefix:@"bt:"]) base = [NSString stringWithFormat:@"连着蓝牙「%@」", [cond substringFromIndex:3]];
     else if ([cond isEqualToString:@"bt"]) base = @"连着蓝牙设备";
@@ -500,6 +500,8 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
     else if ([cond isEqualToString:@"locked"]) base = @"设备已锁定";
     else if ([cond isEqualToString:@"music"]) base = @"正在播放音乐";
     else if ([cond isEqualToString:@"headphones"]) base = @"连着耳机";
+    else if ([cond isEqualToString:@"lowpower"]) base = @"低电量模式开着";
+    else if ([cond isEqualToString:@"flashlight"]) base = @"手电筒开着";
     else if ([cond hasPrefix:@"battery<"]) base = [NSString stringWithFormat:@"电量低于 %@%%", [cond substringFromIndex:8]];
     else if ([cond hasPrefix:@"battery>"]) base = [NSString stringWithFormat:@"电量高于 %@%%", [cond substringFromIndex:8]];
     else if ([cond hasPrefix:@"time:"]) {

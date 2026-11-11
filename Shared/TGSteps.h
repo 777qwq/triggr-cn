@@ -60,6 +60,8 @@ typedef NS_ENUM(NSInteger, TGConditionKind) {
     TGConditionKindBatteryBelow,
     TGConditionKindBatteryAbove,
     TGConditionKindTime,        // time:HHMM-HHMM, overnight allowed
+    TGConditionKindFlashlight,  // flashlight / !flashlight（2.0/2.1 有，cn4.20 补）
+    TGConditionKindNetwork,     // 裸 wifi / !wifi：有没有网（Wi-Fi 或蜂窝），与 wifi: 不是一回事
 };
 
 #define TGArgumentMax 128
@@ -129,12 +131,16 @@ static inline BOOL TGConditionParse(NSString *encoded, TGCondition *out) {
     if (!body.length) return NO;
 
     // 只有 Wi-Fi 和蓝牙吃参数，其余条件后面不许有剩余文本。
-    // 2.0 会同时写 "!wifi" 和 "!wifi:" 表示「完全没网」，把裸形式当成空参数。
-    if ([body isEqualToString:@"wifi"]) body = @"wifi:";
+    // 裸 "wifi"（不带冒号）是 2.0 的 "No network at all"：Wi-Fi 和蜂窝都没有，
+    // 和「已连任意 Wi-Fi」（wifi: 名字为空）是两回事，不能再归一成同一个。
+    // 裸 "bt" 仍然等于「任意蓝牙设备」。
     if ([body isEqualToString:@"bt"]) body = @"bt:";
 
     BOOL takesArgument = NO;
-    if ([body hasPrefix:@"wifi:"]) {
+    if ([body isEqualToString:@"wifi"]) {
+        out->kind = TGConditionKindNetwork;
+        body = @"";
+    } else if ([body hasPrefix:@"wifi:"]) {
         out->kind = TGConditionKindWiFi;
         body = [body substringFromIndex:5];
         takesArgument = YES;
@@ -172,6 +178,9 @@ static inline BOOL TGConditionParse(NSString *encoded, TGCondition *out) {
     } else if ([body isEqualToString:@"lowpower"]) {
         out->kind = TGConditionKindLowPower;
         body = @"";
+    } else if ([body isEqualToString:@"flashlight"]) {
+        out->kind = TGConditionKindFlashlight;
+        body = @"";
     } else {
         return NO;
     }
@@ -197,6 +206,9 @@ static inline NSString *TGConditionEncode(const TGCondition *condition) {
         case TGConditionKindMusic: body = @"music"; break;
         case TGConditionKindHeadphones: body = @"headphones"; break;
         case TGConditionKindLowPower: body = @"lowpower"; break;
+        case TGConditionKindFlashlight: body = @"flashlight"; break;
+        // 裸形式，不带冒号：见 TGConditionParse 里为什么不能归一。
+        case TGConditionKindNetwork: body = @"wifi"; break;
         default: return nil;
     }
     if (condition->wait > 0) body = [body stringByAppendingFormat:@"@%g", condition->wait];
@@ -224,6 +236,8 @@ static inline NSString *TGConditionTitle(const TGCondition *condition) {
         case TGConditionKindMusic: return condition->negated ? @"音乐未在播放" : @"音乐播放中";
         case TGConditionKindHeadphones: return condition->negated ? @"未连接耳机" : @"已连接耳机";
         case TGConditionKindLowPower: return condition->negated ? @"低电量模式已关闭" : @"低电量模式已开启";
+        case TGConditionKindFlashlight: return condition->negated ? @"手电筒已关闭" : @"手电筒已开启";
+        case TGConditionKindNetwork: return condition->negated ? @"完全没有网络" : @"有网络（Wi-Fi 或蜂窝）";
         case TGConditionKindBatteryBelow: return [NSString stringWithFormat:@"电量低于 %d%%", condition->value];
         case TGConditionKindBatteryAbove: return [NSString stringWithFormat:@"电量高于 %d%%", condition->value];
         case TGConditionKindTime:

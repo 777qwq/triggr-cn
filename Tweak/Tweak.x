@@ -1430,6 +1430,43 @@ static BOOL TGConditionMusicPlaying(void) {
     return TGCallBool(TGShared("SBMediaController"), @selector(isPlaying));
 }
 
+// 手电筒：和控制中心同一个控制器，level > 0 就是亮着。
+// iOS 17 起 SpringBoard 不能再用 AVCaptureDevice 点灯，动作侧（TGSwitchFor）也是这么读的。
+static BOOL TGFlashlightOn(void) {
+    id flashlight = TGShared("SBUIFlashlightController");
+    if (![flashlight respondsToSelector:@selector(level)]) return NO;
+    @try {
+        id level = [flashlight valueForKey:@"level"];
+        return [level respondsToSelector:@selector(doubleValue)] && [level doubleValue] > 0;
+    } @catch (__unused NSException *e) {
+        return NO;
+    }
+}
+
+// 蜂窝有没有注册上网：有 currentRadioAccessTechnology 就算有。
+// 只服务「完全没有网络」这一个条件——Wi-Fi 关着但插着卡的人不该被当成断网。
+static BOOL TGConditionCellular(void) {
+    Class infoClass = objc_getClass("CTTelephonyNetworkInfo");
+    if (!infoClass) {
+        dlopen("/System/Library/PrivateFrameworks/CoreTelephony.framework/CoreTelephony", RTLD_LAZY);
+        infoClass = objc_getClass("CTTelephonyNetworkInfo");
+    }
+    if (!infoClass) return NO;
+    @try {
+        id info = [[infoClass alloc] init];
+        if (![info respondsToSelector:@selector(serviceCurrentRadioAccessTechnology)]) return NO;
+        id tech = ((id (*)(id, SEL))objc_msgSend)(info, @selector(serviceCurrentRadioAccessTechnology));
+        if ([tech isKindOfClass:NSDictionary.class]) {
+            for (id value in [tech allValues])
+                if ([value isKindOfClass:NSString.class] && [value length]) return YES;
+            return NO;
+        }
+        return [tech isKindOfClass:NSString.class] && [tech length];
+    } @catch (__unused NSException *e) {
+        return NO;
+    }
+}
+
 // 现在几点，HHMM。
 static int TGNowClock(void) {
     NSDateComponents *components = [NSCalendar.currentCalendar components:(NSCalendarUnitHour | NSCalendarUnitMinute) fromDate:NSDate.date];
@@ -1456,6 +1493,9 @@ static BOOL TGConditionHolds(TGCondition condition) {
         case TGConditionKindMusic: holds = TGConditionMusicPlaying(); break;
         case TGConditionKindHeadphones: holds = TGRouteHasHeadphones(AVAudioSession.sharedInstance.currentRoute); break;
         case TGConditionKindLowPower: holds = NSProcessInfo.processInfo.isLowPowerModeEnabled; break;
+        case TGConditionKindFlashlight: holds = TGFlashlightOn(); break;
+        // 有网 = 连着 Wi-Fi，或者蜂窝注册上了；negated 才是「完全没有网络」。
+        case TGConditionKindNetwork: holds = TGConditionNetwork() != nil || TGConditionCellular(); break;
         case TGConditionKindBatteryBelow: {
             int level = TGBatteryPercent();
             holds = level >= 0 && level < condition.value;
@@ -1765,6 +1805,15 @@ static void TGShowMenu(NSString *menuID) {
 
 static BOOL TGCallBool(id target, SEL selector);
 
+// 与 TGFire 同一套前置判断，但不执行。按键在「按下」那一刻就要分岔：这一次是
+// Triggr 接管，还是原样交给系统。Only If 不成立时，接管的前提根本不存在——
+// 等到松手才问 TGFire，系统那一步已经吞掉了（音量步进、锁屏、Home 都是这样丢的）。
+static BOOL TGWillFire(NSString *trigger) {
+    NSString *key = nil;
+    NSArray *actions = TGActionForKey(trigger, &key);
+    return actions != nil && TGOnlyHolds(TGOnlyFor(key));
+}
+
 static BOOL TGFire(NSString *trigger) {
     NSString *key = nil;
     NSArray *actions = TGActionForKey(trigger, &key);
@@ -1834,7 +1883,8 @@ static NSUInteger tgHomeGeneration;
         // Third press inside the window: it's a triple.
         tgHomeAwaitingTriple = NO;
         tgHomeGeneration++;
-        tgHomeSwallowSingle = tgReplaces;
+        // 三击的仅当不成立时不吞单击：这一按要照常回 Home，不能两种动作都没有。
+        tgHomeSwallowSingle = tgReplaces && TGWillFire(@"home.triple");
         TGFire(@"home.triple");
     }
     tgHomeDownAt = CACurrentMediaTime();
@@ -2062,8 +2112,11 @@ static BOOL TGVolumeBegan(int which) {
             TGFire(hold);
         });
     }
-    // cn5 语义：只要长按被指派，按下就吞掉系统音量步进；短按且单按未指派时在松手补播一次步进
-    state->calledSystemOnDown = !tgReplaces || (TGActionFor(press) == nil && TGActionFor(hold) == nil);
+    // cn5 语义：只要这次真的会接管，按下就吞掉系统音量步进；短按且单按未指派时在松手补播一次。
+    // 「会接管」要连仅当一起判：条件不成立等于没配，按下就该把步进交给系统——
+    // 否则要等松手才知道不跑，那一次音量就白按了。
+    BOOL willTake = TGWillFire(press) || (TGActionFor(hold) != nil && TGWillFire(hold));
+    state->calledSystemOnDown = !tgReplaces || !willTake;
     return state->calledSystemOnDown;
 }
 
@@ -2089,10 +2142,11 @@ static BOOL TGVolumeEnded(int which) {
     state->down = NO;
     if (state->holdFired || state->partOfBoth) tgVolumeLastTap = -1;
     else if ([tgAssignedTriggers containsObject:@"volume.updown"] || [tgAssignedTriggers containsObject:@"volume.downup"]) TGVolumeTapped(which);
-    if ((!state->calledSystemOnDown || !tgReplaces) && !state->holdFired && !state->partOfBoth) { TGFire(press); }
-    // 被吞掉的步进：确认为短按且单按未指派时补播一次
-    NSString *hold = which == 0 ? @"volume.uphold" : @"volume.downhold";
-    if (tgReplaces && !state->calledSystemOnDown && !state->holdFired && !state->partOfBoth && TGActionFor(press) == nil && TGActionFor(hold) != nil)
+    BOOL ran = NO;
+    if ((!state->calledSystemOnDown || !tgReplaces) && !state->holdFired && !state->partOfBoth) { ran = TGFire(press); }
+    // 吞了系统步进、却没有任何动作接上（仅当不成立、动作不可用，或短按只配了长按）：
+    // 补播一次。按键不能既没有动作也没有音量。
+    if (!state->calledSystemOnDown && !ran && !state->holdFired && !state->partOfBoth)
         TGVolumeStep(UIApplication.sharedApplication, which == 0, NO);
     return state->calledSystemOnDown;
 }
@@ -2206,7 +2260,8 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^iosAction)(void)) {
     // 当成另一次单击，看起来像「双击的第一下被单击吃了」。
     // tgLockDowns 由 buttonDown: 在按下瞬间累加，这里读到的就是真实第几下。
     if (!tgLockBurstScreenOn && tgLockDowns < 2) return NO; // the waking press itself stays iOS's
-    BOOL replace = tgReplaces;
+    // 仅当不成立时整个交还 iOS：三个都没过条件就等于没配，不能既等一轮又不补系统动作。
+    BOOL replace = tgReplaces && (TGWillFire(@"lock.single") || TGWillFire(@"lock.double") || TGWillFire(@"lock.triple"));
     if (!replace) {
         // Alongside iOS: iOS acts now; Triggr runs once the presses stop.
         iosAction();
@@ -2301,7 +2356,9 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^iosAction)(void)) {
     BOOL multiple = TGActionFor(@"lock.double") || TGActionFor(@"lock.triple");
     if (replace && !multiple) {
         // Only Single Press is assigned: nothing to wait for.
-        TGFire(@"lock.single");
+        // 仅当不成立（或动作都不可用）时 TGFire 返回 NO：这一按等于没配，必须交还 iOS，
+        // 否则锁键按下去毫无反应——比动作没执行更糟。
+        if (!TGFire(@"lock.single")) %orig;
         return;
     }
     if (!replace) %orig;

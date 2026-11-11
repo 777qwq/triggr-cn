@@ -31,13 +31,15 @@ def parse(encoded):
         body = body[:at]
     if not body:
         return None
-    if body == "wifi":
-        body = "wifi:"
     if body == "bt":
         body = "bt:"
     cond = {"negated": negated, "wait": wait, "arg": "", "value": 0, "start": 0, "end": 0}
     takes_argument = False
-    if body.startswith("wifi:"):
+    if body == "wifi":
+        # 裸 wifi / !wifi 是「有没有网」：Wi-Fi 或蜂窝任一可用。
+        # 带冒号的 wifi: 才是「已连某个 Wi-Fi」，两者不能归一。
+        cond["kind"], body = "network", ""
+    elif body.startswith("wifi:"):
         cond["kind"], body, takes_argument = "wifi", body[5:], True
     elif body.startswith("bt:"):
         cond["kind"], body, takes_argument = "bt", body[3:], True
@@ -54,7 +56,7 @@ def parse(encoded):
             return None
         cond.update(kind="time", start=start, end=end)
         body = ""
-    elif body in ("charging", "locked", "music", "headphones", "lowpower"):
+    elif body in ("charging", "locked", "music", "headphones", "lowpower", "flashlight"):
         cond["kind"] = body
         body = ""
     else:
@@ -66,8 +68,8 @@ def parse(encoded):
 
 
 STATE = {"wifi": None, "bt": None, "charging": False, "locked": False,
-         "music": False, "headphones": False, "lowpower": False,
-         "battery": 50, "now": 1200}
+         "music": False, "headphones": False, "lowpower": False, "flashlight": False,
+         "cellular": False, "battery": 50, "now": 1200}
 
 
 def holds(c):
@@ -86,6 +88,10 @@ def holds(c):
         v = STATE["headphones"]
     elif k == "lowpower":
         v = STATE["lowpower"]
+    elif k == "flashlight":
+        v = STATE["flashlight"]
+    elif k == "network":
+        v = STATE["wifi"] is not None or STATE["cellular"]
     elif k == "battery_below":
         v = 0 <= STATE["battery"] < c["value"]
     elif k == "battery_above":
@@ -153,8 +159,8 @@ def run_steps(steps, index=0, frames=None, stopped=None):
 
 def reset(**kw):
     STATE.update({"wifi": None, "bt": None, "charging": False, "locked": False,
-                  "music": False, "headphones": False, "lowpower": False,
-                  "battery": 50, "now": 1200})
+                  "music": False, "headphones": False, "lowpower": False, "flashlight": False,
+                  "cellular": False, "battery": 50, "now": 1200})
     STATE.update(kw)
 
 
@@ -188,6 +194,12 @@ case("电量阈值：10 < 20 成立", ["if:battery<20", "a", "endif"], ["a"], ba
 case("电量阈值：10 > 80 不成立", ["if:battery>80", "a", "endif"], [], battery=10)
 case("暂停跨块：外层不成立时不跑",
      ["if:charging", "a", "pause:1", "b", "endif"], [], charging=False)
+case("手电筒开着", ["if:flashlight", "a", "endif"], ["a"], flashlight=True)
+case("手电筒关着", ["if:!flashlight", "a", "endif"], ["a"], flashlight=False)
+# 「未连 Wi-Fi」与「完全没有网络」必须分开：前者有蜂窝也成立，后者才是断网。
+case("未连 Wi-Fi：有蜂窝仍成立", ["if:!wifi:", "a", "endif"], ["a"], wifi=None, cellular=True)
+case("完全没有网络：Wi-Fi 与蜂窝都没有", ["if:!wifi", "a", "endif"], ["a"], wifi=None, cellular=False)
+case("完全没有网络：有蜂窝就不算断网", ["if:!wifi", "a", "endif", "b"], ["b"], wifi=None, cellular=True)
 
 # 暂停/等待后的续跑
 def _pause_case():
