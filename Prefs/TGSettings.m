@@ -375,6 +375,9 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
 - (UISwipeActionsConfiguration *)tableView:(UITableView *)tableView leadingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
     PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
     if (![spec propertyForKey:@"tgTrigger"]) return nil;
+    // 「全部指派 → 按执行内容」里一行只是某触发器上的一个动作，搬走的却是整条指派，
+    // 容易让人以为只动了这一行，所以那一屏不给右滑移动。
+    if ([spec propertyForKey:@"tgListedAction"]) return nil;
     __weak typeof(self) weakSelf = self;
     UIContextualAction *move = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"移动" handler:^(UIContextualAction *a, UIView *view, void (^done)(BOOL)) {
         __strong typeof(self) strongSelf = weakSelf;
@@ -1096,7 +1099,7 @@ static NSString *TGCategoryOf(NSString *action) {
 
     // What's picked, in run order, so it's visible without opening each category.
     PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
-    if (_selection.count) [notes insertObject:@"左滑可移除。" atIndex:0];
+    if (_selection.count) [notes insertObject:@"从右往左滑可移除。" atIndex:0];
     else if (!_menuEditor && TGDefaultActionTitle(_trigger))
         // 上游 2.1 的「Clearer button notes」：这里唯一要说清的是「原生功能还在」。
         // 原本文案教人「选无操作来关闭它」，方向相反——多数人想留一部分，不是全关。
@@ -1930,7 +1933,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         } else {
             NSArray *events = [self customEventRows];
             PSSpecifier *mine = [PSSpecifier groupSpecifierWithName:nil];
-            [mine setProperty:events.count ? @"左滑事件可删除。" : @"还没有自定义事件。在下方添加一个，再选择它执行的动作。" forKey:@"footerText"];
+            [mine setProperty:events.count ? @"从右往左滑可删除事件。" : @"还没有自定义事件。在下方添加一个，再选择它执行的动作。" forKey:@"footerText"];
             [specs addObject:mine];
             [specs addObjectsFromArray:events];
             [specs addObject:[PSSpecifier groupSpecifierWithName:@"添加事件"]];
@@ -2258,7 +2261,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
         }
         NSMutableArray *specs = [NSMutableArray array];
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
-        [group setProperty:rows.count ? @"点按可修改，左滑可移除。" : [NSString stringWithFormat:@"此处的指派还是空的（%@）。", TGModePhrase(_mode)] forKey:@"footerText"];
+        [group setProperty:rows.count ? @"点按可修改；从右往左滑可移除，从左往右滑可换到其他触发器。" : [NSString stringWithFormat:@"此处的指派还是空的（%@）。", TGModePhrase(_mode)] forKey:@"footerText"];
         [specs addObject:group];
         [specs addObjectsFromArray:[rows sortedArrayUsingComparator:TGCatalogOrder]];
         if (rows.count > 1) {
@@ -2586,8 +2589,8 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
         NSMutableArray *specs = [NSMutableArray array];
         PSSpecifier *top = [PSSpecifier groupSpecifierWithName:nil];
         [top setProperty:!assignments.count ? @"还没有指派。返回后先选位置，再选触发器。"
-            : _byAction ? @"按执行内容分组。点按触发器可修改，左滑可将其动作从触发器上移除。"
-            : @"按生效位置分组。点按可修改，左滑可移除。" forKey:@"footerText"];
+            : _byAction ? @"按执行内容分组。点按可修改；从右往左滑可把这个动作从触发器上移除。"
+            : @"按生效位置分组。点按可修改；从右往左滑可移除，从左往右滑可换到其他触发器。" forKey:@"footerText"];
         [specs addObject:top];
         if (!_byAction) {
             NSMutableArray *places = [TGModeIdentifiers() mutableCopy];
@@ -2689,7 +2692,7 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
         self.title = @"菜单";
         NSMutableArray *specs = [NSMutableArray array];
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:nil];
-        [group setProperty:TGReadMenus().count ? @"菜单会弹出一张动作列表供选择。在动作选择器的「菜单」分类里把它指派给触发器。左滑菜单可删除。"
+        [group setProperty:TGReadMenus().count ? @"菜单会弹出一张动作列表供选择。在动作选择器的「菜单」分类里把它指派给触发器。从右往左滑可删除菜单。"
             : @"菜单会弹出一张动作列表供选择。先创建菜单，再在动作选择器的「菜单」分类里把它指派给触发器。" forKey:@"footerText"];
         [specs addObject:group];
         for (NSDictionary *menu in TGReadMenus()) [specs addObject:[self editorSpecifierForMenu:menu]];
@@ -2873,7 +2876,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         self.title = @"配置与共享";
         NSMutableArray *specs = [NSMutableArray array];
         PSSpecifier *group = [PSSpecifier groupSpecifierWithName:@"配置"];
-        [group setProperty:@"点按配置可切换或导出；左滑可删除。切换前会先把当前设置存入当前生效的配置，不会丢失。" forKey:@"footerText"];
+        [group setProperty:@"点按配置可切换或导出；从右往左滑可删除。切换前会先把当前设置存入当前生效的配置，不会丢失。" forKey:@"footerText"];
         [specs addObject:group];
         for (NSString *name in [self.profiles.allKeys sortedArrayUsingSelector:@selector(localizedStandardCompare:)]) {
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name target:self set:nil get:@selector(profileStatus:) detail:nil cell:PSTitleValueCell edit:nil];
