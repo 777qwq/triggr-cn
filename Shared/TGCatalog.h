@@ -582,7 +582,7 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
     }
     else if ([cond isEqualToString:@"bt"]) { base = @"已连接蓝牙设备"; opposite = @"未连接蓝牙设备"; }
     else if ([cond isEqualToString:@"charging"]) { base = @"充电中"; opposite = @"未充电"; }
-    else if ([cond isEqualToString:@"locked"]) { base = @"已锁定"; opposite = @"未解锁"; }
+    else if ([cond isEqualToString:@"locked"]) { base = @"已锁定"; opposite = @"未锁定"; }
     else if ([cond isEqualToString:@"music"]) { base = @"音乐播放中"; opposite = @"音乐未播放"; }
     else if ([cond isEqualToString:@"headphones"]) { base = @"已连接耳机"; opposite = @"未连接耳机"; }
     else if ([cond isEqualToString:@"lowpower"]) { base = @"低电量模式已开启"; opposite = @"低电量模式已关闭"; }

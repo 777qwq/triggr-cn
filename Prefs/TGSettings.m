@@ -239,6 +239,9 @@ static UIColor *TGColorNamed(NSString *name) {
 // A Settings-style icon: a white SF Symbol on a rounded colour square.
 static void TGSetIcon(PSSpecifier *spec, NSString *symbol, UIColor *color) {
     UIImage *glyph = [UIImage systemImageNamed:symbol withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightMedium]];
+    // 有些符号在旧系统上只认默认配置，或者干脆没有：先退回不带配置的取法，
+    // 两种都取不到就说明这个符号名在当前 iOS 上不存在（整行会没有图标）。
+    if (!glyph) glyph = [UIImage systemImageNamed:symbol];
     if (!glyph) return;
     glyph = [glyph imageWithTintColor:UIColor.whiteColor renderingMode:UIImageRenderingModeAlwaysOriginal];
     CGSize size = CGSizeMake(29, 29);
@@ -669,7 +672,7 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
     add(@"充电中", ^{ done(@"charging"); });
     add(@"未充电", ^{ done(@"!charging"); });
     add(@"已锁定", ^{ done(@"locked"); });
-    add(@"未解锁", ^{ done(@"!locked"); });
+    add(@"未锁定", ^{ done(@"!locked"); });
     add(@"音乐播放中", ^{ done(@"music"); });
     add(@"音乐未播放", ^{ done(@"!music"); });
     add(@"已连接耳机", ^{ done(@"headphones"); });
@@ -2369,7 +2372,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             @"拨片开关": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
             @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
             @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"CarPlay": @[@"car.fill", UIColor.systemBlueColor],
-            @"日出与日落": @[@"sun.horizon.fill", UIColor.systemOrangeColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"应用内手势": @[@"hand.tap.fill", UIColor.systemMintColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
+            @"日出与日落": @[@"sunrise.fill", UIColor.systemOrangeColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"应用内手势": @[@"hand.tap.fill", UIColor.systemMintColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
         };
         for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
             if (!TGShowsTriggerGroup(&TGTriggerGroups[g])) continue;

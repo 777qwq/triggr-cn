@@ -227,7 +227,7 @@ static inline NSString *TGConditionTitle(const TGCondition *condition) {
             if (condition->negated) return name.length ? [NSString stringWithFormat:@"未连接蓝牙「%@」", name] : @"未连接蓝牙设备";
             return name.length ? [NSString stringWithFormat:@"已连接蓝牙「%@」", name] : @"已连接蓝牙设备";
         case TGConditionKindCharging: return condition->negated ? @"未充电" : @"充电中";
-        case TGConditionKindLocked: return condition->negated ? @"未解锁" : @"已锁定";
+        case TGConditionKindLocked: return condition->negated ? @"未锁定" : @"已锁定";
         case TGConditionKindMusic: return condition->negated ? @"音乐未播放" : @"音乐播放中";
         case TGConditionKindHeadphones: return condition->negated ? @"未连接耳机" : @"已连接耳机";
         case TGConditionKindLowPower: return condition->negated ? @"低电量模式已关闭" : @"低电量模式已开启";
