@@ -143,8 +143,8 @@ static const TGGroup TGTriggerGroups[] = {
     {"锁键", TGHomeButton, TG_COUNT(TGHomeButton), NULL},
     {"触控 ID", TGTouchID, TG_COUNT(TGTouchID), "轻点两下是指不按下而轻触传感器两次。解锁状态下 iOS 不上报单次轻触和长按。手指停留与指纹匹配仅在锁屏界面生效，并与解锁并行。"},
     {"锁屏键", TGLockButton, TG_COUNT(TGLockButton), NULL},
-    {"音量键", TGVolume, TG_COUNT(TGVolume), "U「音量加后音量减」（及反向）是两次快速连按；始终与系统并行执行，音量最终回到原位。"},
-    {"锁键 + 音量键", TGSideCombos, TG_COUNT(TGSideCombos), "同时按住锁键与一个音量键。Up Hold / Down Hold 指同时按住半秒；动作与 iOS 并行运行，继续按住仍会照常出现关机滑条和紧急 SOS。"},
+    {"音量键", TGVolume, TG_COUNT(TGVolume), "「音量加后音量减」（及反向）是两次快速连按；始终与系统并行执行，音量最终回到原位。"},
+    {"锁键 + 音量键", TGSideCombos, TG_COUNT(TGSideCombos), "同时按住锁键与一个音量键。「长按音量加 / 长按音量减」指同时按住半秒；动作与 iOS 并行运行，继续按住仍会照常出现关机滑条和紧急 SOS。"},
     {"拨片开关", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。"},
     {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
     {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。"},
@@ -189,8 +189,8 @@ static const TGItem TGPowerActions[] = {
     X("keepawake", "保持屏幕常亮") X("location", "定位服务")
 #define TG_SWITCH_NAME(id, name) {id, name},
 #define TG_SWITCH_TOGGLE(id, name) {"toggle." id, "切换" name},
-#define TG_SWITCH_ON(id, name) {"on." id, name " 开启"},
-#define TG_SWITCH_OFF(id, name) {"off." id, name " 关闭"},
+#define TG_SWITCH_ON(id, name) {"on." id, "开启" name},
+#define TG_SWITCH_OFF(id, name) {"off." id, "关闭" name},
 static const TGItem TGSwitches[] = { TG_SWITCHES(TG_SWITCH_NAME) };
 static const TGItem TGToggleActions[] = { TG_SWITCHES(TG_SWITCH_TOGGLE) };
 static const TGItem TGOnActions[] = { TG_SWITCHES(TG_SWITCH_ON) };
@@ -336,13 +336,26 @@ static inline BOOL TGExtensionRunnable(NSString *action) {
 #define TGAirPlayListReady "com.johndie.triggr/airplay-list-ready"
 #define TGAirPlayListPath TGJB(@"/var/mobile/Library/Preferences/com.johndie.triggr.airplay.plist")
 
-// Settings pages for "打开设置页" (App-prefs:<id>, verified to open Settings on iOS 16.7).
+// Settings pages for "打开设置页" (App-prefs:root=<id>).
+// 汉化时把「蓝牙 / 通用 / 墙纸」这三个 id 也翻成了中文，而 iOS 只认英文 id，
+// 那三项在设置里点了等于什么也没发生。这里存回英文。
 static const TGItem TGSettingsPages[] = {
-    {"WIFI", "Wi-Fi"}, {"蓝牙", "蓝牙"}, {"MOBILE_DATA_SETTINGS_ID", "蜂窝网络"},
-    {"NOTIFICATIONS_ID", "通知"}, {"Sounds", "声音与触感"}, {"通用", "通用"},
-    {"ControlCenter", "控制中心"}, {"DISPLAY", "显示与亮度"}, {"墙纸", "墙纸"},
+    {"WIFI", "Wi-Fi"}, {"Bluetooth", "蓝牙"}, {"MOBILE_DATA_SETTINGS_ID", "蜂窝网络"},
+    {"NOTIFICATIONS_ID", "通知"}, {"Sounds", "声音与触感"}, {"General", "通用"},
+    {"ControlCenter", "控制中心"}, {"DISPLAY", "显示与亮度"}, {"Wallpaper", "墙纸"},
     {"BATTERY_USAGE", "电池"}, {"Privacy", "隐私与安全性"},
 };
+
+// iOS 16 起要写成 root=<id> 才会跳到具体页面（只写 id 会停在设置首页）。
+// 老配置里存的是不带 root= 的英文 id，以及被误翻成中文的那三个，统一在这里归一化。
+static inline NSString *TGPageAnchor(NSString *page) {
+    if (page.length == 0) return @"";
+    if ([page hasPrefix:@"root="]) return page;
+    if ([page isEqualToString:@"蓝牙"]) return @"root=Bluetooth";
+    if ([page isEqualToString:@"通用"]) return @"root=General";
+    if ([page isEqualToString:@"墙纸"]) return @"root=Wallpaper";
+    return [@"root=" stringByAppendingString:page];
+}
 #define TGPauseMax 30.0
 
 // Actions that open an app. iOS can't show them over the Lock Screen (verified:
@@ -639,10 +652,11 @@ static inline NSString *TGActionTitle(NSString *action) {
     if ([action hasPrefix:TGSpeakPrefix]) return [@"朗读：" stringByAppendingString:[action substringFromIndex:TGSpeakPrefix.length]];
     if ([action hasPrefix:TGAirPlayPrefix]) return [@"AirPlay 到 " stringByAppendingString:[action substringFromIndex:TGAirPlayPrefix.length]];
     if ([action hasPrefix:TGSettingsPrefix]) {
-        NSString *page = [action substringFromIndex:TGSettingsPrefix.length];
+        // 两侧都归一化，老配置里的裸 id / 中文 id 也能对上标题。
+        NSString *page = TGPageAnchor([action substringFromIndex:TGSettingsPrefix.length]);
         for (int i = 0; i < TG_COUNT(TGSettingsPages); i++)
-            if ([page isEqualToString:@(TGSettingsPages[i].identifier)]) return [@"设置：" stringByAppendingString:@(TGSettingsPages[i].title)];
-        return [@"设置：" stringByAppendingString:page];
+            if ([page isEqualToString:TGPageAnchor(@(TGSettingsPages[i].identifier))]) return [@"设置：" stringByAppendingString:@(TGSettingsPages[i].title)];
+        return [@"设置：" stringByAppendingString:[action substringFromIndex:TGSettingsPrefix.length]];
     }
     for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++)
         if ([action isEqualToString:@(TGQuickActionPresets[i].identifier)]) return @(TGQuickActionPresets[i].title);

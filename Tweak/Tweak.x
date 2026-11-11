@@ -328,8 +328,9 @@ static BOOL TGValueAction(NSString *action, BOOL dryRun) {
         return name.length && TGAirPlayTo(name, dryRun);
     }
     if ([action hasPrefix:TGSettingsPrefix]) {
-        // "prefs:" no longer opens from SpringBoard on iOS 16; "App-prefs:" does (verified).
-        if (!dryRun) TGOpenURL([@"App-prefs:" stringByAppendingString:[action substringFromIndex:TGSettingsPrefix.length]]);
+        // "prefs:" no longer opens from SpringBoard on iOS 16; "App-prefs:root=" does,
+        // and the bare "App-prefs:<id>" form now stops at the Settings home page.
+        if (!dryRun) TGOpenURL([@"App-prefs:" stringByAppendingString:TGPageAnchor([action substringFromIndex:TGSettingsPrefix.length])]);
         return YES;
     }
     return NO;

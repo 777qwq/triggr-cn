@@ -549,7 +549,7 @@ static NSString *TGListWarning(NSArray<NSString *> *list, NSString *adding) {
     NSArray *shutdown = @[@"system.restart", @"system.poweroff"];
     if ([list firstObjectCommonWithArray:shutdown]) return @"重启或关机之后的动作不会执行。请放在最后。";
     if ([shutdown containsObject:adding])
-        return @"触发器一触发就会立即重启或关机，不询问。在再次运行 Dopamine 前越狱保持关闭。";
+        return @"触发器一触发就会立即重启或关机，不询问。重启后越狱会关闭，需要重新运行越狱工具才能再启用。";
     // Toggle / On / Off of the same switch.
     NSArray *verbs = @[@"toggle", @"on", @"off"];
     NSRange dot = [adding rangeOfString:@"."];
@@ -1102,7 +1102,8 @@ static NSString *TGCategoryOf(NSString *action) {
 
     // What's picked, in run order, so it's visible without opening each category.
     PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
-    if (_selection.count) [notes insertObject:@"从右往左滑可移除。" atIndex:0];
+    // 「移除」在最右，「复制一份」在它左边（全滑只执行最右那个）。
+    if (_selection.count) [notes insertObject:@"从右往左滑可移除或复制动作。" atIndex:0];
     else if (!_menuEditor && TGDefaultActionTitle(_trigger))
         // 上游 2.1 的「Clearer button notes」：这里唯一要说清的是「原生功能还在」。
         // 原本文案教人「选无操作来关闭它」，方向相反——多数人想留一部分，不是全关。
@@ -1573,6 +1574,8 @@ static NSString *TGCategoryOf(NSString *action) {
         if (selected) cell.accessoryType = UITableViewCellAccessoryCheckmark;
         // With several picked, show where this one runs in the list.
         if (selected && action.length && _selection.count > 1) detail = [NSString stringWithFormat:@"%lu", (unsigned long)[self positionOfItem:action]];
+        // 「无操作」看着像「停在这里」，其实只让这次触发什么都不做，后面的动作照常执行。
+        if (!detail.length && [action isEqualToString:@"system.nothing"]) detail = @"只接管这次触发，什么也不做；后面还有动作时照常继续。";
     } else if (name) {
         NSArray *verbs = [self verbsForSwitch:name];
         if (verbs.count) cell.accessoryType = UITableViewCellAccessoryCheckmark;
@@ -1581,7 +1584,17 @@ static NSString *TGCategoryOf(NSString *action) {
         NSString *item = [self itemWithPrefix:prefix];
         if (item) cell.accessoryType = UITableViewCellAccessoryCheckmark;
         BOOL titled = [prefix isEqualToString:TGAppPrefix] || [prefix isEqualToString:TGSettingsPrefix];
-        if (item) detail = titled ? [TGDisplayTitle(item) substringFromIndex:[TGDisplayTitle(item) rangeOfString:@" "].location + 1] : [item substringFromIndex:prefix.length];
+        if (item && !titled) detail = [item substringFromIndex:prefix.length];
+        else if (item) {
+            // 「打开 微信」按空格切，「设置：通用」按全角冒号切。
+            // 标题里没有分隔符时不能取子串：rangeOfString: 返回 NSNotFound，
+            // 加一溢出成天文数字，substringFromIndex: 抛 NSRangeException——
+            // 添加「打开设置页」里的任意一项就闪退（cn4.26 实测）。
+            NSString *full = TGDisplayTitle(item);
+            NSRange sep = [full rangeOfString:@" "];
+            if (sep.location == NSNotFound) sep = [full rangeOfString:@"："];
+            detail = sep.location == NSNotFound ? full : [full substringFromIndex:NSMaxRange(sep)];
+        }
     }
     // Search mixes every category; say where each result lives.
     if (_query && !detail.length && !picked) {
@@ -3080,12 +3093,12 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         [specs addObject:TGSwitchRow(TGHasHomeButton() ? @"状态栏点按" : @"状态栏点按（实验性）", TGStatusBarTapKey, TGHasHomeButton(), self)];
 
         PSSpecifier *lock = [PSSpecifier groupSpecifierWithName:@"锁屏界面"];
-        [lock setProperty:@"应用、URL 和快捷指令无法在锁屏界面上打开，因此它们总会等到解锁后才执行。开启后，shell 命令也会等解锁（设置了密码时）。其他动作照常立即执行。" forKey:@"footerText"];
+        [lock setProperty:@"应用、URL、快捷指令和「打开设置页」无法在锁屏界面上打开，因此它们总会等到解锁后才执行。开启后，shell 命令也会等解锁（设置了密码时）。其他动作照常立即执行。" forKey:@"footerText"];
         [specs addObject:lock];
         [specs addObject:TGSwitchRow(@"命令需解锁", TGRequireUnlockKey, YES, self)];
 
         PSSpecifier *buttons = [PSSpecifier groupSpecifierWithName:@"按键"];
-        [buttons setProperty:TGButtonText(@"开：已指派的按压会取代按键自身动作（回主屏、音量步进、锁屏、静音…）。想两者都保留，就补一个对应动作，如锁键配\"屏幕休眠\"。关：一切照旧与按键并行。唤醒、紧急 SOS 和强制重启始终不受影响。") forKey:@"footerText"];
+        [buttons setProperty:TGButtonText(@"开：已指派的按压会取代按键自身动作（回主屏、音量步进、锁屏、静音…）。想两者都保留，就补一个对应动作，如锁键配「屏幕休眠」。关：一切照旧与按键并行。唤醒、紧急 SOS 和强制重启始终不受影响。") forKey:@"footerText"];
         [specs addObject:buttons];
         PSSpecifier *replace = [PSSpecifier preferenceSpecifierNamed:@"替换按键动作" target:self set:@selector(setPreferenceValue:specifier:)
             get:@selector(readPreferenceValue:) detail:nil cell:PSSwitchCell edit:nil];
