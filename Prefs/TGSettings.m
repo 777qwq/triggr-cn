@@ -37,7 +37,7 @@ static NSArray<NSDictionary *> *TGReadMenus(void) {
 // 仅当的一行：只显示条件本身（未在充电 / 已解锁），不带「如果」前缀。
 static NSString *TGOnlyTitle(NSString *encoded) {
     TGCondition condition;
-    if (!TGConditionParse(encoded, &condition)) return encoded;
+    if (!TGConditionParse(encoded, &condition)) return [NSString stringWithFormat:@"无法识别的条件「%@」", encoded];
     NSString *title = TGConditionTitle(&condition);
     if (condition.wait > 0) title = [title stringByAppendingFormat:@"（%@ 秒后仍成立）", [NSString stringWithFormat:@"%g", condition.wait]];
     return title;

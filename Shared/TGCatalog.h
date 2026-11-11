@@ -592,7 +592,9 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
         NSArray *parts = [[cond substringFromIndex:5] componentsSeparatedByString:@"-"];
         base = parts.count == 2 ? [NSString stringWithFormat:@"%@ 到 %@ 之间", parts[0], parts[1]] : [@"时间条件 " stringByAppendingString:cond];
     }
-    else base = cond;
+    // 词表里没有的（例如 cn4.25 移除的 flashlight）不能就显示成裸标识符：
+    // 那一行会永远判为不成立，用户却看不出原因。
+    else base = [NSString stringWithFormat:@"无法识别的条件「%@」", cond];
     if (neg) return opposite ?: [NSString stringWithFormat:@"不满足「%@」", base];
     return base;
 }
