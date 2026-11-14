@@ -309,6 +309,11 @@ static void CNRelayAttachAll(void) {
     for (UIWindow *w in ws) [[TGInAppTarget shared] refresh:w wanted:CNRelayWanted()];
 }
 
+// 关联对象的 key 必须是稳定且唯一的指针。用字符串字面量当 key 只是「碰巧能用」：
+// 同一 TU 里 clang 会合并相同字面量，一旦不合并（编译选项、代码搬走、手抄成两份），
+// get 全返回 nil，表现是「应用内多指手势全都不触发」，不崩也不报错。
+static const void *TGInAppIndexKey = &TGInAppIndexKey;
+
 @implementation TGInAppTarget
 
 + (instancetype)shared {
@@ -341,14 +346,14 @@ static void CNRelayAttachAll(void) {
     g.cancelsTouchesInView = NO;
     g.delaysTouchesBegan = NO;
     g.delaysTouchesEnded = NO;
-    objc_setAssociatedObject(g, "TGInAppIndex", @(idx), OBJC_ASSOCIATION_RETAIN);
+    objc_setAssociatedObject(g, TGInAppIndexKey, @(idx), OBJC_ASSOCIATION_RETAIN);
     return g;
 }
 
 - (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted {
     if (!window) return;
     for (UIGestureRecognizer *g in [window.gestureRecognizers copy]) {
-        NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+        NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
         if (!idxN) continue;
         int idx = idxN.intValue;
         uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
@@ -359,7 +364,7 @@ static void CNRelayAttachAll(void) {
         if (!(wanted & bit)) continue;
         BOOL present = NO;
         for (UIGestureRecognizer *g in window.gestureRecognizers) {
-            NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+            NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
             if (idxN && idxN.intValue == idx) { present = YES; break; }
         }
         if (!present) [window addGestureRecognizer:[self recognizerFor:idx]];
@@ -367,7 +372,7 @@ static void CNRelayAttachAll(void) {
 }
 
 - (void)recognized:(UIGestureRecognizer *)g {
-    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+    NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
     int idx = idxN ? idxN.intValue : -1;
     if (idx >= 0 && (idx & 0xfffffffe) == 10) {
         if (g.state != UIGestureRecognizerStateEnded) return;
@@ -385,7 +390,7 @@ static void CNRelayAttachAll(void) {
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    NSNumber *idxN = objc_getAssociatedObject(g, "TGInAppIndex");
+    NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
     if (!idxN) return NO;
     int idx = idxN.intValue;
     uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);

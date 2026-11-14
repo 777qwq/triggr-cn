@@ -188,13 +188,12 @@ static NSDictionary<NSString *, NSArray<NSString *> *> *TGAllAssignments(void) {
     CFPreferencesAppSynchronize(domain);
     NSArray *keys = CFBridgingRelease(CFPreferencesCopyKeyList(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
     NSDictionary *values = keys.count ? CFBridgingRelease(CFPreferencesCopyMultiple((__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) : @{};
-    NSArray *modes = TGModeIdentifiers();
     NSMutableDictionary *result = [NSMutableDictionary dictionary];
     [values enumerateKeysAndObjectsUsingBlock:^(NSString *key, id value, BOOL *stop) {
         NSRange slash = [key rangeOfString:@"/"];
         if (slash.location == NSNotFound) return;
         NSString *mode = [key substringToIndex:slash.location];
-        if (![modes containsObject:mode] && !([mode hasPrefix:TGAppModePrefix] && mode.length > TGAppModePrefix.length)) return;
+        if (!TGModeIsValid(mode)) return;
         NSString *trigger = [key substringFromIndex:slash.location + 1];
         if (!TGIsKnownTrigger(trigger) || !TGTriggerFitsHardware(trigger, TGHasHomeButton())) return;
         NSArray *actions = TGActionList(value);
@@ -2383,7 +2382,7 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             @"拨片开关": @[@"bell.slash.fill", UIColor.systemOrangeColor], @"状态栏": @[@"rectangle.topthird.inset.filled", UIColor.systemIndigoColor],
             @"主屏幕图标": @[@"square.grid.3x3.fill", UIColor.systemBlueColor], @"主屏幕手势": @[@"hand.draw.fill", UIColor.systemMintColor], @"动作": @[@"iphone.radiowaves.left.and.right", UIColor.systemYellowColor],
             @"充电器与耳机": @[@"bolt.fill", UIColor.systemGreenColor], @"CarPlay": @[@"car.fill", UIColor.systemBlueColor],
-            @"日出与日落": @[@"sunrise.fill", UIColor.systemOrangeColor], @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"应用内手势": @[@"hand.tap.fill", UIColor.systemMintColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
+            @"音乐": @[@"music.note", UIColor.systemPinkColor], @"通知": @[@"bell.badge.fill", UIColor.systemRedColor], @"电话": @[@"phone.fill", UIColor.systemGreenColor], @"屏幕边缘": @[@"arrow.left.and.right.square.fill", UIColor.systemCyanColor], @"应用内手势": @[@"hand.tap.fill", UIColor.systemMintColor], @"距离传感器": @[@"hand.raised.fill", UIColor.systemBrownColor], @"状态变化": @[@"arrow.triangle.2.circlepath", UIColor.systemTealColor],
         };
         for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++) {
             if (!TGShowsTriggerGroup(&TGTriggerGroups[g])) continue;
@@ -2782,7 +2781,6 @@ static BOOL TGIsStringList(id value) {
 // Keeps only keys and value types Triggr understands; everything else is dropped.
 static NSDictionary *TGSanitizedSetup(NSDictionary *input) {
     NSMutableDictionary *setup = [NSMutableDictionary dictionary];
-    NSSet *modes = [NSSet setWithObjects:@"anywhere", @"home", @"app", @"lock", nil];
     [input enumerateKeysAndObjectsUsingBlock:^(id key, id value, BOOL *stop) {
         if (![key isKindOfClass:NSString.class]) return;
         NSRange slash = [key rangeOfString:@"/"];
@@ -2793,10 +2791,10 @@ static NSDictionary *TGSanitizedSetup(NSDictionary *input) {
             // 少了它，导出的配置会把所有前置门丢在家里。
             NSString *actionKey = [key substringFromIndex:TGOnlyKeyPrefix.length];
             NSRange s = [actionKey rangeOfString:@"/"];
-            if (s.location != NSNotFound && [modes containsObject:[actionKey substringToIndex:s.location]]
+            if (s.location != NSNotFound && TGModeIsValid([actionKey substringToIndex:s.location])
                 && TGIsKnownTrigger([actionKey substringFromIndex:s.location + 1]) && TGIsStringList(value)) setup[key] = value;
         } else if (slash.location != NSNotFound) {
-            if ([modes containsObject:[key substringToIndex:slash.location]] && TGIsKnownTrigger([key substringFromIndex:slash.location + 1]) && TGIsStringList(value)) setup[key] = value;
+            if (TGModeIsValid([key substringToIndex:slash.location]) && TGIsKnownTrigger([key substringFromIndex:slash.location + 1]) && TGIsStringList(value)) setup[key] = value;
         } else if ([key isEqualToString:TGEnabledKey] || [key isEqualToString:TGRequireUnlockKey] || [key isEqualToString:TGShowBannersKey]) {
             // (Allow API is deliberately not imported: a shared setup shouldn't switch it on.)
             if ([value isKindOfClass:NSNumber.class]) setup[key] = value;

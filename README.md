@@ -3,7 +3,7 @@
 把 Triggr（越狱插件：给按键、开关和手势指派动作）的**界面与配置全量汉化**，并补上若干动作与 2.0 版的条件序列。
 
 - 上游：[`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0，GPL-3.0
-- 本仓库：`777qwq/triggr-cn`，分支 `cn274`，当前版本 **1.5.0+cn4.29**
+- 本仓库：`777qwq/triggr-cn`，分支 `cn274`，当前版本 **1.5.0+cn4.30**
 - 适用：iOS 15 – 18，无根（rootless / roothide），arm64 + arm64e
 
 ## 装之前

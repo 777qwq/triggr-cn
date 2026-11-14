@@ -95,9 +95,13 @@ static void TGSyncUnavailable(NSDictionary<NSString *, NSArray<NSString *> *> *a
             if (!TGCanPerform(action)) [unavailable addObject:action];
         }
     NSArray *sorted = [unavailable.allObjects sortedArrayUsingSelector:@selector(compare:)];
+    // 首次算出的集合也要写一次：早退只针对「这次和上次一样」，不能把「首次就是空」
+    // 也当成没变化——那样偏好里上一次留下的旧记录永远清不掉，设置页会一直拿它当事实。
     static NSArray *last;
-    if (last ? [last isEqualToArray:sorted] : sorted.count == 0) return;
+    static BOOL lastValid;
+    if (lastValid && [last isEqualToArray:sorted]) return;
     last = sorted;
+    lastValid = YES;
     CFStringRef domain = (__bridge CFStringRef)TGDomain;
     CFPreferencesSetAppValue((__bridge CFStringRef)TGUnavailableKey, (__bridge CFPropertyListRef)sorted, domain);
     CFPreferencesAppSynchronize(domain);
@@ -174,6 +178,10 @@ static void TGReadAssignments(void) {
 
 #pragma mark - Mode
 
+// 前台 App 的 bundle id（或上一个在前台的）。私有 selector 随 iOS 版本改名，
+// 一律走这一处：不 respondsToSelector 就直接发消息，是 SpringBoard 注销级的崩。
+static NSString *TGFrontAppIdentifier(void);
+
 // Private SpringBoard API (widely used, guarded): lock screen, then front app.
 static NSString *TGCurrentMode(void) {
     Class lockManager = objc_getClass("SBLockScreenManager");
@@ -181,8 +189,7 @@ static NSString *TGCurrentMode(void) {
         SBLockScreenManager *manager = [lockManager sharedInstance];
         if ([manager respondsToSelector:@selector(isUILocked)] && [manager isUILocked]) return @"lock";
     }
-    SpringBoard *springBoard = (SpringBoard *)UIApplication.sharedApplication;
-    if ([springBoard respondsToSelector:@selector(_accessibilityFrontMostApplication)] && [springBoard _accessibilityFrontMostApplication]) return @"app";
+    if (TGFrontAppIdentifier()) return @"app";
     return @"home";
 }
 
@@ -216,17 +223,15 @@ static NSArray<NSString *> *TGActionForKey(NSString *trigger, NSString **outKey)
     NSString *mode = TGCurrentMode();
     if (tgBlockedApps && [mode isEqualToString:@"app"]) {
         // Block List: ignore triggers inside these apps.
-        id front = [UIApplication.sharedApplication respondsToSelector:@selector(_accessibilityFrontMostApplication)] ? [(SpringBoard *)UIApplication.sharedApplication _accessibilityFrontMostApplication] : nil;
-        id identifier = [front respondsToSelector:@selector(bundleIdentifier)] ? [front performSelector:@selector(bundleIdentifier)] : nil;
+        NSString *identifier = TGFrontAppIdentifier();
         if ([identifier isKindOfClass:NSString.class] && [tgBlockedApps containsObject:identifier]) return nil;
     }
     NSArray *actions = nil;
     NSString *key = nil;
     if (tgHasAppAssignments && [mode isEqualToString:@"app"]) {
         // In Specific Apps: this app's own assignment comes first.
-        id front = [(SpringBoard *)UIApplication.sharedApplication _accessibilityFrontMostApplication];
-        id identifier = [front respondsToSelector:@selector(bundleIdentifier)] ? [front performSelector:@selector(bundleIdentifier)] : nil;
-        if ([identifier isKindOfClass:NSString.class]) {
+        NSString *identifier = TGFrontAppIdentifier();
+        if (identifier.length) {
             key = TGAssignmentKey([TGAppModePrefix stringByAppendingString:identifier], trigger);
             actions = TGPerformable(tgAssignments[key]);
         }
@@ -418,11 +423,24 @@ static int TGSpawnShell(const char *const argv[], pid_t *pid) {
     return error;
 }
 
+static void TGShowBanner(NSString *text);
+
 // Hands a run to triggrd (it checks the action is one of the user's own).
 static void TGRunViaDaemon(NSString *action) {
     NSString *path = [TGRunQueue stringByAppendingPathComponent:[NSString stringWithFormat:@"%.6f-%u.plist", CFAbsoluteTimeGetCurrent(), arc4random()]];
-    BOOL ok = [@{@"Action": action} writeToFile:path atomically:YES];
-    if (ok) notify_post(TGRunRequestNotification);
+    NSError *error = nil;
+    // iOS 18 上 shell 动作全走这条路，写盘失败等于「命令静默不执行」：目录没建起来、
+    // 权限不对、磁盘满，现场一个都不留痕迹。日志 + 横幅至少能让两头对上。
+    // NSDictionary 没有带 error 的写盘方法，先序列化成 plist 再写，才能拿到失败原因。
+    NSData *data = [NSPropertyListSerialization dataWithPropertyList:@{@"Action": action}
+                                                               format:NSPropertyListXMLFormat_v1_0
+                                                              options:0 error:&error];
+    if (!data || ![data writeToFile:path options:NSDataWritingAtomic error:&error]) {
+        NSLog(@"[Triggr] 队列写入失败：%@（%@，errno %d）", path, error.localizedDescription ?: @"序列化失败", errno);
+        if (tgShowBanners) TGShowBanner(@"命令没能交给后台执行");
+        return;
+    }
+    notify_post(TGRunRequestNotification);
 }
 
 static void TGRunShell(NSString *command) {
@@ -2670,11 +2688,26 @@ static const void *TGHoldRecognizerKey = &TGHoldRecognizerKey;
     objc_setAssociatedObject(bar, TGHoldRecognizerKey, hold, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 %end
+// 从顶部往下拉通知中心/控制中心时，手指虽然在状态栏窗口外松开，touch 仍归这个窗口，
+// 只看 Ended 会把这一下当成点按。记住起点，位移超过 10pt 就不算轻点。
+static CGPoint tgStatusBarTapStart;
+static BOOL tgStatusBarTapTracked;
+
 static void TGStatusBarWindowEvent(UIEvent *event) {
+    if (event.type != UIEventTypeTouches || !TGStatusBarInUse()) return;
     UITouch *touch = event.allTouches.anyObject;
-    if (event.type == UIEventTypeTouches && TGStatusBarInUse() && touch.phase == UITouchPhaseEnded) {
-        TGStatusBarTapped(TGSideOf([touch locationInView:touch.window].x, touch.window.bounds.size.width));
+    if (!touch) return;
+    if (touch.phase == UITouchPhaseBegan) {
+        tgStatusBarTapStart = [touch locationInView:touch.window];
+        tgStatusBarTapTracked = YES;
+        return;
     }
+    if (touch.phase != UITouchPhaseEnded) return;
+    CGPoint end = [touch locationInView:touch.window];
+    BOOL tap = !tgStatusBarTapTracked
+        || hypot(end.x - tgStatusBarTapStart.x, end.y - tgStatusBarTapStart.y) <= 10.0;
+    tgStatusBarTapTracked = NO;
+    if (tap) TGStatusBarTapped(TGSideOf(end.x, touch.window.bounds.size.width));
 }
 %hook UIStatusBarWindow
 - (void)sendEvent:(UIEvent *)event {
@@ -2823,7 +2856,8 @@ static BOOL TGHomeScreenBusy(void) {
 
 + (instancetype)shared {
     static TGHomeGestureTarget *target;
-    if (!target) target = [TGHomeGestureTarget new];
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ target = [TGHomeGestureTarget new]; });
     return target;
 }
 
@@ -3028,141 +3062,6 @@ static void TGUpdateEdgeGestures(void) {
     return %orig;
 }
 %end
-
-#pragma mark - Sunrise & Sunset
-
-// 用系统已有的位置算日出日落：取一次坐标，本地算时刻，不持续定位、不联网。
-// 算法是 NOAA 的常规公式（太阳赤纬 + 时角），误差一两分钟，做触发器够用。
-// 极昼/极夜时当天没有事件，直接不排——不是错误。
-//
-// 位置只用来算时刻，不记录、不上传；触发器取消后立刻停止定位。
-
-
-static BOOL tgSunWanted;
-static BOOL tgSunHasCoordinate;
-static CLLocationCoordinate2D tgSunCoordinate;
-static CLLocationManager *tgSunManager;
-static NSUInteger tgSunGeneration;
-static void TGSunReschedule(void);
-
-@interface TGSunLocator : NSObject <CLLocationManagerDelegate>
-@end
-
-@implementation TGSunLocator
-- (void)locationManager:(CLLocationManager *)manager didUpdateLocations:(NSArray<CLLocation *> *)locations {
-    CLLocation *location = locations.lastObject;
-    if (location) {
-        tgSunCoordinate = location.coordinate;
-        tgSunHasCoordinate = YES;
-    }
-    [manager stopUpdatingLocation]; // 只要一个点
-    if (tgSunWanted) TGSunReschedule();
-}
-- (void)locationManager:(CLLocationManager *)manager didFailWithError:(NSError *)error {
-    [manager stopUpdatingLocation];
-}
-- (void)locationManagerDidChangeAuthorization:(CLLocationManager *)manager {
-    CLAuthorizationStatus status = manager.authorizationStatus;
-    if (tgSunWanted && (status == kCLAuthorizationStatusAuthorizedWhenInUse || status == kCLAuthorizationStatusAuthorizedAlways))
-        [manager startUpdatingLocation];
-}
-@end
-
-static double TGRadians(double degrees) { return degrees * M_PI / 180.0; }
-static double TGDegrees(double radians) { return radians * 180.0 / M_PI; }
-
-// 某一天（UTC）的日出/日落绝对时刻；nil = 这天没有（极昼/极夜）。
-static NSDate *TGSunEventOnDay(NSDate *day, BOOL sunrise) {
-    static NSCalendar *utc;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        utc = [NSCalendar calendarWithIdentifier:NSCalendarIdentifierGregorian];
-        utc.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"UTC"];
-    });
-    NSDateComponents *components = [utc components:NSCalendarUnitYear | NSCalendarUnitMonth | NSCalendarUnitDay fromDate:day];
-    NSDate *midnight = [utc dateFromComponents:components];
-    double n = (double)[utc ordinalityOfUnit:NSCalendarUnitDay inUnit:NSCalendarUnitYear forDate:midnight];
-    double latitude = tgSunCoordinate.latitude, longitude = tgSunCoordinate.longitude;
-
-    double lngHour = longitude / 15.0;
-    double t = n + ((sunrise ? 6.0 : 18.0) - lngHour) / 24.0;
-    double M = 0.9856 * t - 3.289;
-    double L = M + 1.916 * sin(TGRadians(M)) + 0.020 * sin(TGRadians(2 * M)) + 282.634;
-    L = fmod(L, 360.0);
-    if (L < 0) L += 360.0;
-
-    double RA = TGDegrees(atan(0.91764 * tan(TGRadians(L))));
-    RA = fmod(RA, 360.0);
-    if (RA < 0) RA += 360.0;
-    RA += floor(L / 90.0) * 90.0 - floor(RA / 90.0) * 90.0; // 同一象限
-    RA /= 15.0;
-
-    double sinDec = 0.39782 * sin(TGRadians(L));
-    double cosDec = cos(asin(sinDec));
-    double cosH = (cos(TGRadians(90.833)) - sinDec * sin(TGRadians(latitude))) / (cosDec * cos(TGRadians(latitude)));
-    if (cosH > 1.0 || cosH < -1.0) return nil; // 太阳整天在地平线下 / 上
-
-    double H = sunrise ? 360.0 - TGDegrees(acos(cosH)) : TGDegrees(acos(cosH));
-    H /= 15.0;
-    double T = H + RA - 0.06571 * t - 6.622;
-    double UT = fmod(T - lngHour, 24.0);
-    if (UT < 0) UT += 24.0;
-    return [midnight dateByAddingTimeInterval:UT * 3600.0];
-}
-
-static NSDate *TGSunNextEvent(BOOL sunrise, NSDate *from) {
-    for (int day = 0; day < 3; day++) {
-        NSDate *event = TGSunEventOnDay([from dateByAddingTimeInterval:day * 86400.0], sunrise);
-        if (event && [event timeIntervalSinceDate:from] > 1) return event;
-    }
-    return nil;
-}
-
-static void TGSunReschedule(void) {
-    NSUInteger generation = ++tgSunGeneration;
-    if (!tgSunWanted || !tgSunHasCoordinate || !tgSpringBoardReady) return;
-    NSDate *now = [NSDate date];
-    NSDate *sunrise = [tgAssignedTriggers containsObject:@"sunrise"] ? TGSunNextEvent(YES, now) : nil;
-    NSDate *sunset = [tgAssignedTriggers containsObject:@"sunset"] ? TGSunNextEvent(NO, now) : nil;
-    NSDate *next = nil;
-    BOOL isSunrise = NO;
-    if (sunrise && (!sunset || [sunrise compare:sunset] == NSOrderedAscending)) { next = sunrise; isSunrise = YES; }
-    else if (sunset) { next = sunset; }
-    if (!next) return;
-    NSTimeInterval delay = MAX(1.0, [next timeIntervalSinceNow]);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (generation != tgSunGeneration || !tgSunWanted) return;
-        TGFire(isSunrise ? @"sunrise" : @"sunset");
-        TGSunReschedule(); // 排下一个
-    });
-}
-
-static void TGSunUpdate(BOOL want) {
-    if (want != tgSunWanted) tgSunGeneration++;
-    tgSunWanted = want;
-    if (!want) {
-        [tgSunManager stopUpdatingLocation];
-        return;
-    }
-    if (!tgSpringBoardReady) return; // 启动就绪后 TGResyncAfterLaunch 会再调一次
-    if (!tgSunManager) {
-        static TGSunLocator *locator;
-        if (!locator) locator = [TGSunLocator new];
-        tgSunManager = [CLLocationManager new];
-        tgSunManager.delegate = locator;
-        tgSunManager.desiredAccuracy = kCLLocationAccuracyThreeKilometers;
-    }
-    if (tgSunManager.location) { // 系统已有缓存位置，直接用
-        tgSunCoordinate = tgSunManager.location.coordinate;
-        tgSunHasCoordinate = YES;
-        TGSunReschedule();
-        return;
-    }
-    [tgSunManager startUpdatingLocation];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(10 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        [tgSunManager stopUpdatingLocation]; // 十秒拿不到就不等了
-    });
-}
 
 #pragma mark - Notifications and calls
 
@@ -3791,7 +3690,6 @@ static void TGUpdateOtherEvents(void) {
     TGUpdateProximity(TGAssignedPrefix(@"proximity."));
     TGUpdateMusic(TGAssignedPrefix(@"music."));
     TGUpdateCallWatcher(TGAssignedPrefix(@"call."));
-    TGSunUpdate(TGAssignedAny(@"sunrise", @"sunset"));
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
@@ -3880,7 +3778,6 @@ static void TGResyncAfterLaunch(void) {
     TGRefreshWiFiState();
     TGRefreshMusicState();
     TGProximityScreenChanged();
-    TGSunUpdate(TGAssignedAny(@"sunrise", @"sunset"));
     TGSyncUnavailable(tgAssignments);
 }
 

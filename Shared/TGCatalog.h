@@ -109,11 +109,6 @@ static const TGItem TGCarPlay[] = {
     {"carplay.connected", "连接 CarPlay"}, {"carplay.disconnected", "断开 CarPlay"},
 };
 
-// 日出 / 日落：拿系统已有位置算一次当天的时刻，不持续定位、不联网。
-static const TGItem TGSun[] = {
-    {"sunrise", "日出"}, {"sunset", "日落"},
-};
-
 // Phone and FaceTime calls (CallKit's public call observer).
 static const TGItem TGCalls[] = {
     {"call.incoming", "来电"}, {"call.answered", "接听电话"},
@@ -154,7 +149,6 @@ static const TGGroup TGTriggerGroups[] = {
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},
     {"CarPlay", TGCarPlay, TG_COUNT(TGCarPlay), "靠音频输出端口判断，有线和无线 CarPlay 都算。连接在建立会话时触发，断开在端口切回扬声器时触发。"},
-    {"日出与日落", TGSun, TG_COUNT(TGSun), "用系统已有的位置算当天的日出日落，不持续定位、不联网。需要「定位服务」开着；算不出来（极昼、极夜）就不触发。"},
     {"电话", TGCalls, TG_COUNT(TGCalls), "使用 CallKit 的电话、FaceTime 及其他通话应用。来电在响铃时触发，接听电话在接通时触发。开启「实时留言信箱」后，转入语音信箱的电话也算接听。"},
     {"通知", TGNotifications, TG_COUNT(TGNotifications), "收到任意通知时触发，无论是否显示横幅。Triggr 只能看到是哪个应用发的，看不到内容。想只针对某个应用，用自定义事件中的「应用通知」。"},
     {"音乐", TGMusic, TG_COUNT(TGMusic), "任何出现在「正在播放」里的应用：音乐、Spotify、YouTube、播客等。切歌每首新歌运行一次，含暂停后的第一首；Triggr 自身媒体动作引起的变化 1 秒内忽略，避免指派自我循环。"},
@@ -575,6 +569,15 @@ static inline NSString *TGModeTitle(NSString *mode) {
 
 // A place for one app: "app:<bundle id>" (checked before In Apps and Anywhere).
 #define TGAppModePrefix @"app:"
+
+// "<mode>/<trigger>" 里的 mode 是否合法：四种内置位置，或 "app:<bundle id>"。
+// 读偏好、导出、导入、存方案、恢复默认必须用同一套判定——只认内置位置的话，
+// 应用内指派会在这些链路上被静默丢掉，恢复默认也清不掉它们。
+static inline BOOL TGModeIsValid(NSString *mode) {
+    if (![mode isKindOfClass:NSString.class] || mode.length == 0) return NO;
+    for (int m = 0; m < TG_COUNT(TGModes); m++) if ([mode isEqualToString:@(TGModes[m].identifier)]) return YES;
+    return [mode hasPrefix:TGAppModePrefix] && mode.length > TGAppModePrefix.length;
+}
 
 static inline NSString *TGAssignmentKey(NSString *mode, NSString *trigger) {
     return [NSString stringWithFormat:@"%@/%@", mode, trigger];

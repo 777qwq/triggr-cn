@@ -38,3 +38,24 @@ ifeq ($(THEOS_PACKAGE_SCHEME),roothide)
 internal-stage::
 	$(ECHO_NOTHING)find "$(THEOS_STAGING_DIR)" -name com.johndie.triggrd.plist -exec sed -i 's#/var/jb##' {} \;$(ECHO_END)
 endif
+
+# 版本号只在 control 里维护，stage 完再写进两个 Info.plist。
+# 少了这一步，设置页底部（读 control）和系统里看到的 bundle 版本会对不上，
+# 崩溃日志报的也是旧版本号——cn4.28 那次就是这样多绕了一圈。
+# macOS 用 PlistBuddy，Linux 沙箱没有它，退回 python3（plistlib 两边都认）。
+TG_VERSION := $(shell sed -n 's/^Version: //p' $(THEOS_PROJECT_DIR)/control)
+
+internal-stage::
+	$(ECHO_NOTHING)set -e; \
+	for p in "$(THEOS_STAGING_DIR)/Library/PreferenceBundles/Triggr.bundle/Info.plist" \
+	         "$(THEOS_STAGING_DIR)/Applications/TriggrApp.app/Info.plist"; do \
+	  [ -f "$$p" ] || continue; \
+	  if [ -x /usr/libexec/PlistBuddy ]; then \
+	    /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $(TG_VERSION)" "$$p" 2>/dev/null \
+	      || /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $(TG_VERSION)" "$$p"; \
+	    /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $(TG_VERSION)" "$$p" 2>/dev/null \
+	      || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $(TG_VERSION)" "$$p"; \
+	  else \
+	    python3 -c "import plistlib,sys; p=sys.argv[1]; d=plistlib.load(open(p,'rb')); d['CFBundleShortVersionString']=sys.argv[2]; d['CFBundleVersion']=sys.argv[2]; plistlib.dump(d,open(p,'wb'))" "$$p" "$(TG_VERSION)"; \
+	  fi; \
+	done$(ECHO_END)
