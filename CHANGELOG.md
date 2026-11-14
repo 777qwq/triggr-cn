@@ -3,6 +3,29 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.31
+
+恢复「AutoTouch 脚本」动作。这套代码在 cn4.9 里是完整的，cn11 那次重构（条件序列、
+多指手势移植）没有把它带过来，此后一直缺席。
+
+### 新增
+
+- **AutoTouch**：设置 → 动作里多一个分类，直接列出脚本目录里的 `.lua` / `.at` 文件，选中即
+  播放。动作 id 是 `autotouch:<脚本名>`，子目录里的脚本显示为「分组/名字」。
+- **调用方式**：不走 Activator，也不依赖命令行。直接调 AutoTouch 注入进程的播放引擎
+  —— `PlayingManager.sharedInstance` → `makePlayingFor:` → `start`。这条入口与 Powercuts 的
+  `AutoTouchRunFileAction` 相同。
+- **脚本目录探测**：`/var/jb/var/mobile/Library/AutoTouch/Scripts`、裸
+  `/var/mobile/...`、AppGroup 容器的三种布局（`var/mobile/…`、`Library/…`、`AutoTouch/…`），
+  外加从自身二进制路径反推隐根。roothide 的 `/.jbroot-<hex>/…` 会在执行前归一化成
+  AppGroup 的绝对路径；rootless 不含这一段，直接跳过。
+- **可用性**：只查 `PlayingManager` 类在不在。AutoTouch 没装、或它的 dylib 没注入
+  SpringBoard 时，动作显示为不可用，不会按了没反应。
+
+### 上限
+
+只能播放脚本，不能录制、不能停、不能设速度——那些都没有对外入口。
+
 ## 1.5.0+cn4.30
 
 按代码评审把「会咬到用户」和「小改动防患」的两组问题收掉。日出日落触发器删掉（见下）。

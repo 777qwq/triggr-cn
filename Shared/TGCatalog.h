@@ -214,6 +214,7 @@ static const TGGroup TGActionGroups[] = {
 #define TGGetPrefix @"get:"     // 后台 GET，只认 http/https；不经过 UIApplication，不切应用
 #define TGShellPrefix @"shell:"
 #define TGAppPrefix @"app:"
+#define TGAutotouchPrefix @"autotouch:" // AutoTouch 脚本名（不含 .lua）
 #define TGPausePrefix @"pause:" // "pause:<seconds>" between actions in a list
 // cn2.77 序列条件（2.0 词表复刻）：if:<cond>[@wait 秒] / else / endif。'!' 前缀=取反。
 // 条件：wifi[:SSID] bt[:名称] charging locked music headphones battery<N battery>N time:H:MM-H:MM
@@ -643,6 +644,103 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
     return base;
 }
 
+// ---- AutoTouch 脚本 -------------------------------------------------------
+// AutoTouch 没有命令行入口，能调用的只有它注入进程的播放引擎（见 Tweak.x
+// TGRunAutoTouch）。脚本目录随版本和越狱形态变过好几次：老版在
+// /var/mobile/Library/AutoTouch/Scripts，新版挪进 AppGroup 容器，roothide 还会在
+// 隐根下再套一层。这里把几处都探一遍，探不到就返回空——设置页那一类随之消失，
+// 不会出现「点了没反应」的空分类。
+static inline NSArray<NSString *> *TGAutoTouchScriptDirectories(void) {
+    NSMutableArray *dirs = [NSMutableArray array];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    void (^probe)(NSString *) = ^(NSString *path) {
+        if (path && ![dirs containsObject:path] && [fm isReadableFileAtPath:path]) [dirs addObject:path];
+    };
+    probe(@"/var/jb/var/mobile/Library/AutoTouch/Scripts");
+    probe(@"/var/mobile/Library/AutoTouch/Scripts");
+    // AppGroup：沙盒化的 AutoTouch 只能往共享容器里写。roothide 会在容器下镜像出
+    // ".jbroot-<hex>/…"，Dopamine 这类 rootless 则可能是 <group>/var/mobile/… 或
+    // <group>/Library/…，三种都探。
+    for (NSString *group in [fm contentsOfDirectoryAtPath:@"/private/var/mobile/Containers/Shared/AppGroup" error:nil]) {
+        NSString *base = [@"/private/var/mobile/Containers/Shared/AppGroup" stringByAppendingPathComponent:group];
+        probe([base stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"]);
+        probe([base stringByAppendingPathComponent:@"Library/AutoTouch/Scripts"]);
+        probe([base stringByAppendingPathComponent:@"AutoTouch/Scripts"]);
+    }
+    // 从自己的真实路径反推隐根：不依赖 /var/jb 这个符号链接是否还在。
+    Dl_info info;
+    if (dladdr((void *)TGAutoTouchScriptDirectories, &info) && info.dli_fname) {
+        NSString *selfPath = @(info.dli_fname);
+        NSString *jbroot = nil;
+        NSRange marker = [selfPath rangeOfString:@"/.jbroot-"];
+        if (marker.location != NSNotFound) {
+            NSRange slash = [selfPath rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, selfPath.length - marker.location - 1)];
+            if (slash.location != NSNotFound) jbroot = [selfPath substringToIndex:slash.location];
+        } else {
+            NSRange r = [selfPath rangeOfString:@"/usr/lib/TweakInject"];
+            if (r.location == NSNotFound) r = [selfPath rangeOfString:@"/Library/MobileSubstrate"];
+            if (r.location != NSNotFound) jbroot = [selfPath substringToIndex:r.location];
+        }
+        if (jbroot) probe([jbroot stringByAppendingPathComponent:@"var/mobile/Library/AutoTouch/Scripts"]);
+    }
+    return dirs;
+}
+
+// 按脚本名找文件。子目录里的脚本在列表里显示成「分组/名字」，这里两种都认。
+// 真实 jbroot 排在 AppGroup 镜像前面：播放引擎对 AppGroup 的绝对路径不一定解析得了。
+static inline NSString *TGAutoTouchFindScript(NSArray<NSString *> *dirs, NSString *name) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *stem = name.stringByDeletingPathExtension;
+    NSArray *exts = name.pathExtension.length ? @[name.pathExtension] : @[@"lua", @"at"];
+    NSMutableArray *ordered = [NSMutableArray array];
+    for (NSString *dir in dirs) if (![dir containsString:@"/Containers/Shared/AppGroup/"]) [ordered addObject:dir];
+    for (NSString *dir in dirs) if ([dir containsString:@"/Containers/Shared/AppGroup/"]) [ordered addObject:dir];
+    for (NSString *dir in ordered) {
+        NSMutableArray *folders = [NSMutableArray arrayWithObject:@""];
+        for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
+            NSString *full = [dir stringByAppendingPathComponent:file];
+            BOOL isDirectory = NO;
+            [fm fileExistsAtPath:full isDirectory:&isDirectory];
+            if (isDirectory && ![file hasPrefix:@"."]) [folders addObject:file];
+        }
+        for (NSString *folder in folders) {
+            for (NSString *ext in exts) {
+                NSString *candidate = folder.length
+                    ? [[dir stringByAppendingPathComponent:folder] stringByAppendingPathComponent:[stem stringByAppendingPathExtension:ext]]
+                    : [dir stringByAppendingPathComponent:[stem stringByAppendingPathExtension:ext]];
+                if ([fm fileExistsAtPath:candidate]) return candidate;
+            }
+        }
+    }
+    return nil;
+}
+
+// 设置页用的脚本清单：文件名去扩展名，子目录带「分组/」前缀。排序保证每次一样。
+static inline NSArray<NSString *> *TGAutoTouchScripts(void) {
+    NSMutableArray *names = [NSMutableArray array];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *dir in TGAutoTouchScriptDirectories()) {
+        for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil]) {
+            if ([file hasPrefix:@"."]) continue;
+            NSString *full = [dir stringByAppendingPathComponent:file];
+            BOOL isDirectory = NO;
+            [fm fileExistsAtPath:full isDirectory:&isDirectory];
+            if (isDirectory) {
+                for (NSString *sub in [fm contentsOfDirectoryAtPath:full error:nil]) {
+                    if (([sub.pathExtension isEqualToString:@"lua"] || [sub.pathExtension isEqualToString:@"at"]) && ![sub hasPrefix:@"."]) {
+                        NSString *rel = [NSString stringWithFormat:@"%@/%@", file, sub.stringByDeletingPathExtension];
+                        if (![names containsObject:rel]) [names addObject:rel];
+                    }
+                }
+            } else if ([file.pathExtension isEqualToString:@"lua"] || [file.pathExtension isEqualToString:@"at"]) {
+                if (![names containsObject:file.stringByDeletingPathExtension])
+                    [names addObject:file.stringByDeletingPathExtension];
+            }
+        }
+    }
+    return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
 static inline NSString *TGActionTitle(NSString *action) {
     if (action.length == 0) return @"无";
     if ([action isEqualToString:TGElseAction]) return @"否则";
@@ -661,6 +759,7 @@ static inline NSString *TGActionTitle(NSString *action) {
     }
     if ([action hasPrefix:TGUnlockPrefix]) return @"密码解锁";
     if ([action hasPrefix:TGShortcutPrefix]) return [@"快捷指令：" stringByAppendingString:[action substringFromIndex:TGShortcutPrefix.length]];
+    if ([action hasPrefix:TGAutotouchPrefix]) return [@"AutoTouch：" stringByAppendingString:[action substringFromIndex:TGAutotouchPrefix.length]];
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
     if ([action hasPrefix:TGGetPrefix]) return [@"请求 URL: " stringByAppendingString:[action substringFromIndex:TGGetPrefix.length]];
     if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
