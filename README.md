@@ -23,10 +23,6 @@
 - **条件序列**：`如果 / 否则 / 结束条件` + `暂停`，条件支持 Wi-Fi 名、蓝牙设备、充电、锁定、播放中、耳机、低电量、电量阈值、时间段、有无网络，可加 `@秒`（等 N 秒后仍成立才执行）。
 - **可被扩展**：别的包往 `Library/Triggr/Extensions/` 放一个 plist，动作选择器里就多出一类动作（条目是某个目录下的文件，用 `<Program> <文件名>` 执行）。Triggr 本体不依赖任何插件；唯一的内置第三方接入是 AutoTouch，装了才出现。两条路的区别见 [EXTENSIONS.md](EXTENSIONS.md)。
 
-| | |
-|---|---|
-| ![](screenshots/1-main.png) | ![](screenshots/3-assigned.png) |
-| ![](screenshots/5-picker.png) | ![](screenshots/8-options.png) |
 
 ## 构建
 
