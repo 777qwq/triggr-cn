@@ -79,15 +79,6 @@ exec /var/jb/bin/sh "/var/mobile/Library/MyScripts/$1.sh"
 | 只有图形界面，但 dylib 注入在 SpringBoard 里 | 进程内调用（如 `autotouch:`） | 改 Triggr 本体 |
 | 只有图形界面，也没有可复用的进程内入口 | 接不了 | — |
 
-## 内置的第三方接入：`autotouch:`
-
-`autotouch:` 不是扩展，是 Triggr 本体内置的一类动作，只是沿用了同一套「分类 + 条目」的界面。它在动作列表里和别的动作完全一样，能排序、能加停顿、能被「如果 / 否则」包住。
-
-AutoTouch 没有命令行入口，也没有「一个脚本一个 Activator 动作」这种东西，所以 `ext:` 接不了它。但它的播放引擎（`PlayingManager`）注入在 SpringBoard 里，tweak 可以直接拿到并驱动，于是有了这一类动作。代价是绑死在它的私有类名和方法名上，对方换版本改了名字就断，只能等 Triggr 跟进。
-
-判可用看 `PlayingManager` 这个类在不在：没装 AutoTouch 时这类动作显示「不可用」，触发器退回系统行为，不会出现按键黑洞。脚本目录不存在时整类不出现在选择器里。
-
-上限是**只能播放**：不能录制、不能中途停止、不能调速。
 
 ## 注意
 
