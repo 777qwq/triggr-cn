@@ -969,6 +969,171 @@ static NSString *TGCategoryOf(NSString *action) {
     return nil;
 }
 
+#pragma mark - Shortcuts
+
+// 取不到列表有两种原因，给用户看的话不一样：系统没提供入口，还是真的一个都没建。
+typedef NS_ENUM(NSInteger, TGShortcutListState) {
+    TGShortcutListUnavailable,
+    TGShortcutListOK,
+    TGShortcutListEmpty,
+};
+
+// 设置进程没有链接 VoiceShortcutClient，2.1 也是运行时才 dlopen 进来的。
+// 名字在这里是唯一的（重名时系统自动加序号），所以只要名字，不要 identifier。
+static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
+    if (state) *state = TGShortcutListUnavailable;
+    Class client = NSClassFromString(@"VCVoiceShortcutClient");
+    if (!client) {
+        // 这类私有框架换过归属地：这边两个都试，命中就停。
+        for (NSString *framework in @[@"VoiceShortcutClient", @"WorkflowKit"]) {
+            NSString *path = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/%@.framework/%@", framework, framework];
+            if (dlopen(path.UTF8String, RTLD_LAZY)) {
+                client = NSClassFromString(@"VCVoiceShortcutClient");
+                if (client) break;
+            }
+        }
+    }
+    SEL standardSel = @selector(standardClient);
+    SEL listSel = @selector(accessibilityWorkflowsWithError:);
+    BOOL hasStandard = [client respondsToSelector:standardSel];
+    id standard = hasStandard ? ((id (*)(id, SEL))objc_msgSend)(client, standardSel) : nil;
+    BOOL hasList = [standard respondsToSelector:listSel];
+    NSError *error = nil;
+    NSArray *workflows = hasList ? ((id (*)(id, SEL, NSError **))objc_msgSend)(standard, listSel, &error) : nil;
+
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    if ([workflows isKindOfClass:NSArray.class]) {
+        for (id workflow in workflows) {
+            if (![workflow respondsToSelector:@selector(name)]) continue;
+            id value = ((id (*)(id, SEL))objc_msgSend)(workflow, @selector(name));
+            if (![value isKindOfClass:NSString.class] || ![value length]) continue;
+            if (![names containsObject:value]) [names addObject:value];
+        }
+    }
+    // 一行日志：类在不在、方法在不在、拿到几条、有没有报错。以后某个系统版本改了口径，
+    // 只看这一行就知道卡在哪一步，不必再猜。
+    NSLog(@"[Triggr] shortcut list: class=%d standard=%d list=%d count=%lu error=%@",
+          client != nil, hasStandard, hasList, (unsigned long)names.count, error);
+    if (!names.count) {
+        // 方法不通和「真的一条都没有」要分开：前者是坏了，后者只是还没建。
+        if (state) *state = workflows ? TGShortcutListEmpty : TGShortcutListUnavailable;
+        return @[];
+    }
+    if (state) *state = TGShortcutListOK;
+    return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
+}
+
+// 快捷指令的选择页。值和执行侧都还是名字，所以这里只管选，不解析 identifier。
+@interface TGShortcutPickerController : TGListController <UISearchResultsUpdating>
+@property (nonatomic, copy) NSString *selected;
+@property (nonatomic, copy) void (^onPick)(NSString *name);
+@end
+
+@implementation TGShortcutPickerController {
+    NSArray<NSString *> *_names;
+    TGShortcutListState _state;
+    BOOL _loading;
+    NSString *_query;
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"快捷指令";
+    UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
+    search.searchResultsUpdater = self;
+    search.obscuresBackgroundDuringPresentation = NO;
+    search.searchBar.placeholder = @"搜索快捷指令";
+    search.searchBar.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    self.navigationItem.searchController = search;
+    self.navigationItem.hidesSearchBarWhenScrolling = NO;
+    self.definesPresentationContext = YES;
+
+    // 取数是跨进程调用，放后台：页面先出来，读到了再刷新，别让设置页停在这儿。
+    _loading = YES;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        TGShortcutListState state = TGShortcutListUnavailable;
+        NSArray<NSString *> *names = TGAvailableShortcuts(&state);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            TGShortcutPickerController *strongSelf = weakSelf;
+            if (!strongSelf) return;
+            strongSelf->_names = names;
+            strongSelf->_state = state;
+            strongSelf->_loading = NO;
+            strongSelf->_specifiers = nil;
+            [strongSelf reloadSpecifiers];
+        });
+    });
+}
+
+- (void)updateSearchResultsForSearchController:(UISearchController *)searchController {
+    NSString *query = [searchController.searchBar.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (!query.length) query = nil;
+    if (query == _query || [query isEqualToString:_query]) return;
+    _query = query;
+    _specifiers = nil;
+    [self reloadSpecifiers];
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) _specifiers = [self shortcutSpecifiers];
+    return _specifiers;
+}
+
+- (PSSpecifier *)shortcutRow:(NSString *)title value:(NSString *)value {
+    PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:title target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
+    if (value) [row setProperty:value forKey:@"tgShortcut"];
+    return row;
+}
+
+- (NSMutableArray *)shortcutSpecifiers {
+    NSMutableArray *specs = [NSMutableArray array];
+    if (_loading) {
+        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+        [specs addObject:[self shortcutRow:@"正在读取…" value:nil]];
+        return specs;
+    }
+    if (_state != TGShortcutListOK) {
+        BOOL failed = _state == TGShortcutListUnavailable;
+        PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
+        [group setProperty:failed ? @"这台系统没有提供读取入口，这个动作暂时配置不了。"
+                                  : @"请先在「快捷指令」App 中创建一个，再回到本页。"
+                    forKey:@"footerText"];
+        [specs addObject:group];
+        [specs addObject:[self shortcutRow:failed ? @"无法读取快捷指令" : @"没有快捷指令" value:nil]];
+        return specs;
+    }
+    NSArray<NSString *> *names = _names;
+    if (_query) names = [names filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"self CONTAINS[cd] %@", _query]];
+    if (!names.count) {
+        PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
+        [group setProperty:@"换个词试试。" forKey:@"footerText"];
+        [specs addObject:group];
+        [specs addObject:[self shortcutRow:@"没有匹配的快捷指令" value:nil]];
+        return specs;
+    }
+    [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+    for (NSString *name in names) [specs addObject:[self shortcutRow:name value:name]];
+    return specs;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [super tableView:tableView cellForRowAtIndexPath:indexPath];
+    NSString *value = [[self specifierAtIndex:[self indexForIndexPath:indexPath]] propertyForKey:@"tgShortcut"];
+    cell.accessoryType = value && [value isEqualToString:_selected] ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+    return cell;
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    NSString *value = [[self specifierAtIndex:[self indexForIndexPath:indexPath]] propertyForKey:@"tgShortcut"];
+    if (!value.length) return; // 「正在读取」「没有快捷指令」这些行不响应
+    if (_onPick) _onPick(value);
+    [self.navigationController popViewControllerAnimated:YES];
+}
+
+@end
+
 @interface TGActionPickerController : TGListController <UISearchResultsUpdating>
 @end
 
@@ -1844,7 +2009,39 @@ static NSString *TGCategoryOf(NSString *action) {
         [self pickAirPlayDeviceAtIndexPath:indexPath specifier:spec existing:existingItem];
         return;
     }
+    if ([prefix isEqualToString:TGShortcutPrefix]) {
+        [self pickShortcutAtIndexPath:indexPath existing:existingItem];
+        return;
+    }
     [self promptForCommand:spec prefix:prefix existing:existingItem];
+}
+
+// 快捷指令从手机自己的列表里选，存进去的仍是一串名字（执行侧按名字匹配）。
+- (void)pickShortcutAtIndexPath:(NSIndexPath *)indexPath existing:(NSString *)existingItem {
+    if (!existingItem) {
+        [self pushShortcutPicker:nil];
+        return;
+    }
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:[existingItem substringFromIndex:TGShortcutPrefix.length] message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"选择其他快捷指令…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [self pushShortcutPicker:existingItem];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        [self setItem:nil forPrefix:TGShortcutPrefix];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentSheet:sheet fromRowAtIndexPath:indexPath];
+}
+
+- (void)pushShortcutPicker:(NSString *)existingItem {
+    TGShortcutPickerController *picker = [TGShortcutPickerController new];
+    picker.specifier = [PSSpecifier emptyGroupSpecifier];
+    picker.selected = existingItem ? [existingItem substringFromIndex:TGShortcutPrefix.length] : nil;
+    __weak typeof(self) weakSelf = self;
+    picker.onPick = ^(NSString *name) {
+        [weakSelf setItem:[TGShortcutPrefix stringByAppendingString:name] forPrefix:TGShortcutPrefix];
+    };
+    [self.navigationController pushViewController:picker animated:YES];
 }
 
 // A text (or number) for a command action, in an alert.
