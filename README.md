@@ -1,6 +1,6 @@
 # Triggr 汉化修改版（triggr-cn）
 
-把 Triggr（越狱插件：给按键、开关和手势指派动作）的**界面与配置全量汉化**，并补上若干动作与 2.0 版的条件序列。
+把 Triggr（越狱插件：给按键、开关和手势指派动作）的**界面与配置全量汉化**，并补上若干动作、2.0 版的条件序列和 AutoTouch 脚本接入。
 
 - 上游：[`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0，GPL-3.0
 - 本仓库：`777qwq/triggr-cn`，分支 `cn274`，当前版本 **1.5.0+cn4.31**
@@ -18,10 +18,10 @@
 
 ## 功能
 
-- **触发器 20 组**：主屏幕键、锁键、音量键与组合键、静音拨片、状态栏、主屏图标轻扫、屏幕边缘、主屏手势、应用内多指手势、摇动、距离传感器、充电器与耳机、CarPlay、日出与日落、电话、通知、音乐、状态变化，以及 Wi-Fi / 蓝牙 / 电量 / 时间 / 应用启动与离开等自定义事件。
-- **动作 90+ 个**：系统（截图、锁屏、睡眠、回主屏、切换器、Siri、快捷指令、URL、后台 GET、Shell 命令…）、开关（Wi-Fi、蓝牙、飞行、勿扰、低电量、手电、定位、静音…）、媒体、应用、菜单。
+- **触发器 20 组**：主屏幕键、触控 ID、锁键、音量键与组合键、静音拨片、状态栏、主屏图标轻扫、屏幕边缘、主屏手势、应用内多指手势、摇动、距离传感器、充电器与耳机、CarPlay、电话、通知、音乐、状态变化（Wi-Fi、蓝牙、低电量、锁定、屏幕点亮/熄灭），以及时间、应用启动与离开等自定义事件。
+- **动作 90+ 个**：系统（截图、锁屏、睡眠、回主屏、切换器、Siri、快捷指令、URL、后台 GET、Shell 命令…）、开关（Wi-Fi、蓝牙、飞行、勿扰、低电量、手电、定位、静音…）、媒体、应用、菜单；装了 AutoTouch 还会多出它的脚本列表。
 - **条件序列**：`如果 / 否则 / 结束条件` + `暂停`，条件支持 Wi-Fi 名、蓝牙设备、充电、锁定、播放中、耳机、低电量、电量阈值、时间段、有无网络，可加 `@秒`（等 N 秒后仍成立才执行）。
-- **可被扩展**：别的包往 `Library/Triggr/Extensions/` 放一个 plist，动作选择器里就多出一类动作（条目是某个目录下的文件，用 `<Program> <文件名>` 执行）。Triggr 自己不依赖任何第三方插件，见 [EXTENSIONS.md](EXTENSIONS.md)。
+- **可被扩展**：别的包往 `Library/Triggr/Extensions/` 放一个 plist，动作选择器里就多出一类动作（条目是某个目录下的文件，用 `<Program> <文件名>` 执行）。Triggr 本体不依赖任何插件；唯一的内置第三方接入是 AutoTouch，装了才出现。两条路的区别见 [EXTENSIONS.md](EXTENSIONS.md)。
 
 | | |
 |---|---|
@@ -30,7 +30,7 @@
 
 ## 构建
 
-需要 macOS + Xcode 命令行工具（arm64e 切片只有 Apple 的 clang/ld64 能写对，Linux 上产出的 arm64e 会在注入时崩在 `readClass`）、[Theos](https://theos.dev)、`ldid`、`dpkg`。
+需要 macOS + Xcode 命令行工具（arm64e 切片只有 Apple 的工具链能写对。Linux 上 lld 产出的切片子类型是 0，lipo 合并不了，包里只剩 arm64，在 A12 及以上设备上等于没装；强行改标记伪装成 arm64e 则会在注入时崩在 `readClass`）、[Theos](https://theos.dev)、`ldid`、`dpkg`。
 
 ```sh
 git clone --recursive https://github.com/theos/theos.git ~/theos
