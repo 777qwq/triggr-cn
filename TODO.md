@@ -12,13 +12,17 @@
 
 ### 1. 列表能不能出来
 
-设置 → 任意触发器 → 添加动作 → 打开 → 运行快捷指令…，预期直接进入列表页。
+设置 → 任意触发器 → 添加动作 → 打开 → 运行快捷指令…，预期几百毫秒后出列表。
 
-- 正常出列表 → 继续第 2 条。
-- 停在「无法读取快捷指令」→ 看 Console 里 `[Triggr] shortcut list:` 那一行：
-  `class=0` 是类没找到（框架路径或类名变了）；`class=1` 但 `list=0` 是方法改名；
-  前两项都是 1、`count=0`，则是真的取到了空表。
-- 一直停在「正在读取…」→ 后台那次跨进程调用没回来。改成主线程同步取（2.1 就是这么做的）再试。
+取数不在设置进程里做：Settings 的沙盒不放行 VoiceShortcutClient 的 XPC（实测报
+4097「Couldn't communicate with a helper application.」），改由 SpringBoard 取好写进
+`/var/mobile/Library/Preferences/com.johndie.triggr.shortcuts.plist`，通知设置页来读。
+
+- 出列表 → 继续第 2 条。
+- 一直「正在读取…」然后「SpringBoard 没有回应」→ 通知没到。先确认 tweak 装在
+  SpringBoard 里（其他触发器能用就说明装了），再看 `notify_post` 是否被拦。
+- 「SpringBoard 取数失败：…」→ 括号里就是原因（类没找到 / standardClient 空 /
+  方法不可用 / 返回空）。这时才回去查 iOS 版本的接口变化。
 
 ### 2. 选完能不能跑
 

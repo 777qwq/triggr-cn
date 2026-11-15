@@ -331,6 +331,14 @@ static inline BOOL TGExtensionRunnable(NSString *action) {
 #define TGAirPlayListReady "com.johndie.triggr/airplay-list-ready"
 #define TGAirPlayListPath TGJB(@"/var/mobile/Library/Preferences/com.johndie.triggr.airplay.plist")
 
+// 快捷指令列表同理，而且更硬：Settings 进程里 VoiceShortcutClient 的 XPC 连不上
+// （4097「Couldn't communicate with a helper application」，沙盒不放行 mach lookup），
+// 只有 SpringBoard 能取。文件里是字典：names（数组）、failed（调用本身失败，而不是空表）、
+// error（失败原因，给设置页显示）。
+#define TGShortcutListRequest "com.johndie.triggr/shortcut-list"
+#define TGShortcutListReady "com.johndie.triggr/shortcut-list-ready"
+#define TGShortcutListPath TGJB(@"/var/mobile/Library/Preferences/com.johndie.triggr.shortcuts.plist")
+
 // Settings pages for "打开设置页" (App-prefs:root=<id>).
 // 汉化时把「蓝牙 / 通用 / 墙纸」这三个 id 也翻成了中文，而 iOS 只认英文 id，
 // 那三项在设置里点了等于什么也没发生。这里存回英文。

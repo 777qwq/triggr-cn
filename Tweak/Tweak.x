@@ -952,6 +952,48 @@ static void TGRunAutoTouch(NSString *name) {
     }
 }
 
+// Settings 里那条 XPC 走不通（沙盒），只能在这里取：名字写进文件，再通知设置页来读。
+// 写字典而不是数组，是为了把「调用失败」和「一条都没有」分开——前者要报错，后者是空表。
+static void TGWriteShortcutList(void) {
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    BOOL failed = YES;
+    NSString *reason = nil;
+    @try {
+        dlopen("/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient", RTLD_LAZY);
+        Class vcCls = NSClassFromString(@"VCVoiceShortcutClient");
+        if (!vcCls) reason = @"VCVoiceShortcutClient 未找到";
+        id std = vcCls ? ((id (*)(id, SEL))objc_msgSend)(vcCls, @selector(standardClient)) : nil;
+        if (vcCls && !std) reason = @"standardClient 返回空";
+        else if (std && ![std respondsToSelector:@selector(accessibilityWorkflowsWithError:)]) reason = @"取列表的方法不可用";
+        if (std) {
+            NSError *err = nil;
+            NSArray *workflows = ((NSArray *(*)(id, SEL, NSError **))objc_msgSend)(std, @selector(accessibilityWorkflowsWithError:), &err);
+            if ([workflows isKindOfClass:NSArray.class]) {
+                failed = NO;
+                for (id wf in workflows) {
+                    for (NSString *prop in @[@"name", @"displayName", @"title"]) {
+                        SEL ps = NSSelectorFromString(prop);
+                        if (![wf respondsToSelector:ps]) continue;
+                        NSString *value = ((NSString *(*)(id, SEL))objc_msgSend)(wf, ps);
+                        if ([value isKindOfClass:NSString.class] && value.length) {
+                            if (![names containsObject:value]) [names addObject:value];
+                            break;
+                        }
+                    }
+                }
+            } else {
+                reason = err.localizedDescription ?: @"取列表返回空";
+            }
+        }
+    } @catch (NSException *e) {
+        reason = e.reason ?: @"异常";
+    }
+    [names sortUsingSelector:@selector(localizedStandardCompare:)];
+    NSDictionary *payload = @{@"names": names, @"failed": @(failed), @"error": reason ?: @""};
+    [payload writeToFile:TGShortcutListPath atomically:YES];
+    notify_post(TGShortcutListReady);
+}
+
 static void TGRunShortcut(NSString *name) {
     @try {
         if (name.length == 0) return;
@@ -3848,6 +3890,8 @@ static void TGResyncAfterLaunch(void) {
     int tapToken;
     int airPlayListToken;
     notify_register_dispatch(TGAirPlayListRequest, &airPlayListToken, dispatch_get_main_queue(), ^(int t) { TGWriteAirPlayList(); });
+    int shortcutListToken;
+    notify_register_dispatch(TGShortcutListRequest, &shortcutListToken, dispatch_get_main_queue(), ^(int t) { TGWriteShortcutList(); });
     notify_register_dispatch(TGRelayStatusBarTap, &tapToken, dispatch_get_main_queue(), ^(int t) {
         TGStatusBarTapped(TGStatusBarSideUnknown);
     });

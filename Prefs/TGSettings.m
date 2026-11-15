@@ -971,69 +971,15 @@ static NSString *TGCategoryOf(NSString *action) {
 
 #pragma mark - Shortcuts
 
-// 取不到列表有两种原因，给用户看的话不一样：系统没提供入口，还是真的一个都没建。
+// 快捷指令的选择页。取数不在这个进程里做：Settings 的沙盒不放行
+// VCVoiceShortcutClient 那条 XPC（4097 "Couldn't communicate with a helper application."），
+// 所以由 SpringBoard 侧取好写进文件，这里只发请求、读结果。值仍然是名字。
 typedef NS_ENUM(NSInteger, TGShortcutListState) {
     TGShortcutListUnavailable,
     TGShortcutListOK,
     TGShortcutListEmpty,
 };
 
-// 设置进程没有链接 VoiceShortcutClient，2.1 也是运行时才 dlopen 进来的。
-// 名字在这里是唯一的（重名时系统自动加序号），所以只要名字，不要 identifier。
-// probe 回传每一步的结果：出错时直接显示在页面上，不必连电脑看日志。
-static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state, NSString **probe) {
-    if (state) *state = TGShortcutListUnavailable;
-    NSMutableArray<NSString *> *notes = [NSMutableArray array];
-    Class client = NSClassFromString(@"VCVoiceShortcutClient");
-    [notes addObject:[NSString stringWithFormat:@"class=%@", client ? @"yes" : @"no"]];
-    if (!client) {
-        // 不知道这个类在哪个框架里：常见的两个都试，再试裸名让 dyld 自己找。
-        for (NSString *path in @[@"/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient",
-                                 @"/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit",
-                                 @"VoiceShortcutClient", @"WorkflowKit"]) {
-            dlerror();
-            void *handle = dlopen(path.UTF8String, RTLD_LAZY);
-            const char *message = handle ? NULL : dlerror();
-            [notes addObject:[NSString stringWithFormat:@"%@ → %@", path.lastPathComponent,
-                              handle ? @"ok" : (message ? [NSString stringWithUTF8String:message] : @"?")]];
-            if (handle) {
-                client = NSClassFromString(@"VCVoiceShortcutClient");
-                if (client) break;
-            }
-        }
-    }
-    SEL standardSel = @selector(standardClient);
-    SEL listSel = @selector(accessibilityWorkflowsWithError:);
-    BOOL hasStandard = [client respondsToSelector:standardSel];
-    id standard = hasStandard ? ((id (*)(id, SEL))objc_msgSend)(client, standardSel) : nil;
-    BOOL hasList = [standard respondsToSelector:listSel];
-    NSError *error = nil;
-    NSArray *workflows = hasList ? ((id (*)(id, SEL, NSError **))objc_msgSend)(standard, listSel, &error) : nil;
-    [notes addObject:[NSString stringWithFormat:@"standard=%d list=%d result=%@",
-                      hasStandard, hasList, workflows ? @(workflows.count) : @"nil"]];
-    if (error) [notes addObject:[NSString stringWithFormat:@"error=%@", error]];
-
-    NSMutableArray<NSString *> *names = [NSMutableArray array];
-    if ([workflows isKindOfClass:NSArray.class]) {
-        for (id workflow in workflows) {
-            if (![workflow respondsToSelector:@selector(name)]) continue;
-            id value = ((id (*)(id, SEL))objc_msgSend)(workflow, @selector(name));
-            if (![value isKindOfClass:NSString.class] || ![value length]) continue;
-            if (![names containsObject:value]) [names addObject:value];
-        }
-    }
-    if (probe) *probe = [notes componentsJoinedByString:@"\n"];
-    NSLog(@"[Triggr] shortcut list: %@", [notes componentsJoinedByString:@" | "]);
-    if (!names.count) {
-        // 方法不通和「真的一条都没有」要分开：前者是坏了，后者只是还没建。
-        if (state) *state = workflows ? TGShortcutListEmpty : TGShortcutListUnavailable;
-        return @[];
-    }
-    if (state) *state = TGShortcutListOK;
-    return [names sortedArrayUsingSelector:@selector(localizedStandardCompare:)];
-}
-
-// 快捷指令的选择页。值和执行侧都还是名字，所以这里只管选，不解析 identifier。
 @interface TGShortcutPickerController : TGListController <UISearchResultsUpdating>
 @property (nonatomic, copy) NSString *selected;
 @property (nonatomic, copy) void (^onPick)(NSString *name);
@@ -1042,8 +988,10 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state, NSS
 @implementation TGShortcutPickerController {
     NSArray<NSString *> *_names;
     TGShortcutListState _state;
-    NSString *_probe;   // 失败时显示的探测结果
+    NSString *_probe;   // 取不到时显示的原因
     NSString *_query;
+    BOOL _waiting;      // 还没等到 SpringBoard 的回话
+    int _token;
 }
 
 - (void)viewDidLoad {
@@ -1058,11 +1006,54 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state, NSS
     self.navigationItem.hidesSearchBarWhenScrolling = NO;
     self.definesPresentationContext = YES;
 
-    // 同步取一次。2.1 也是主线程调的：这条跨进程连接在后台线程上可能拿不到东西，
-    // 而一次调用是几百毫秒的量级，比页面先出「正在读取」再闪一下更干净。
-    NSString *probe = nil;
-    _names = TGAvailableShortcuts(&_state, &probe);
-    _probe = probe;
+    // 先显示上一次的结果，同时请 SpringBoard 现取一份（同一个文件，取完会覆盖）。
+    _token = -1;
+    __weak typeof(self) weakSelf = self;
+    notify_register_dispatch(TGShortcutListReady, &_token, dispatch_get_main_queue(), ^(int t) {
+        [weakSelf readShortcutList];
+    });
+    if (![self readShortcutList]) _waiting = YES;
+    notify_post(TGShortcutListRequest);
+    // SpringBoard 那边是同步取，正常几百毫秒。等不到就直说，别让页面一直转。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        TGShortcutPickerController *strongSelf = weakSelf;
+        if (!strongSelf || !strongSelf->_waiting) return;
+        strongSelf->_waiting = NO;
+        strongSelf->_probe = @"SpringBoard 没有回应（3 秒）。这套系统可能没有可用的快捷指令接口。";
+        [strongSelf reloadList];
+    });
+}
+
+- (void)dealloc {
+    if (_token != -1) notify_cancel(_token);
+}
+
+// 读文件；读到就返回 YES（哪怕是空表），文件不存在返回 NO。
+- (BOOL)readShortcutList {
+    id payload = [NSDictionary dictionaryWithContentsOfFile:TGShortcutListPath];
+    if (![payload isKindOfClass:NSDictionary.class]) return NO;
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    id list = payload[@"names"];
+    for (id name in [list isKindOfClass:NSArray.class] ? list : @[])
+        if ([name isKindOfClass:NSString.class] && [name length]) [names addObject:name];
+    _names = names;
+    _waiting = NO;
+    if ([payload[@"failed"] boolValue] && !names.count) {
+        _state = TGShortcutListUnavailable;
+        id reason = payload[@"error"];
+        _probe = [NSString stringWithFormat:@"SpringBoard 取数失败：%@",
+                  [reason isKindOfClass:NSString.class] && [reason length] ? reason : @"未知原因"];
+    } else {
+        _state = names.count ? TGShortcutListOK : TGShortcutListEmpty;
+        _probe = nil;
+    }
+    [self reloadList];
+    return YES;
+}
+
+- (void)reloadList {
+    _specifiers = nil;
+    [self reloadSpecifiers];
 }
 
 - (void)updateSearchResultsForSearchController:(UISearchController *)searchController {
@@ -1070,8 +1061,7 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state, NSS
     if (!query.length) query = nil;
     if (query == _query || [query isEqualToString:_query]) return;
     _query = query;
-    _specifiers = nil;
-    [self reloadSpecifiers];
+    [self reloadList];
 }
 
 - (NSArray *)specifiers {
@@ -1087,12 +1077,16 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state, NSS
 
 - (NSMutableArray *)shortcutSpecifiers {
     NSMutableArray *specs = [NSMutableArray array];
+    if (_waiting) {
+        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+        [specs addObject:[self shortcutRow:@"正在读取…" value:nil]];
+        return specs;
+    }
     if (_state != TGShortcutListOK) {
         BOOL failed = _state == TGShortcutListUnavailable;
         PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
         NSString *footer = failed ? @"这台系统没有提供读取入口，这个动作暂时配置不了。"
                                   : @"请先在「快捷指令」App 中创建一个，再回到本页。";
-        // 读不到时把探测结果一并写出来：截图就能定位是哪一步断的，不用连电脑。
         if (failed && _probe.length) footer = [footer stringByAppendingFormat:@"\n\n%@", _probe];
         [group setProperty:footer forKey:@"footerText"];
         [specs addObject:group];
@@ -1123,7 +1117,7 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state, NSS
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSString *value = [[self specifierAtIndex:[self indexForIndexPath:indexPath]] propertyForKey:@"tgShortcut"];
-    if (!value.length) return; // 「无法读取」「没有快捷指令」这些行不响应
+    if (!value.length) return; // 「正在读取」「无法读取」「没有快捷指令」这些行不响应
     if (_onPick) _onPick(value);
     [self.navigationController popViewControllerAnimated:YES];
 }

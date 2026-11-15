@@ -3,6 +3,22 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.34
+
+cn4.33 的诊断结果：设置进程里 `VCVoiceShortcutClient` 的类和方法都在（`class=no` 是
+dlopen 前查的，加载后 `standard=1 list=1`），但调用返回 nil，错误是
+`NSCocoaErrorDomain 4097 "Couldn't communicate with a helper application."`
+——Settings 的沙盒不放行这条 XPC，换线程、换路径都没用。
+
+### 改动
+
+- **取数搬到 SpringBoard**：设置页发一个 Darwin 通知，tweak 收到后取列表、写进
+  `/var/mobile/Library/Preferences/com.johndie.triggr.shortcuts.plist`，再回一个通知。
+  和「AirPlay 到」用的是同一套通道（设置进程同样看不到 AirPlay 设备）。
+- **写字典而不是数组**：`names`、`failed`、`error`，把「调用失败」和「真的没有」分开。
+- **设置页先显示上次结果**，同时后台刷新；等 3 秒没回话才报「SpringBoard 没有回应」。
+- 设置进程里那段直接调用删掉了（在这台机器上恒定失败）。
+
 ## 1.5.0+cn4.33
 
 cn4.32 在真机上停在「无法读取快捷指令」。这一版把取数改回主线程（2.1 也是主线程调的，
