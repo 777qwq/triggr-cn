@@ -980,14 +980,23 @@ typedef NS_ENUM(NSInteger, TGShortcutListState) {
 
 // 设置进程没有链接 VoiceShortcutClient，2.1 也是运行时才 dlopen 进来的。
 // 名字在这里是唯一的（重名时系统自动加序号），所以只要名字，不要 identifier。
-static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
+// probe 回传每一步的结果：出错时直接显示在页面上，不必连电脑看日志。
+static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state, NSString **probe) {
     if (state) *state = TGShortcutListUnavailable;
+    NSMutableArray<NSString *> *notes = [NSMutableArray array];
     Class client = NSClassFromString(@"VCVoiceShortcutClient");
+    [notes addObject:[NSString stringWithFormat:@"class=%@", client ? @"yes" : @"no"]];
     if (!client) {
-        // 这类私有框架换过归属地：这边两个都试，命中就停。
-        for (NSString *framework in @[@"VoiceShortcutClient", @"WorkflowKit"]) {
-            NSString *path = [NSString stringWithFormat:@"/System/Library/PrivateFrameworks/%@.framework/%@", framework, framework];
-            if (dlopen(path.UTF8String, RTLD_LAZY)) {
+        // 不知道这个类在哪个框架里：常见的两个都试，再试裸名让 dyld 自己找。
+        for (NSString *path in @[@"/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient",
+                                 @"/System/Library/PrivateFrameworks/WorkflowKit.framework/WorkflowKit",
+                                 @"VoiceShortcutClient", @"WorkflowKit"]) {
+            dlerror();
+            void *handle = dlopen(path.UTF8String, RTLD_LAZY);
+            const char *message = handle ? NULL : dlerror();
+            [notes addObject:[NSString stringWithFormat:@"%@ → %@", path.lastPathComponent,
+                              handle ? @"ok" : (message ? [NSString stringWithUTF8String:message] : @"?")]];
+            if (handle) {
                 client = NSClassFromString(@"VCVoiceShortcutClient");
                 if (client) break;
             }
@@ -1000,6 +1009,9 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
     BOOL hasList = [standard respondsToSelector:listSel];
     NSError *error = nil;
     NSArray *workflows = hasList ? ((id (*)(id, SEL, NSError **))objc_msgSend)(standard, listSel, &error) : nil;
+    [notes addObject:[NSString stringWithFormat:@"standard=%d list=%d result=%@",
+                      hasStandard, hasList, workflows ? @(workflows.count) : @"nil"]];
+    if (error) [notes addObject:[NSString stringWithFormat:@"error=%@", error]];
 
     NSMutableArray<NSString *> *names = [NSMutableArray array];
     if ([workflows isKindOfClass:NSArray.class]) {
@@ -1010,10 +1022,8 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
             if (![names containsObject:value]) [names addObject:value];
         }
     }
-    // 一行日志：类在不在、方法在不在、拿到几条、有没有报错。以后某个系统版本改了口径，
-    // 只看这一行就知道卡在哪一步，不必再猜。
-    NSLog(@"[Triggr] shortcut list: class=%d standard=%d list=%d count=%lu error=%@",
-          client != nil, hasStandard, hasList, (unsigned long)names.count, error);
+    if (probe) *probe = [notes componentsJoinedByString:@"\n"];
+    NSLog(@"[Triggr] shortcut list: %@", [notes componentsJoinedByString:@" | "]);
     if (!names.count) {
         // 方法不通和「真的一条都没有」要分开：前者是坏了，后者只是还没建。
         if (state) *state = workflows ? TGShortcutListEmpty : TGShortcutListUnavailable;
@@ -1032,7 +1042,7 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
 @implementation TGShortcutPickerController {
     NSArray<NSString *> *_names;
     TGShortcutListState _state;
-    BOOL _loading;
+    NSString *_probe;   // 失败时显示的探测结果
     NSString *_query;
 }
 
@@ -1048,22 +1058,11 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
     self.navigationItem.hidesSearchBarWhenScrolling = NO;
     self.definesPresentationContext = YES;
 
-    // 取数是跨进程调用，放后台：页面先出来，读到了再刷新，别让设置页停在这儿。
-    _loading = YES;
-    __weak typeof(self) weakSelf = self;
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        TGShortcutListState state = TGShortcutListUnavailable;
-        NSArray<NSString *> *names = TGAvailableShortcuts(&state);
-        dispatch_async(dispatch_get_main_queue(), ^{
-            TGShortcutPickerController *strongSelf = weakSelf;
-            if (!strongSelf) return;
-            strongSelf->_names = names;
-            strongSelf->_state = state;
-            strongSelf->_loading = NO;
-            strongSelf->_specifiers = nil;
-            [strongSelf reloadSpecifiers];
-        });
-    });
+    // 同步取一次。2.1 也是主线程调的：这条跨进程连接在后台线程上可能拿不到东西，
+    // 而一次调用是几百毫秒的量级，比页面先出「正在读取」再闪一下更干净。
+    NSString *probe = nil;
+    _names = TGAvailableShortcuts(&_state, &probe);
+    _probe = probe;
 }
 
 - (void)updateSearchResultsForSearchController:(UISearchController *)searchController {
@@ -1088,17 +1087,14 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
 
 - (NSMutableArray *)shortcutSpecifiers {
     NSMutableArray *specs = [NSMutableArray array];
-    if (_loading) {
-        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
-        [specs addObject:[self shortcutRow:@"正在读取…" value:nil]];
-        return specs;
-    }
     if (_state != TGShortcutListOK) {
         BOOL failed = _state == TGShortcutListUnavailable;
         PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
-        [group setProperty:failed ? @"这台系统没有提供读取入口，这个动作暂时配置不了。"
-                                  : @"请先在「快捷指令」App 中创建一个，再回到本页。"
-                    forKey:@"footerText"];
+        NSString *footer = failed ? @"这台系统没有提供读取入口，这个动作暂时配置不了。"
+                                  : @"请先在「快捷指令」App 中创建一个，再回到本页。";
+        // 读不到时把探测结果一并写出来：截图就能定位是哪一步断的，不用连电脑。
+        if (failed && _probe.length) footer = [footer stringByAppendingFormat:@"\n\n%@", _probe];
+        [group setProperty:footer forKey:@"footerText"];
         [specs addObject:group];
         [specs addObject:[self shortcutRow:failed ? @"无法读取快捷指令" : @"没有快捷指令" value:nil]];
         return specs;
@@ -1127,7 +1123,7 @@ static NSArray<NSString *> *TGAvailableShortcuts(TGShortcutListState *state) {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSString *value = [[self specifierAtIndex:[self indexForIndexPath:indexPath]] propertyForKey:@"tgShortcut"];
-    if (!value.length) return; // 「正在读取」「没有快捷指令」这些行不响应
+    if (!value.length) return; // 「无法读取」「没有快捷指令」这些行不响应
     if (_onPick) _onPick(value);
     [self.navigationController popViewControllerAnimated:YES];
 }
