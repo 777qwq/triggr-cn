@@ -1881,12 +1881,11 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
 }
 
 // 快捷指令从手机自己的列表里选，存进去的仍是一串名字（执行侧按名字匹配）。
-// 每次点击都重新问一遍 SpringBoard：改名、新建、删除都要在下一次弹窗里看得到。
+// 每次点击都重新问一遍 SpringBoard，改名、新建、删除都要在下一次弹窗里看得到。
 // 以前是「文件里有就直接用」，于是列表停在第一次取到的那份快照上，改完名怎么点都不变。
-// 正常回包几十毫秒；超过 0.5 秒还没回来就先用手上那份，免得点一下像卡住。
+// 那个文件只是这条通道的载体，不留着顶替：这一轮没回包就不显示，宁可让人输名字。
 - (void)pickShortcutAtIndexPath:(NSIndexPath *)indexPath existing:(NSString *)existingItem {
     NSString *current = existingItem.length > TGShortcutPrefix.length ? [existingItem substringFromIndex:TGShortcutPrefix.length] : nil;
-    NSArray<NSString *> *cached = TGShortcutNames(TGShortcutPayload());
     __weak typeof(self) weakSelf = self;
     __block BOOL done = NO;
     int *token = malloc(sizeof(int));
@@ -1904,14 +1903,13 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
     notify_register_dispatch(TGShortcutListReady, token, dispatch_get_main_queue(), ^(int t) {
         NSDictionary *payload = TGShortcutPayload();
         NSArray *names = TGShortcutNames(payload);
-        if (names.count) finish(names, nil);
-        // 这一轮取数失败（类没了、XPC 被拒）：退回上次那份，比弹输入框有用。
-        else if ([payload[@"failed"] boolValue] && cached.count) finish(cached, nil);
-        else finish(nil, TGShortcutFailure(payload));
+        finish(names, names.count ? nil : TGShortcutFailure(payload));
     });
     notify_post(TGShortcutListRequest);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        finish(cached, cached.count ? nil : @"SpringBoard 没有回应。");
+    // 1.5 秒还没回包：SpringBoard 那边没接（dylib 没注入、或升级后没重启）。
+    // 这时不拿旧列表充数——旧名字正是用户抱怨的那件事。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        finish(nil, @"读取超时。可先重启桌面（注销）再试，或直接输入名称。");
     });
 }
 
