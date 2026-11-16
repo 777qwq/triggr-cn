@@ -1275,9 +1275,10 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
         [openApp setProperty:TGAppPrefix forKey:@"tgCommandPrefix"];
         [rows addObject:openApp];
         [rows addObject:[self rowForCommand:TGSettingsPrefix title:@"打开设置页…" prompt:nil]];
-        [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
         [rows addObject:[self rowForCommand:TGURLPrefix title:@"打开 URL…" prompt:@"任意 URL 或 URL scheme，如 https://…、tel:…、music://"]];
         [rows addObject:[self rowForCommand:TGGetPrefix title:@"静默请求 URL…" prompt:@"只对 http、https 生效；其他 scheme 请用「打开 URL」。后台 GET，不切换应用。"]];
+        // cn4.37: 快捷指令挪到扫一扫预设之前——它是这一类里用得最多的。
+        [rows addObject:[self rowForCommand:TGShortcutPrefix title:@"运行快捷指令…" prompt:@"快捷指令名称，需与快捷指令 App 中完全一致"]];
         // cn2.63: quick-action presets (open category per TA request).
         // WeChat: activate WeChat's own dynamic quick actions (Title match),
         // TypeX-proven channel — activateShortcut:withBundleIdentifier:forIconView:.
@@ -1916,19 +1917,21 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
     });
 }
 
-// 系统 actionSheet，和插件里其他几选一的动作同一种样式。当前项后面打勾，
+// 系统 actionSheet，和插件里其他几选一的动作同一种样式。当前项右侧打勾
+// （UIAlertAction 自己的 checked 私有键，和飞行模式那三个选项同一处写法），
 // 再点它就是把动作删掉。
 - (void)presentShortcutSheetFromIndexPath:(NSIndexPath *)indexPath names:(NSArray<NSString *> *)names current:(NSString *)current {
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"运行快捷指令" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) weakSelf = self;
     for (NSString *name in names) {
         BOOL selected = current && [name isEqualToString:current];
-        UIAlertAction *action = [UIAlertAction actionWithTitle:selected ? [name stringByAppendingString:@"  ✓"] : name
+        UIAlertAction *action = [UIAlertAction actionWithTitle:name
                                                          style:UIAlertActionStyleDefault
                                                        handler:^(UIAlertAction *a) {
             if (selected) [weakSelf setItem:nil forPrefix:TGShortcutPrefix];
             else [weakSelf setItem:[TGShortcutPrefix stringByAppendingString:name] forPrefix:TGShortcutPrefix];
         }];
+        @try { if (selected) [action setValue:@YES forKey:@"checked"]; } @catch (NSException *exception) {}
         [sheet addAction:action];
     }
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
