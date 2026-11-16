@@ -1881,15 +1881,12 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
 }
 
 // 快捷指令从手机自己的列表里选，存进去的仍是一串名字（执行侧按名字匹配）。
-// 弹层里再点一次当前那项＝取消这个动作；取不到列表就改弹输入框。
+// 每次点击都重新问一遍 SpringBoard：改名、新建、删除都要在下一次弹窗里看得到。
+// 以前是「文件里有就直接用」，于是列表停在第一次取到的那份快照上，改完名怎么点都不变。
+// 正常回包几十毫秒；超过 0.5 秒还没回来就先用手上那份，免得点一下像卡住。
 - (void)pickShortcutAtIndexPath:(NSIndexPath *)indexPath existing:(NSString *)existingItem {
     NSString *current = existingItem.length > TGShortcutPrefix.length ? [existingItem substringFromIndex:TGShortcutPrefix.length] : nil;
     NSArray<NSString *> *cached = TGShortcutNames(TGShortcutPayload());
-    if (cached.count) {
-        [self presentShortcutSheetFromIndexPath:indexPath names:cached current:current];
-        return;
-    }
-    // 第一次用、文件里还没有内容：等 SpringBoard 回话，最多 1 秒。
     __weak typeof(self) weakSelf = self;
     __block BOOL done = NO;
     int *token = malloc(sizeof(int));
@@ -1907,13 +1904,14 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
     notify_register_dispatch(TGShortcutListReady, token, dispatch_get_main_queue(), ^(int t) {
         NSDictionary *payload = TGShortcutPayload();
         NSArray *names = TGShortcutNames(payload);
-        finish(names, names.count ? nil : TGShortcutFailure(payload));
+        if (names.count) finish(names, nil);
+        // 这一轮取数失败（类没了、XPC 被拒）：退回上次那份，比弹输入框有用。
+        else if ([payload[@"failed"] boolValue] && cached.count) finish(cached, nil);
+        else finish(nil, TGShortcutFailure(payload));
     });
     notify_post(TGShortcutListRequest);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        NSDictionary *payload = TGShortcutPayload();
-        NSArray *names = TGShortcutNames(payload);
-        finish(names, names.count ? nil : @"SpringBoard 没有回应。");
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        finish(cached, cached.count ? nil : @"SpringBoard 没有回应。");
     });
 }
 
@@ -1921,7 +1919,11 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
 // （UIAlertAction 自己的 checked 私有键，和飞行模式那三个选项同一处写法），
 // 再点它就是把动作删掉。
 - (void)presentShortcutSheetFromIndexPath:(NSIndexPath *)indexPath names:(NSArray<NSString *> *)names current:(NSString *)current {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"运行快捷指令" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    // 改过名或删掉之后，存着的那串名字已经不在列表里，勾会凭空消失；
+    // 不说明一句，用户只能看到「没有勾」而不知道旧的那条去哪了。
+    NSString *missing = (current.length && ![names containsObject:current])
+        ? [NSString stringWithFormat:@"「%@」不在列表里了，可能已改名或删除。", current] : nil;
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"运行快捷指令" message:missing preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) weakSelf = self;
     for (NSString *name in names) {
         BOOL selected = current && [name isEqualToString:current];
