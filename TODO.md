@@ -2,41 +2,33 @@
 
 按顺序做，做完一条删一条，并在 `CHANGELOG.md` 记一段。
 
-## cn4.32：快捷指令改为从列表选择
+## cn4.35：快捷指令改成弹出层，取不到列表退输入框
 
-「运行快捷指令」原来弹输入框，要求名字与快捷指令 App 里一字不差；打错就是静默失败。
-现在 push 一个选择页，从手机自己的列表里点。值仍然是名字，执行侧没动。
+### 1. 弹出层
 
-取数：`VCVoiceShortcutClient.standardClient` → `accessibilityWorkflowsWithError:` → `name`。
-2.1 的设置页里就有这段代码（还带 10 秒缓存），这条路在 Settings 进程里是通的。
+设置 → 任意触发器 → 添加动作 → 打开 → 运行快捷指令…
 
-### 1. 列表能不能出来
+预期：卡片从底部升起，导航栏写「运行快捷指令」、左侧「取消」，一行一个快捷指令，搜索框常驻。
+不是 push 进来的整页 —— 底下能看见动作列表。
 
-设置 → 任意触发器 → 添加动作 → 打开 → 运行快捷指令…，预期几百毫秒后出列表。
+### 2. 选择与取消
 
-取数不在设置进程里做：Settings 的沙盒不放行 VoiceShortcutClient 的 XPC（实测报
-4097「Couldn't communicate with a helper application.」），改由 SpringBoard 取好写进
-`/var/mobile/Library/Preferences/com.johndie.triggr.shortcuts.plist`，通知设置页来读。
+- 点一项 → 卡片落下，行尾显示「快捷指令：名字」；触发一次仍是后台静默、不跳 App。
+- 再点同一项 → 整个动作从列表消失（等同原来的「移除」）。
+- 点「取消」→ 什么都不改。
 
-- 出列表 → 继续第 2 条。
-- 一直「正在读取…」然后「SpringBoard 没有回应」→ 通知没到。先确认 tweak 装在
-  SpringBoard 里（其他触发器能用就说明装了），再看 `notify_post` 是否被拦。
-- 「SpringBoard 取数失败：…」→ 括号里就是原因（类没找到 / standardClient 空 /
-  方法不可用 / 返回空）。这时才回去查 iOS 版本的接口变化。
+### 3. 取不到列表
 
-### 2. 选完能不能跑
+预期 1 秒内出结果：有缓存直接出列表；没有缓存最多等 1 秒，超时就收起卡片弹输入框。
 
-选一个 → 返回上级，行尾应显示「快捷指令：名字」→ 触发一次。
-预期：后台静默执行，不跳快捷指令 App，也不出现进度条。
+造这个场景：用 Filza 把 `/var/mobile/Library/Preferences/com.johndie.triggr.shortcuts.plist`
+里的 `names` 清空、`failed` 改成 true，再进页面。应立即收起卡片并弹输入框，message 带原因。
+输一个名字保存，值仍是 `shortcut:<名字>`。
 
-### 3. 条数与 App 内一致
+### 4. 条数
 
-打开快捷指令 App 数一遍，与列表比。少了说明 `accessibilityWorkflowsWithError:`
-只返回「辅助功能可用」的那部分，那就得改用 `WFDatabase` 取全量。
-
-### 已知取舍
-
-不提供手动输入。取不到列表时这个动作就配不了，页面会写明原因（而不是留一个输入框）。
+与快捷指令 App 里数一遍对比。少了说明 `accessibilityWorkflowsWithError:` 只返回
+「辅助功能可用」的那部分，那就得改用 `WFDatabase` 取全量。
 
 ## cn4.31：AutoTouch 脚本动作的真机验证
 

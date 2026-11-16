@@ -971,32 +971,30 @@ static NSString *TGCategoryOf(NSString *action) {
 
 #pragma mark - Shortcuts
 
-// 快捷指令的选择页。取数不在这个进程里做：Settings 的沙盒不放行
+// 快捷指令的弹出层。取数不在这个进程里做：Settings 的沙盒不放行
 // VCVoiceShortcutClient 那条 XPC（4097 "Couldn't communicate with a helper application."），
 // 所以由 SpringBoard 侧取好写进文件，这里只发请求、读结果。值仍然是名字。
-typedef NS_ENUM(NSInteger, TGShortcutListState) {
-    TGShortcutListUnavailable,
-    TGShortcutListOK,
-    TGShortcutListEmpty,
-};
-
 @interface TGShortcutPickerController : TGListController <UISearchResultsUpdating>
 @property (nonatomic, copy) NSString *selected;
-@property (nonatomic, copy) void (^onPick)(NSString *name);
+@property (nonatomic, copy) void (^onPick)(NSString *name);       // 选了另一个
+@property (nonatomic, copy) void (^onRemove)(void);               // 又点了当前这个
+@property (nonatomic, copy) void (^onFallback)(NSString *reason); // 取不到列表
 @end
 
 @implementation TGShortcutPickerController {
     NSArray<NSString *> *_names;
-    TGShortcutListState _state;
-    NSString *_probe;   // 取不到时显示的原因
     NSString *_query;
-    BOOL _waiting;      // 还没等到 SpringBoard 的回话
+    NSString *_failure;
+    BOOL _waiting;   // 还没等到 SpringBoard 的回话
+    BOOL _settled;   // 已经交回父页面，别再重复回调
     int _token;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title = @"快捷指令";
+    self.title = @"运行快捷指令";
+    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel target:self action:@selector(cancel)];
+
     UISearchController *search = [[UISearchController alloc] initWithSearchResultsController:nil];
     search.searchResultsUpdater = self;
     search.obscuresBackgroundDuringPresentation = NO;
@@ -1006,49 +1004,65 @@ typedef NS_ENUM(NSInteger, TGShortcutListState) {
     self.navigationItem.hidesSearchBarWhenScrolling = NO;
     self.definesPresentationContext = YES;
 
-    // 先显示上一次的结果，同时请 SpringBoard 现取一份（同一个文件，取完会覆盖）。
+    // 先看上一次的结果：有就立刻显示，同时请 SpringBoard 现取一份。
     _token = -1;
     __weak typeof(self) weakSelf = self;
     notify_register_dispatch(TGShortcutListReady, &_token, dispatch_get_main_queue(), ^(int t) {
-        [weakSelf readShortcutList];
+        if ([weakSelf readShortcutList:YES]) [weakSelf reloadList];
     });
-    if (![self readShortcutList]) _waiting = YES;
+    if (![self readShortcutList:NO]) {
+        _waiting = YES;
+        // 正常几百毫秒。只有完全没回音才等到这里，所以不必给太久。
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            TGShortcutPickerController *picker = weakSelf;
+            if (!picker || !picker->_waiting || picker->_settled) return;
+            picker->_waiting = NO;
+            picker->_failure = @"SpringBoard 没有回应。";
+            [picker fallback];
+        });
+    }
     notify_post(TGShortcutListRequest);
-    // SpringBoard 那边是同步取，正常几百毫秒。等不到就直说，别让页面一直转。
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        TGShortcutPickerController *strongSelf = weakSelf;
-        if (!strongSelf || !strongSelf->_waiting) return;
-        strongSelf->_waiting = NO;
-        strongSelf->_probe = @"SpringBoard 没有回应（3 秒）。这套系统可能没有可用的快捷指令接口。";
-        [strongSelf reloadList];
-    });
 }
 
 - (void)dealloc {
     if (_token != -1) notify_cancel(_token);
 }
 
-// 读文件；读到就返回 YES（哪怕是空表），文件不存在返回 NO。
-- (BOOL)readShortcutList {
+// 读文件。fresh=YES 表示这是刚取回来的结果：还没有名字就说明真取不到，改成输入框。
+// 返回是否有名字可显示。
+- (BOOL)readShortcutList:(BOOL)fresh {
     id payload = [NSDictionary dictionaryWithContentsOfFile:TGShortcutListPath];
-    if (![payload isKindOfClass:NSDictionary.class]) return NO;
     NSMutableArray<NSString *> *names = [NSMutableArray array];
-    id list = payload[@"names"];
-    for (id name in [list isKindOfClass:NSArray.class] ? list : @[])
-        if ([name isKindOfClass:NSString.class] && [name length]) [names addObject:name];
-    _names = names;
-    _waiting = NO;
-    if ([payload[@"failed"] boolValue] && !names.count) {
-        _state = TGShortcutListUnavailable;
-        id reason = payload[@"error"];
-        _probe = [NSString stringWithFormat:@"SpringBoard 取数失败：%@",
-                  [reason isKindOfClass:NSString.class] && [reason length] ? reason : @"未知原因"];
-    } else {
-        _state = names.count ? TGShortcutListOK : TGShortcutListEmpty;
-        _probe = nil;
+    if ([payload isKindOfClass:NSDictionary.class]) {
+        id list = payload[@"names"];
+        for (id name in [list isKindOfClass:NSArray.class] ? list : @[])
+            if ([name isKindOfClass:NSString.class] && [name length]) [names addObject:name];
     }
-    [self reloadList];
-    return YES;
+    if (names.count) {
+        _names = names;
+        _waiting = NO;
+        _failure = nil;
+        return YES;
+    }
+    if (!fresh) return NO;
+    _waiting = NO;
+    if (_names.count) return YES;   // 这次没取到，但手上还有上一次的列表，继续用
+    id error = payload[@"error"];
+    NSString *reason = [error isKindOfClass:NSString.class] && [error length] ? error : nil;
+    _failure = [payload[@"failed"] boolValue] ? (reason ?: @"读取失败。") : @"没有读到快捷指令。";
+    [self fallback];
+    return NO;
+}
+
+- (void)fallback {
+    if (_settled) return;
+    _settled = YES;
+    if (_onFallback) _onFallback(_failure ?: @"没有读到快捷指令。");
+}
+
+- (void)cancel {
+    _settled = YES;
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)reloadList {
@@ -1077,32 +1091,19 @@ typedef NS_ENUM(NSInteger, TGShortcutListState) {
 
 - (NSMutableArray *)shortcutSpecifiers {
     NSMutableArray *specs = [NSMutableArray array];
+    PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
+    if (_names.count || _waiting) [group setProperty:@"再次点按已选中的快捷指令可取消。" forKey:@"footerText"];
+    [specs addObject:group];
     if (_waiting) {
-        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
         [specs addObject:[self shortcutRow:@"正在读取…" value:nil]];
-        return specs;
-    }
-    if (_state != TGShortcutListOK) {
-        BOOL failed = _state == TGShortcutListUnavailable;
-        PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
-        NSString *footer = failed ? @"这台系统没有提供读取入口，这个动作暂时配置不了。"
-                                  : @"请先在「快捷指令」App 中创建一个，再回到本页。";
-        if (failed && _probe.length) footer = [footer stringByAppendingFormat:@"\n\n%@", _probe];
-        [group setProperty:footer forKey:@"footerText"];
-        [specs addObject:group];
-        [specs addObject:[self shortcutRow:failed ? @"无法读取快捷指令" : @"没有快捷指令" value:nil]];
         return specs;
     }
     NSArray<NSString *> *names = _names;
     if (_query) names = [names filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"self CONTAINS[cd] %@", _query]];
     if (!names.count) {
-        PSSpecifier *group = [PSSpecifier emptyGroupSpecifier];
-        [group setProperty:@"换个词试试。" forKey:@"footerText"];
-        [specs addObject:group];
-        [specs addObject:[self shortcutRow:@"没有匹配的快捷指令" value:nil]];
+        [specs addObject:[self shortcutRow:_names.count ? @"没有匹配的快捷指令" : @"没有快捷指令" value:nil]];
         return specs;
     }
-    [specs addObject:[PSSpecifier emptyGroupSpecifier]];
     for (NSString *name in names) [specs addObject:[self shortcutRow:name value:name]];
     return specs;
 }
@@ -1117,9 +1118,16 @@ typedef NS_ENUM(NSInteger, TGShortcutListState) {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     NSString *value = [[self specifierAtIndex:[self indexForIndexPath:indexPath]] propertyForKey:@"tgShortcut"];
-    if (!value.length) return; // 「正在读取」「无法读取」「没有快捷指令」这些行不响应
-    if (_onPick) _onPick(value);
-    [self.navigationController popViewControllerAnimated:YES];
+    if (!value.length || _settled) return;
+    if (_selected && [value isEqualToString:_selected]) {
+        if (!_onRemove) return;
+        _settled = YES;
+        _onRemove();
+        return;
+    }
+    if (!_onPick) return;
+    _settled = YES;
+    _onPick(value);
 }
 
 @end
@@ -2007,31 +2015,53 @@ typedef NS_ENUM(NSInteger, TGShortcutListState) {
 }
 
 // 快捷指令从手机自己的列表里选，存进去的仍是一串名字（执行侧按名字匹配）。
+// 弹层里再点一次当前那项＝取消这个动作；取不到列表就收起弹层改弹输入框。
 - (void)pickShortcutAtIndexPath:(NSIndexPath *)indexPath existing:(NSString *)existingItem {
-    if (!existingItem) {
-        [self pushShortcutPicker:nil];
-        return;
-    }
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:[existingItem substringFromIndex:TGShortcutPrefix.length] message:nil preferredStyle:UIAlertControllerStyleActionSheet];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"选择其他快捷指令…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        [self pushShortcutPicker:existingItem];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"移除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        [self setItem:nil forPrefix:TGShortcutPrefix];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [self presentSheet:sheet fromRowAtIndexPath:indexPath];
-}
-
-- (void)pushShortcutPicker:(NSString *)existingItem {
+    NSString *current = existingItem.length > TGShortcutPrefix.length ? [existingItem substringFromIndex:TGShortcutPrefix.length] : nil;
     TGShortcutPickerController *picker = [TGShortcutPickerController new];
     picker.specifier = [PSSpecifier emptyGroupSpecifier];
-    picker.selected = existingItem ? [existingItem substringFromIndex:TGShortcutPrefix.length] : nil;
+    picker.selected = current;
     __weak typeof(self) weakSelf = self;
     picker.onPick = ^(NSString *name) {
-        [weakSelf setItem:[TGShortcutPrefix stringByAppendingString:name] forPrefix:TGShortcutPrefix];
+        [weakSelf dismissViewControllerAnimated:YES completion:^{
+            [weakSelf setItem:[TGShortcutPrefix stringByAppendingString:name] forPrefix:TGShortcutPrefix];
+        }];
     };
-    [self.navigationController pushViewController:picker animated:YES];
+    picker.onRemove = ^{
+        [weakSelf dismissViewControllerAnimated:YES completion:^{
+            [weakSelf setItem:nil forPrefix:TGShortcutPrefix];
+        }];
+    };
+    picker.onFallback = ^(NSString *reason) {
+        [weakSelf dismissViewControllerAnimated:YES completion:^{
+            [weakSelf promptShortcutName:reason existing:current];
+        }];
+    };
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:picker];
+    nav.modalPresentationStyle = UIModalPresentationPageSheet;
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+// 取不到列表时的入口，也是原版「Run Shortcut by Name…」那一项的意思。
+- (void)promptShortcutName:(NSString *)reason existing:(NSString *)current {
+    NSString *message = [NSString stringWithFormat:@"%@\n可以直接输入名称，需与「快捷指令」App 中完全一致。",
+                         reason.length ? reason : @"没有读到快捷指令。"];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"运行快捷指令" message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.text = current;
+        field.placeholder = @"快捷指令名称";
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *text = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (!text.length) return;
+        [self setItem:[TGShortcutPrefix stringByAppendingString:text] forPrefix:TGShortcutPrefix];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 // A text (or number) for a command action, in an alert.
