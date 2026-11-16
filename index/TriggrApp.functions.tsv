@@ -1,0 +1,3 @@
+start	end	size	strings
+0x100004000	0x10000419c	412	/var/jb | /Library/PreferenceBundles/Triggr.bundle
+0x10000419c	0x10000466c	1232	TGRootListController | Triggr's settings couldn't be loaded. Reinstall Triggr from your package manager. | Triggr

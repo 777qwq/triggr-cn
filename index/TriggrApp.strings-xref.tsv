@@ -1,0 +1,6 @@
+text	addrs
+/Library/PreferenceBundles/Triggr.bundle	0x1000040a8
+/var/jb	0x1000040a0
+TGRootListController	0x1000041d4
+Triggr	0x1000044b8
+Triggr's settings couldn't be loaded. Reinstall Triggr from your package manager.	0x100004254

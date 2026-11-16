@@ -1,0 +1,412 @@
+start	end	size	strings
+0x4000	0x4244	580	tgMode | tgTrigger | com.johndie.triggr | defaults | %@/%@ | if: | key | com.johndie.triggr/prefs-changed | PostNotification
+0x4244	0x4848	1540	Undo | com.johndie.triggr | defaults | TestAssignment | key | tgMode | tgTrigger | tgMenuEditor
+0x4848	0x48dc	148	%@/%@
+0x48dc	0x4bac	720	Run | play.fill
+0x4bac	0x4c04	88	
+0x4c04	0x4c20	28	
+0x4c20	0x4e44	548	
+0x4e44	0x50e4	672	play.fill | Run Now | trash
+0x50e4	0x50f8	20	
+0x50f8	0x50fc	4	
+0x50fc	0x52d8	476	com.johndie.triggr | defaults | StatusBarSingleTap | key
+0x52d8	0x52e0	8	
+0x52e0	0x53a0	192	com.johndie.triggr | defaults | LockReplaces | key
+0x53a0	0x55b0	528	tgMode | anywhere | tgTrigger | Anywhere: | Default:
+0x55b0	0x55c0	16	
+0x55c0	0x55e8	40	
+0x55e8	0x5698	176	
+0x5698	0x578c	244	
+0x578c	0x58c8	316	
+0x58c8	0x5984	188	
+0x5984	0x5ba8	548	
+0x5ba8	0x5c08	96	
+0x5c08	0x5c24	28	
+0x5c24	0x6610	2540	Scheduled Time | Runs at this time on the selected days. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.
+0x6610	0x6718	264	
+0x6718	0x69f4	732	%ld | 1234567 | 23456 | 17
+0x69f4	0x6e2c	1080	time: | %@%02ld%02ld:%@ | Steps | Add Pause | if: | endif
+0x6e2c	0x6ed4	168	
+0x6ed4	0x7070	412	else | endif | if:
+0x7070	0x7160	240	item
+0x7160	0x71ec	140	if: | else | endif
+0x71ec	0x7304	280	pause:
+0x7304	0x73a4	160	
+0x73a4	0x740c	104	
+0x740c	0x766c	608	lib: | Actions | menu: | id | Menu (deleted) | app: | LSApplicationProxy | name | Menu:
+0x766c	0x778c	288	ItemTitle | %@: %@ | Menu (deleted)
+0x778c	0x77bc	48	
+0x77bc	0x77d4	24	Open
+0x77d4	0x77e0	12	
+0x77e0	0x77e4	4	
+0x77e4	0x77ec	8	
+0x77ec	0x77f4	8	
+0x77f4	0x788c	152	None | shortcut: | Shortcut:
+0x788c	0x7b18	652	activator: | url: | URL: | %@: %@ | shell: | Command: | app: | Open
+0x7b18	0x7b2c	20	
+0x7b2c	0x7b30	4	
+0x7b30	0x7df4	708	pause: | Pause %@ s | if: | If | else | Otherwise | endif | End If | menu: | Menu | brightness: | Brightness %@%% | brightness.up: | Brightness Up %@%% | brightness.down: | Brightness Down %@%% | volume.media: | Media Volume %@%% | volume.ringer: | Ringer Volume %@%%
+0x7df4	0x7e04	16	
+0x7e04	0x7e08	4	
+0x7e08	0x7e10	8	
+0x7e10	0x7f28	280	message: | Message: | speak: | Say: | toast: | Show: | airplay: | AirPlay to
+0x7f28	0x8064	316	settings: | Settings:
+0x8064	0x836c	776	Settings: | Actions run top to bottom. Drag to reorder. Tap an action to add a pause after it or to run it only if something is true; tap an If to change it or add Otherwise. | No actions yet: pick some first. | if:
+0x836c	0x84d4	360	endif | if: | pause: | else
+0x84d4	0x84ec	24	
+0x84ec	0x85d8	236	endif
+0x85d8	0x8cb4	1756	pause: | else | endif | if: | Change Condition… | Add Otherwise | Remove If (Keep Actions) | Add Pause After
+0x8cb4	0x8d24	112	Run Only If…
+0x8d24	0x8d78	84	Cancel
+0x8d78	0x8e14	156	If…
+0x8e14	0x9614	2048	On Wi-Fi… | Not on Wi-Fi… | Bluetooth Device Connected… | Bluetooth Device Not Connected… | Charging | Not Charging | Locked | Unlocked | Music Playing | Music Not Playing | Headphones Connected | Low Power Mode On | Flashlight On | Flashlight Off | Battery Below… | Battery Above… | Between Times… | Still True After… | Cancel
+0x9614	0x9618	4	
+0x9618	0x9620	8	
+0x9620	0x9630	16	
+0x9630	0x9638	8	
+0x9638	0x9640	8	
+0x9640	0x9648	8	
+0x9648	0x9654	12	
+0x9654	0x9660	12	
+0x9660	0x9934	724	if: | Contact | else | Run only if… | endif
+0x9934	0x9a2c	248	
+0x9a2c	0x9cb8	652	pause: | if: | else | endif
+0x9cb8	0x9df0	312	Add Pause | Pauses go between two actions. Pick at least two actions first, or tap an action to add a pause after it. | OK | pause:
+0x9df0	0x9fb0	448	Seconds to wait before the next action (0.1–%g). | Pause | Cancel | Save
+0x9fb0	0xa128	376	pause: | %@%g
+0xa128	0xa700	1496	Search Actions | tgMenuEditor | Test | %@/%@ | com.johndie.triggr | defaults | RecentActions | key | pause: | if: | else
+0xa700	0xa740	64	endif
+0xa740	0xa828	232	pause: | if: | else
+0xa828	0xac60	1080	endif | menu: | com.johndie.triggr | defaults | RecentActions | key | tgMode | tgTrigger | tgMenuEditor | recent
+0xac60	0xad30	208	
+0xad30	0xadec	188	Nothing picked: it does its normal thing (%@). An action you pick runs instead. To keep %@ some of the time, add Only If. | Nothing picked: it does its normal thing (%@).
+0xadec	0xae08	28	
+0xae08	0xae10	8	
+0xae10	0xaedc	204	anywhere
+0xaedc	0xaf4c	112	Anywhere runs %@; picking here replaces it %@.
+0xaf4c	0xb014	200	In This Menu | anywhere | Only %@. | Selected | Runs in This Order
+0xb014	0xb124	272	footerText | pause: | tgPicked | if: | else
+0xb124	0xb214	240	%lu.  %@ | endif
+0xb214	0xc3dc	4552	Order, Pauses & If | tgOrder | Remove All | tgClear | Only If | All of these must be true, or it does its normal thing. | Optional. For example: only while the flashlight is on, only on your home Wi-Fi, or only at night. | footerText | tgCondition | after: | checkmark.circle.fill | hourglass | Add Condition… | tgAddCondition | plus.circle.fill | Actions | recent | Recently Used | tgCategory | clock.arrow.circlepath | system | house.fill | power | switches | switch.2 | media | play.fill | levels | slider.horizontal.3 | open | arrow.up.right.square.fill | text | text.bubble.fill | menus | list.bullet.rectangle.fill | snapper3 | camera.viewfinder | copylog | doc.on.clipboard.fill | activator | bolt.fill | shortcuts | square.stack.3d.up.fill | classics | waveform | phone | phone.fill | compose | square.and.pencil | clock | alarm.fill | haptics | iphone.radiowaves.left.and.right | record | record.circle | lib: | Symbol | ext: | puzzlepiece.extension.fill | Color | blue | green | indigo | orange | pink | purple | red | teal | yellow | gray
+0xc3dc	0xc44c	112	puzzlepiece.extension.fill
+0xc44c	0xc484	56	
+0xc484	0xc5ec	360	Tap an action below. Pick several to run them in order. | Tap the actions this menu should offer.
+0xc5ec	0xc648	92	
+0xc648	0xc6ac	100	time: | time | To run instead, turn on Replace Button Actions in Options.
+0xc6ac	0xc76c	192	icon.flick | battery.above: | battery.below: | battery
+0xc76c	0xc77c	16	
+0xc77c	0xc7a4	40	
+0xc7a4	0xc7d4	48	
+0xc7d4	0xc850	124	Lock Button | Side Button | Top Button
+0xc850	0xca2c	476	Lock Button | lock button | + Volume | Lock + Volume | press | lock press | showing the power-off slider | opening Siri | the power-off slider | Siri | the slider
+0xca2c	0xca54	40	
+0xca54	0xcae8	148	app: | inside | there
+0xcae8	0xcb04	28	
+0xcb04	0xcb58	84	
+0xcb58	0xcb7c	36	wifi | On any Wi-Fi | Not on Wi-Fi
+0xcb7c	0xcb84	8	
+0xcb84	0xcc0c	136	wifi: | On “%@” | Not on “%@” | bt: | “%@” connected | “%@” not connected
+0xcc0c	0xcc3c	48	
+0xcc3c	0xcc40	4	
+0xcc40	0xcf38	760	charging | Charging | Not charging | locked | Locked | Unlocked | music | Music playing | Music not playing | headphones | Headphones connected | No headphones | lowpower | Low Power Mode on | Low Power Mode off | flashlight | Flashlight on | Flashlight off | battery< | Battery below %@%% | battery> | Battery above %@%% | time: | Between %02d:%02d and %02d:%02d | after: | Still true after %@ s
+0xcf38	0xcf5c	36	
+0xcf5c	0xd1c0	612	circle.fill | iconImage
+0xd1c0	0xd21c	92	
+0xd21c	0xd26c	80	
+0xd26c	0xd29c	48	
+0xd29c	0xd570	724	Actions | lib: | plist
+0xd570	0xd870	768	Title | ext: | recent | menu:
+0xd870	0xdae0	624	ext: | ItemsDirectory | ItemsExtension | ItemsExclude | lib: | Actions
+0xdae0	0xdc58	376	
+0xdc58	0xdd08	176	
+0xdd08	0xde20	280	%@%@:%@ | ext:
+0xde20	0xde24	4	
+0xde24	0xded8	180	classics | system | power
+0xded8	0xdf40	104	media | phone | compose
+0xdf40	0xdf8c	76	clock | haptics
+0xdf8c	0xe564	1496	media | airplay: | AirPlay To… | Speaker or TV name, as it appears in the AirPlay menu (part of it is enough) | switches | tgSwitch | levels | brightness: | Set Brightness… | Brightness, 0–100 % | brightness.up: | Brightness Up… | Raise brightness by this much each time, 1–50 % (10 is a good step) | brightness.down: | Brightness Down… | Lower brightness by this much each time, 1–50 % (10 is a good step) | volume.media: | Set Media Volume… | Media volume, 0–100 % | volume.ringer: | Set Ringer Volume… | Ringer volume, 0–100 % | open | Open App… | useSearchBar | sections | app: | tgCommandPrefix | settings: | Open Settings Page… | url: | Open URL… | Any URL or URL scheme, e.g. https://…, tel:… or music:// | text | message: | Show Message… | Text to show in an alert | speak: | Speak Text… | Text for the device to say | toast: | Show Text… | Shown in a small banner. {battery}, {time} and {date} are filled in. | shell: | Run Command… | Shell command. Runs with the jailbreak's sh -c as the mobile user.
+0xe564	0xe56c	8	
+0xe56c	0xe814	680	shortcuts | shortcut: | Run Shortcut by Name… | Shortcut name, exactly as in the Shortcuts app | activator | activator: | %@: %@
+0xe814	0xe8b0	156	
+0xe8b0	0xea74	452	menus | id | menu: | name | record | snapper3
+0xea74	0xeab0	60	copylog
+0xeab0	0xeae0	48	
+0xeae0	0xed30	592	plist | Title | Program
+0xed30	0xed88	88	
+0xed88	0xed98	16	
+0xed98	0xefa8	528	Group
+0xefa8	0xf058	176	Title | Missing:
+0xf058	0xf080	40	
+0xf080	0xf148	200	
+0xf148	0xf25c	276	
+0xf25c	0xf348	236	
+0xf348	0xf388	64	
+0xf388	0xf6e0	856	/var/jb | /Library/Activator/Listeners | /Library/MobileSubstrate/DynamicLibraries | dylib | com.jontelang.snapper3.
+0xf6e0	0xf9ac	716	Info.plist | title | group
+0xf9ac	0xfa48	156	
+0xfa48	0xfcc8	640	com.johndie.triggr | Menus | id
+0xfcc8	0xfce8	32	
+0xfce8	0xfd80	152	
+0xfd80	0xfda0	32	
+0xfda0	0xff24	388	ext: | lib:
+0xff24	0x103a0	1148	No action matches “%@”. | footerText | tgAction | tgCommandPrefix | tgPrompt
+0x103a0	0x106b4	788	%@.%@
+0x106b4	0x106bc	8	
+0x106bc	0x107dc	288	system.respring | system.safemode | Respring and Safe Mode restart SpringBoard, so actions after them won't run. Keep them last.
+0x107dc	0x107ec	16	
+0x107ec	0x10950	356	Heads Up | Cancel | Add Anyway
+0x10950	0x10ba4	596	system.safemode | Safe Mode restarts SpringBoard with no tweaks, Triggr included, until you tap Dismiss on the Safe Mode screen. | Nothing runs after a restart or power off. Keep it last. | This restarts or powers off the phone as soon as the trigger fires, without asking. The jailbreak stays off until you run Dopamine again.
+0x10ba4	0x10dec	584	pause: | %@ and %@ change the same switch, so only the last one sticks. | %@ and %@ can't open at the same time. Add a pause between them in Order, Pauses & If.
+0x10dec	0x10df4	8	
+0x10df4	0x10dfc	8	
+0x10dfc	0x10e08	12	
+0x10e08	0x10f58	336	
+0x10f58	0x10fac	84	
+0x10fac	0x10fb0	4	
+0x10fb0	0x11044	148	
+0x11044	0x110a4	96	
+0x110a4	0x114b0	1036	com.johndie.triggr | defaults | anywhere | %@/%@ | if: | key | com.johndie.triggr/prefs-changed | PostNotification
+0x114b0	0x1151c	108	battery
+0x1151c	0x115b8	156	battery
+0x115b8	0x11618	96	
+0x11618	0x11858	576	wifi | bt
+0x11858	0x11934	220	Only run if…
+0x11934	0x11938	4	
+0x11938	0x11948	16	
+0x11948	0x11b54	524	tgPicked | Remove | tgCondition
+0x11b54	0x11b58	4	
+0x11b58	0x11d8c	564	tgAction | tgCommandPrefix | tgSwitch
+0x11d8c	0x11e44	184	
+0x11e44	0x11e78	52	
+0x11e78	0x11ec0	72	
+0x11ec0	0x11f1c	92	
+0x11f1c	0x12004	232	menu: | menus | activator: | activator | shortcut: | shortcuts | ext:
+0x12004	0x1200c	8	
+0x1200c	0x125fc	1520	levels | open | text | switches | media. | airplay: | media | phone. | phone | compose. | compose | clock. | clock | haptic. | haptics | flashlight. | record. | record | power | system. | system
+0x125fc	0x12748	332	pause: | if: | else
+0x12748	0x12790	72	endif
+0x12790	0x12bd0	1088	tgCategory | tgAction | tgCommandPrefix | tgSwitch | tgPicked | tgClear | pause: | if: | else
+0x12bd0	0x12c10	64	
+0x12c10	0x12c90	128	tgCondition | tgAddCondition
+0x12c90	0x12d04	116	tgOrder | tgClear
+0x12d04	0x12dd0	204	iconImage
+0x12dd0	0x12ddc	12	
+0x12ddc	0x12de4	8	
+0x12de4	0x12f38	340	chevron.right | chevron.down
+0x12f38	0x12f3c	4	
+0x12f3c	0x12f8c	80	tgOrder
+0x12f8c	0x12fc4	56	
+0x12fc4	0x12fc8	4	
+0x12fc8	0x13020	88	
+0x13020	0x131ac	396	endif | toggle.
+0x131ac	0x131b0	4	
+0x131b0	0x131c8	24	
+0x131c8	0x13550	904	%lu | app: | settings:
+0x13550	0x137c4	628	%@.%@ | checked
+0x137c4	0x13814	80	
+0x13814	0x1399c	392	Cancel
+0x1399c	0x13aa0	260	pause: | if: | else
+0x13aa0	0x13ae4	68	endif
+0x13ae4	0x13b94	176	
+0x13b94	0x142c4	1840	/var/jb | /var/mobile/Library/Preferences/com.johndie.triggr.airplay.plist | No speakers or TVs found right now. You can still type a name. | AirPlay To | airplay: | Type a Name… | Remove | Cancel
+0x142c4	0x142c8	4	
+0x142c8	0x142d8	16	
+0x142d8	0x148ac	1492	airplay: | battery> | Open Settings Page | Remove | Cancel | settings: | tgCategory | tgPicked
+0x148ac	0x14a04	344	tgCategory
+0x14a04	0x14fc4	1472	tgAddCondition | tgClear | Remove All Actions | Cancel | tgAction | tgSwitch | tgOrder | AirPlay To… | tgCommandPrefix | app: | Choose Another App… | Remove | settings: | airplay:
+0x14fc4	0x14fd4	16	
+0x14fd4	0x14fdc	8	
+0x14fdc	0x14ff0	20	
+0x14ff0	0x1500c	28	
+0x1500c	0x15204	504	AirPlay To… | brightness.up: | brightness.down: | 10 | brightness: | volume.media: | volume.ringer:
+0x15204	0x1520c	8	
+0x1520c	0x154d8	716	tgPrompt | Cancel | Save | Remove
+0x154d8	0x1568c	436	
+0x1568c	0x15888	508	%d | tgTrigger
+0x15888	0x158b0	40	
+0x158b0	0x15c20	880	tgMode | tgGroup | tgLibGroup | Triggers | Footer
+0x15c20	0x15c70	80	
+0x15c70	0x161b8	1352	%@Added by %@ through libtriggr. | footerText | Triggers | lib. | Swipe left on an event to delete it. | No custom events yet. Add one below, then pick what it runs. | Add Event | airplay: | tgAddEvent | App Opened | useSearchBar | sections | Notification From App | App Icon Flicked
+0x161b8	0x161c4	12	
+0x161c4	0x1627c	184	Assigned presses run alongside the button's own action. | Assigned presses replace the button's own action. | %@ %@
+0x1627c	0x16290	20	
+0x16290	0x16430	416	footerText | Single taps are off in Options. | statusbar.tap | statusbar.left.tap
+0x16430	0x16440	16	
+0x16440	0x1647c	60	statusbar.right.tap
+0x1647c	0x1648c	16	
+0x1648c	0x164ec	96	
+0x164ec	0x16568	124	Double and Triple Press take over Wallet and the Accessibility Shortcut.
+0x16568	0x1663c	212	/var/jb | /var/mobile/Library/Triggr/registry.plist
+0x1663c	0x1698c	848	tgMode | tgTrigger
+0x1698c	0x16a40	180	
+0x16a40	0x16ac8	136	com.johndie.triggr
+0x16ac8	0x16bec	292	
+0x16bec	0x16c48	92	cellClass | height
+0x16c48	0x16ccc	132	lib. | Triggers
+0x16ccc	0x16d78	172	app.launched: | Opened | notification.app: | Notification from
+0x16d78	0x16d94	28	
+0x16d94	0x16d98	4	
+0x16d98	0x1722c	1172	icon.flick | %@ on %@
+0x1722c	0x172fc	208	wifi.joined: | Joined “%@” | wifi.left: | Left “%@” | bt.connected: | Connected to “%@” | Icon %s | Home Screen %s | %s %s
+0x172fc	0x17308	12	
+0x17308	0x17390	136	bt.disconnected: | Disconnected from “%@” | battery.above: | Battery Rises Above %@%% | battery.below: | Battery Drops Below %@%%
+0x17390	0x1739c	12	
+0x1739c	0x173a0	4	
+0x173a0	0x173b0	16	
+0x173b0	0x17460	176	Volume Buttons Up | Volume Up | Volume Buttons Down | Volume Down | app.launched: | Opened | notification.app: | Notification from
+0x17460	0x17548	232	icon.flick | %@ on %@ | %02d:%02d %@
+0x17548	0x1754c	4	
+0x1754c	0x17760	532	tgTrigger | Delete | Clear
+0x17760	0x178e4	388	tgTrigger
+0x178e4	0x17d08	1060	Flick on %@ | Runs instead of the plain icon flick in that direction. | Cancel
+0x17d08	0x17d8c	132	app: | Open
+0x17d8c	0x17e40	180	
+0x17e40	0x18450	1552	app.launched: | notification.app: | tgAddEvent | time: | battery.above: | battery.below: | Battery level, 1–100 %. Runs once when the level falls past it. | Battery level, 1–100 %. Runs once when the level climbs past it; 100 means fully charged. | wifi.joined: | Network name (SSID), as shown in Settings → Wi-Fi | wifi.left: | Device name, as shown in Settings → Bluetooth
+0x18450	0x184cc	124	
+0x184cc	0x18744	632	Other… | Cancel
+0x18744	0x1875c	24	
+0x1875c	0x187c4	104	
+0x187c4	0x187e0	28	
+0x187e0	0x188b4	212	
+0x188b4	0x18a20	364	
+0x18a20	0x18a38	24	
+0x18a38	0x18ab4	124	
+0x18ab4	0x18b74	192	
+0x18b74	0x18c20	172	
+0x18c20	0x1901c	1020	Cancel | Next
+0x1901c	0x191a0	388	%d
+0x191a0	0x19544	932	tgMode | Assigned | Tap one to change it, or swipe left to remove it. | footerText | Nothing is assigned %@ yet.
+0x19544	0x198cc	904	Remove All | alignment | PSTableCell | cellClass | tgDestructive | tgTrigger
+0x198cc	0x19e7c	1456	Remove all %lu assignments %@? Those triggers go back to their normal behaviour. | Remove All | Cancel | Delete | tgTrigger | Remove | tgMode | app: | tgTitle
+0x19e7c	0x19e8c	16	
+0x19e8c	0x1a0ac	544	anywhere | app: | Pick a button or gesture, then what it does. It works everywhere, unless you give it something else in one of the Places. | footerText | Anywhere | In Apps and Anywhere | Only %@. Replaces %@ for the same trigger.
+0x1a0ac	0x1a218	364	Assigned | tgMode | checklist
+0x1a218	0x1a2ac	148	
+0x1a2ac	0x1a374	200	home | lock | app
+0x1a374	0x1a3d0	92	Lock Button | Side Button | Top Button
+0x1a3d0	0x1a564	404	
+0x1a564	0x1a5b0	76	
+0x1a5b0	0x1a940	912	home | lock | Triggers | More | tgLibGroup | puzzlepiece.extension.fill | Custom Events | sparkles
+0x1a940	0x1aa20	224	app:
+0x1aa20	0x1aa50	48	
+0x1aa50	0x1aa88	56	
+0x1aa88	0x1aadc	84	
+0x1aadc	0x1aaf8	28	
+0x1aaf8	0x1ab14	28	
+0x1ab14	0x1ab1c	8	
+0x1ab1c	0x1ab20	4	
+0x1ab20	0x1ab4c	44	
+0x1ab4c	0x1ab70	36	
+0x1ab70	0x1abac	60	
+0x1abac	0x1adc8	540	Group
+0x1adc8	0x1b148	896	%lu | tgMode | tgGroup | tgLibGroup | Triggers | lib.
+0x1b148	0x1b174	44	
+0x1b174	0x1b190	28	
+0x1b190	0x1b1d8	72	
+0x1b1d8	0x1b350	376	
+0x1b350	0x1c5b0	4704	tgTrigger | Remove | In Specific Apps | app: | Give one app its own assignments: inside it they replace In Apps' and Anywhere's for the same trigger, everywhere else nothing changes. | footerText | tgCount | tgMode | Add App… | useSearchBar | sections | airplay: | PostNotification | com.johndie.triggr | defaults | key | com.johndie.triggr/prefs-changed | Menus | name | id | menu/ | tgMenuEditor | tgMenuID | A menu pops up a list of actions to choose from. Assign it to a trigger from the action picker's Menus category. Swipe left on a menu to delete it. | A menu pops up a list of actions to choose from. Make one, then assign it to a trigger from the action picker. | New Menu… | new | tgMenuCommand | pause: | if: | else
+0x1c5b0	0x1c5e8	56	endif
+0x1c5e8	0x1c64c	100	1 action | %lu actions
+0x1c64c	0x1c860	532	tgMenuCommand | New Menu | Name shown at the top of the menu | Cancel | Create
+0x1c860	0x1c8a0	64	
+0x1c8a0	0x1cf1c	1660	id | name | tgMenuID | Delete | com.johndie.triggr | defaults | key | Profiles | ActiveProfile
+0x1cf1c	0x1d1d4	696	
+0x1d1d4	0x1d270	156	com.johndie.triggr
+0x1d270	0x1d33c	204	BlockedApps
+0x1d33c	0x1d3cc	144	
+0x1d3cc	0x1dec8	2812	Profiles | ActiveProfile | Profiles, Sharing & Reset | Tap a profile to switch to it or export it; swipe left to delete it. Switching saves your current setup into the active profile first, so nothing is lost. | footerText | tgProfile | Save Current as Profile… | save | Share | Export makes a file you can send with AirDrop, Messages or Files. Import replaces your current setup after showing what it contains. | Export Current Setup… | export | Import Setup… | import | Clears every assignment, menu and setting, and turns off Allow API (Replace Button Actions goes back on). Saved profiles are kept. | Reset to Defaults… | reset | tgCommand | Delete | Active | Cancel | Triggr Setup | Reset to Defaults? | Every assignment, menu and setting is cleared. Saved profiles are kept. | Reset
+0x1dec8	0x1e350	1160	AllowAPI | LockReplaces | ActiveProfile | Switch To | Export | Delete | Cancel
+0x1e350	0x1e554	516	lock | app | home | anywhere
+0x1e554	0x1e708	436	Save Profile | Saves your current assignments, menus and settings. An existing profile with this name is replaced. | Cancel | Save
+0x1e708	0x1e99c	660	Name | It includes the Wi-Fi network and Bluetooth device names used in your events. | It includes your shell commands; check they don't contain anything private. | Export Setup | Share
+0x1e99c	0x1ec6c	720	shell: | url: | BlockedApps | if: | menu/ | wifi.joined: | wifi.left: | bt.connected: | bt.disconnected: | shortcut:
+0x1ec6c	0x1f1d0	1380	Menus | %lu assignments, %lu menus, %lu shell commands, %lu URLs or Shortcuts. | Triggr | setup | /\: | .json
+0x1f1d0	0x1f3ac	476	Triggr | setup | This replaces your current setup. Save it as a profile first if you want to keep it. | This setup runs shell commands on your device. Only import setups from people you trust. | Import Setup? | Replace My Setup | Not a Triggr Setup | That file isn't a setup exported from Triggr. | OK
+0x1f3ac	0x1f948	1436	ActiveProfile | Options | Buttons | On: an assigned press runs instead of the button's own action. Off: both run. Waking, Emergency SOS and force restart always work. | footerText | Replace Button Actions | com.johndie.triggr | defaults | LockReplaces | key | default | com.johndie.triggr/prefs-changed | PostNotification | When an Action Runs | A banner names what just ran. Haptic Feedback is a small tap; it follows iOS's System Haptics setting. | Show Banners | ShowBanners | Haptic Feedback | Haptics | setValues:titles: | validValues | validTitles | Restarting | Respring, Restart and Power Off ask before they run, from a trigger or from Run Now. Safe Mode never asks, so it always works when a tweak gets stuck. | Ask Before Restarting | AskBeforeRestart | Shortcuts | On: Shortcuts run like Back Tap runs them, without opening the app. Off: the Shortcuts app opens. | Run in Background | ShortcutsInBackground | Apps | Triggr ignores triggers while one of these apps is open, like a game that uses the volume buttons. | Block List | useSearchBar | sections | Status Bar
+0x1f948	0x1f990	72	Experimental on Face ID iPhones, so it starts off: a tap at the top can begin pulling down Control Center. Double Tap and Hold always work. | Lets the status bar's single-tap triggers run. Double Tap and Hold always work. | footerText
+0x1f990	0x1fbe8	600	Single Taps | StatusBarSingleTap | Lock Screen | Apps and Shortcuts always wait for you to unlock. With this on, shell commands wait too. | footerText | Commands Need Passcode | RequireUnlock | Advanced | Lets other tweaks and the triggr command run your triggers and built-in actions (never commands or apps). Leave off unless you use it. | Allow API | AllowAPI | Save and switch setups, share them as a file, or reset Triggr to its defaults. | Profiles, Sharing & Reset
+0x1fbe8	0x20750	2920	com.johndie.triggr | defaults | key | default | com.johndie.triggr/prefs-changed | PostNotification | BlockedApps | tgDetail | Guide | cellClass | footerText | version | tgNotes | tgEarlier | SeenNotes
+0x20750	0x20778	40	
+0x20778	0x20788	16	
+0x20788	0x208cc	324	tgNotes | version | Triggr %@ | What's New
+0x208cc	0x20984	184	version | Triggr %@
+0x20984	0x20eac	1320	footer | footerText | intro | items | Earlier Versions | tgEarlier | version | tgNotes
+0x20eac	0x21cec	3648	tgDetail | cellClass | header | Welcome to Triggr | hand.tap.fill | Pick a trigger | A button press, a swipe, or something that happens, like plugging in your charger. | list.bullet | Choose what it does | Turn on the flashlight, open an app or run a shortcut. Pick a few and they run in order. | play.fill | Try it right here | Swipe right on a trigger, or hold it, to run it without pressing anything. | checkmark.shield.fill | Only what you set up | Triggr reacts only to the triggers you add. Everything else works as usual. | Continue
+0x21cec	0x2275c	2672	%@. %@ | Lock Screen | Search Triggers | header | Triggr
+0x2275c	0x227f4	152	com.johndie.triggr | defaults | Enabled | key
+0x227f4	0x22888	148	%lu triggers on | %lu trigger on | Nothing set up yet | Off. Your triggers are saved. | Off
+0x22888	0x22890	8	
+0x22890	0x228b0	32	
+0x228b0	0x22a70	448	key | Enabled | com.johndie.triggr | defaults | WelcomeShown
+0x22a70	0x22a8c	28	
+0x22a8c	0x22d10	644	com.johndie.triggr | Anywhere | home.
+0x22d10	0x22edc	460	touchid. | statusbar.tap | statusbar.left.tap | homebar. | statusbar.right.tap | %@ %@ %@ | anywhere | home.
+0x22edc	0x22efc	32	
+0x22efc	0x22f9c	160	No trigger matches “%@”. | footerText | For one place only (Home Screen, apps, Lock Screen), open that place above instead.
+0x22f9c	0x23734	1944	tgMode | tgTrigger | %@/%@ | anywhere | %@: %@ | if: | com.johndie.triggr | · only if %@ | defaults | key | tgSetupRow | Remove | Enabled | version | What's New in %@ | What's New
+0x23734	0x23ae0	940	sparkles | Guide | book.fill | Your Setup | Add a Trigger | anywhere | tgMode | Anywhere | tgTitle | plus | tgSetupRow | lib. | puzzlepiece.extension.fill
+0x23ae0	0x23ae8	8	
+0x23ae8	0x23bd8	240	
+0x23bd8	0x23c48	112	
+0x23c48	0x23cd8	144	Show Less | Show %lu More
+0x23cd8	0x24a14	3388	Tap one to change it. Swipe right or hold it to run it now, swipe left to remove it. | Nothing set up yet. Add a Trigger to start, or open the Guide to see what Triggr can do. | footerText | ActionButtonGuard | com.johndie.triggr | Action Button Paused | SpringBoard crashed while Triggr was handling the Action button, so the button went back to iOS. It tries again after the next Triggr update. Your other triggers still work. | Places | Most things belong in Anywhere. Use a place when a trigger should do something different there. | anywhere | globe | home | house.fill | app | square.grid.2x2.fill | lock | lock.fill | tgMode | In Specific Apps | app.badge.fill | Menus | list.bullet.rectangle.fill | Options | gearshape.fill | Help & Support | 2.1.0 | Triggr %@ by Jond_ie | footerAlignment | Report a Problem | https://github.com/Jond-ie/triggr/issues | ladybug.fill | Contact | https://x.com/Jond_ie | bubble.left.fill | Support Triggr | https://jond-ie.github.io/repo/support/ | heart.fill | tgURL | PSTableCell | cellClass | arrow.up.forward | version | SeenNotes | New
+0x24a14	0x24bec	472	tgURL | tgMode
+0x24bec	0x2500c	1056	app: | com.johndie.triggr | defaults | ActiveProfile | key | anywhere
+0x2500c	0x250e0	212	com.johndie.triggr | defaults | %@/%@ | key | com.johndie.triggr/prefs-changed | PostNotification
+0x250e0	0x251f4	276	ext:
+0x251f4	0x251fc	8	
+0x251fc	0x253c8	460	On Wi-Fi | Any network
+0x253c8	0x25c40	2168	None saved on this iPhone. | Cancel | wifi: | wifi | AirPlay To… | Not on Wi-Fi | No network at all | Contact | !wifi: | !wifi | Connected | bt: | Not connected | !bt: | charging | !charging | locked | !locked | music | !music | headphones | lowpower | flashlight | !flashlight | Battery Below | Percent, 1–100 | 20
+0x25c40	0x25e64	548	Cancel | Add
+0x25e64	0x264f4	1680	battery<%d | Battery Above | Percent, 0–99 | 80 | battery>%d | Between Times | Start and end, 24-hour, e.g. 22:00-06:00 (overnight is fine) | 22:00-06:00 | time:%04d-%04d | Still True After | Wait this many seconds, then run only if the opposite didn't happen meanwhile (e.g. you didn't rejoin the network). | 30 | after:%d
+0x264f4	0x26630	316	/var/jb | /Library/Triggr/Extensions
+0x26630	0x267cc	412	battery> | Title | snapper | snapper2 | snapper3
+0x267cc	0x267dc	16	
+0x267dc	0x26934	344	/var/jb | /Library/MobileSubstrate/DynamicLibraries | dylib
+0x26934	0x26968	52	
+0x26968	0x26b34	460	copylog | app: | settings:
+0x26b34	0x26b98	100	HomeButtonType
+0x26b98	0x26c0c	116	
+0x26c0c	0x26ccc	192	battery>
+0x26ccc	0x26d44	120	home. | touchid.
+0x26d44	0x26d84	64	app:
+0x26d84	0x26de0	92	homebar.
+0x26de0	0x26f7c	412	lib.
+0x26f7c	0x26fc4	72	
+0x26fc4	0x27114	336	time:
+0x27114	0x27134	32	
+0x27134	0x27348	532	weekdays | Weekdays | weekends | Weekends | 1234567 | Every Day
+0x27348	0x2735c	20	Every Day
+0x2735c	0x27de0	2692	Home Button | circle.circle | Touch ID | touchid | Lock Button | lock.fill | Volume Buttons | speaker.wave.2.fill | Lock + Volume | plus.rectangle.on.rectangle | Mute Switch | bell.slash.fill | Action Button | button.programmable | Status Bar | rectangle.topthird.inset.filled | Home Screen Icons | square.grid.3x3.fill | Home Screen Gestures | hand.draw.fill | Multi-Finger Gestures | hand.tap.fill | Motion | iphone.radiowaves.left.and.right | Charger & Headphones | bolt.fill | Music | music.note | Notifications | bell.badge.fill | Phone Calls | phone.fill | Screen Edges | arrow.left.and.right.square.fill | Proximity Sensor | hand.raised.fill | State Changes | arrow.triangle.2.circlepath | Home Bar | platter.filled.bottom.iphone|capsule.fill | Lock Screen Clock | clock.fill | Headset Button | headphones | CarPlay | car.fill | Sunrise & Sunset | sunrise.fill
+0x27de0	0x27f04	292	
+0x27f04	0x27f0c	8	
+0x27f0c	0x28020	276	app:
+0x28020	0x28028	8	
+0x28028	0x28174	332	if: | menu/
+0x28174	0x28218	164	Enabled | RequireUnlock | ShowBanners | Haptics | ShortcutsInBackground
+0x28218	0x28560	840	BlockedApps | Menus | id | name | PatchNotes | plist
+0x28560	0x285ac	76	
+0x285ac	0x285c0	20	
+0x285c0	0x285d4	20	
+0x285d4	0x285e8	20	
+0x285e8	0x285fc	20	
+0x285fc	0x28600	4	
+0x28600	0x28604	4	
+0x28604	0x28608	4	
+0x28608	0x2860c	4	
+0x2860c	0x28610	4	
+0x28610	0x28614	4	
+0x28614	0x28618	4	
+0x28618	0x2861c	4	
+0x2861c	0x28620	4	
+0x28620	0x28644	36	
+0x28644	0x28648	4	
+0x28648	0x2864c	4	
+0x2864c	0x28650	4	
+0x28650	0x28654	4	
+0x28654	0x28668	20	
+0x28668	0x2866c	4	
+0x2866c	0x28670	4	
+0x28670	0x28684	20	
+0x28684	0x28688	4	
+0x28688	0x2868c	4	

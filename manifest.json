@@ -1,0 +1,57 @@
+{
+ "package": {
+  "file": "triggr_2.1.deb",
+  "sha256": "2ed85587cdd543e2cd657af3210bc77d05e998e17a2e0ed23dfd395c58f87c4e"
+ },
+ "binaries": {
+  "Triggr.bundle": {
+   "path": "/Library/PreferenceBundles/Triggr.bundle/Triggr",
+   "sha256": "8bbf2905de9e570a202b90602a07f2dfbc77840c2df6900b2f75a5c6a2d2184a",
+   "functions": 411,
+   "strings": 664,
+   "asm_lines": 38107
+  },
+  "Triggr.dylib": {
+   "path": "/Library/MobileSubstrate/DynamicLibraries/Triggr.dylib",
+   "sha256": "e162db2d3aaa16ba2101d205e3e2dcca2e4732d0aa92baef7b61583564e852ab",
+   "functions": 503,
+   "strings": 406,
+   "asm_lines": 29495
+  },
+  "TriggrRelay.dylib": {
+   "path": "/Library/MobileSubstrate/DynamicLibraries/TriggrRelay.dylib",
+   "sha256": "4c35c5d120182cfe8d295dc90c14cb1d68370c239fcfe390633b525469cfccad",
+   "functions": 50,
+   "strings": 24,
+   "asm_lines": 2766
+  },
+  "libtriggr.dylib": {
+   "path": "/usr/lib/libtriggr.dylib",
+   "sha256": "60dc0aedc0fc779036342d9ed1dfe82c680307441ac50d10bb424c8746117052",
+   "functions": 18,
+   "strings": 21,
+   "asm_lines": 1229
+  },
+  "triggrd": {
+   "path": "/usr/libexec/triggrd",
+   "sha256": "f206d677cf704822fc4250e8cde956bb4b40fa67129c2ce336d16a1c1c5e8aec",
+   "functions": 14,
+   "strings": 11,
+   "asm_lines": 959
+  },
+  "triggr": {
+   "path": "/usr/bin/triggr",
+   "sha256": "0434b225f06c35ca7c0d052094187250b9b14d8470cfeaa4aacd421489ab9d37",
+   "functions": 13,
+   "strings": 15,
+   "asm_lines": 574
+  },
+  "TriggrApp": {
+   "path": "/Applications/TriggrApp.app/TriggrApp",
+   "sha256": "d2964fc4c23c5257e78b338d55edd519726d10abaef69883041aacea2394b0b4",
+   "functions": 2,
+   "strings": 5,
+   "asm_lines": 418
+  }
+ }
+}

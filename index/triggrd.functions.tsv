@@ -1,0 +1,15 @@
+start	end	size	strings
+0x100004000	0x1000040d8	216	/var/tmp/com.johndie.triggr-run
+0x1000040d8	0x100004334	604	/var/tmp/com.johndie.triggr-run | Action | shell: | ext:
+0x100004334	0x1000043dc	168	
+0x1000043dc	0x10000445c	128	com.johndie.triggr
+0x10000445c	0x1000044e4	136	
+0x1000044e4	0x100004688	420	shell: | ext:
+0x100004688	0x100004690	8	
+0x100004690	0x1000047c4	308	/var/jb | /Library/Triggr/Extensions
+0x1000047c4	0x1000049e4	544	plist | Title | Program
+0x1000049e4	0x100004a84	160	Program
+0x100004a84	0x100004ad0	76	
+0x100004ad0	0x100004bf8	296	
+0x100004bf8	0x100004cdc	228	
+0x100004cdc	0x100004e80	420	/var/jb | /bin/sh

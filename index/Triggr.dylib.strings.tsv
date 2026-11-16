@@ -1,0 +1,1537 @@
+addr	section	text
+0x22b70	__TEXT,__cstring	v8@?0
+0x22b76	__TEXT,__cstring	
+0x22b78	__TEXT,__cstring	ActionButtonGuard
+0x22b8a	__TEXT,__cstring	statusbar.swipeleft
+0x22b9e	__TEXT,__cstring	statusbar.swiperight
+0x22bb3	__TEXT,__cstring	icon.flickleft
+0x22bc2	__TEXT,__cstring	icon.flickright
+0x22bd2	__TEXT,__cstring	icon.flickup
+0x22bdf	__TEXT,__cstring	icon.flickdown
+0x22bee	__TEXT,__cstring	homescreen.doubletap
+0x22c03	__TEXT,__cstring	homescreen.twoup
+0x22c14	__TEXT,__cstring	homescreen.twodown
+0x22c27	__TEXT,__cstring	homescreen.pinchin
+0x22c3a	__TEXT,__cstring	homescreen.pinchout
+0x22c4e	__TEXT,__cstring	IconView
+0x22c57	__TEXT,__cstring	Widget
+0x22c5e	__TEXT,__cstring	Dock
+0x22c63	__TEXT,__cstring	
+0x22c65	__TEXT,__cstring	SBLockScreenManager
+0x22c79	__TEXT,__cstring	carplay.connected
+0x22c8b	__TEXT,__cstring	carplay.disconnected
+0x22ca1	__TEXT,__cstring	call.ended
+0x22cac	__TEXT,__cstring	call.answered
+0x22cba	__TEXT,__cstring	call.outgoing
+0x22cc8	__TEXT,__cstring	call.incoming
+0x22cd6	__TEXT,__cstring	
+0x22cd8	__TEXT,__cstring	com.apple.springboard
+0x22cee	__TEXT,__cstring	com.johndie.triggr/prefs-changed
+0x22d0f	__TEXT,__cstring	v12@?0i8
+0x22d18	__TEXT,__cstring	com.johndie.triggr/test
+0x22d30	__TEXT,__cstring	com.johndie.triggr
+0x22d43	__TEXT,__cstring	TestAssignment
+0x22d52	__TEXT,__cstring	/
+0x22d54	__TEXT,__cstring	com.johndie.triggr/airplay-list
+0x22d74	__TEXT,__cstring	com.johndie.triggr/statusbar-tap
+0x22d95	__TEXT,__cstring	com.johndie.triggr/statusbar-tap-left
+0x22dbb	__TEXT,__cstring	com.johndie.triggr/statusbar-tap-right
+0x22de2	__TEXT,__cstring	com.johndie.triggr/shake
+0x22dfb	__TEXT,__cstring	/usr/lib/libtriggr.dylib
+0x22e14	__TEXT,__cstring	TGLibSetHost
+0x22e21	__TEXT,__cstring	TGLibCanRun
+0x22e2d	__TEXT,__cstring	TGLibRun
+0x22e36	__TEXT,__cstring	com.johndie.triggr/inapp
+0x22e4f	__TEXT,__cstring	SBHomeHardwareButton
+0x22e64	__TEXT,__cstring	SBHomeHardwareButtonActions
+0x22e80	__TEXT,__cstring	SBVolumeHardwareButton
+0x22e97	__TEXT,__cstring	SBLockHardwareButtonActions
+0x22eb3	__TEXT,__cstring	SBLockHardwareButton
+0x22ec8	__TEXT,__cstring	SBCombinationHardwareButtonActions
+0x22eeb	__TEXT,__cstring	SpringBoard
+0x22ef7	__TEXT,__cstring	SBRingerControl
+0x22f07	__TEXT,__cstring	SBUIBiometricResource
+0x22f1d	__TEXT,__cstring	UIStatusBar_Base
+0x22f2e	__TEXT,__cstring	UIStatusBarWindow
+0x22f40	__TEXT,__cstring	SBIconView
+0x22f4b	__TEXT,__cstring	SBRootFolderView
+0x22f5c	__TEXT,__cstring	UIScreenEdgePanGestureRecognizer
+0x22f7d	__TEXT,__cstring	SBMainDisplaySystemGestureManager
+0x22f9f	__TEXT,__cstring	SBSystemGestureManager
+0x22fb6	__TEXT,__cstring	SBVoiceControlController
+0x22fcf	__TEXT,__cstring	NCNotificationDispatcher
+0x22fe8	__TEXT,__cstring	SBMediaController
+0x22ffa	__TEXT,__cstring	SBProximitySensorManager
+0x23013	__TEXT,__cstring	SBActionHardwareButton
+0x2302a	__TEXT,__cstring	SBRingerHardwareButton
+0x23041	__TEXT,__cstring	SBHomeAffordanceInteractionManager
+0x23064	__TEXT,__cstring	SBHomeGrabberRevealGesturesManager
+0x23087	__TEXT,__cstring	SBMainSwitcherWindow
+0x2309c	__TEXT,__cstring	SBDeviceApplicationSceneViewController
+0x230c3	__TEXT,__cstring	_statusBarDoubleTapTop:
+0x230db	__TEXT,__cstring	CSProminentTimeView
+0x230ef	__TEXT,__cstring	SBFLockScreenDateView
+0x23105	__TEXT,__cstring	SBStatusBarWindow
+0x23117	__TEXT,__cstring	shortcuts://run-shortcut?name=
+0x23136	__TEXT,__cstring	v12@?0B8
+0x2313f	__TEXT,__cstring	LSApplicationWorkspace
+0x23156	__TEXT,__cstring	after:
+0x2315d	__TEXT,__cstring	power.connected
+0x2316d	__TEXT,__cstring	power.disconnected
+0x23180	__TEXT,__cstring	headphones.in
+0x2318e	__TEXT,__cstring	headphones.out
+0x2319d	__TEXT,__cstring	wifi.on
+0x231a5	__TEXT,__cstring	wifi.off
+0x231ae	__TEXT,__cstring	wifi.joined
+0x231ba	__TEXT,__cstring	wifi.left
+0x231c4	__TEXT,__cstring	bluetooth.on
+0x231d1	__TEXT,__cstring	bluetooth.off
+0x231df	__TEXT,__cstring	lowpower.on
+0x231eb	__TEXT,__cstring	lowpower.off
+0x231f8	__TEXT,__cstring	device.locked
+0x23206	__TEXT,__cstring	device.unlocked
+0x23216	__TEXT,__cstring	display.on
+0x23221	__TEXT,__cstring	display.off
+0x2322d	__TEXT,__cstring	music.started
+0x2323b	__TEXT,__cstring	music.stopped
+0x23249	__TEXT,__cstring	mute.silent
+0x23255	__TEXT,__cstring	mute.ring
+0x2325f	__TEXT,__cstring	wifi.joined:
+0x2326c	__TEXT,__cstring	wifi.left:
+0x23277	__TEXT,__cstring	bt.connected:
+0x23285	__TEXT,__cstring	bt.disconnected:
+0x23296	__TEXT,__cstring	app
+0x2329a	__TEXT,__cstring	app:
+0x2329f	__TEXT,__cstring	anywhere
+0x232a8	__TEXT,__cstring	lock
+0x232ad	__TEXT,__cstring	home
+0x232b2	__TEXT,__cstring	%@/%@
+0x232b8	__TEXT,__cstring	snapper3.
+0x232c2	__TEXT,__cstring	copylog.
+0x232cb	__TEXT,__cstring	activator:
+0x232d6	__TEXT,__cstring	menu:
+0x232dc	__TEXT,__cstring	shortcut:
+0x232e6	__TEXT,__cstring	url:
+0x232eb	__TEXT,__cstring	shell:
+0x232f2	__TEXT,__cstring	lib:
+0x232f7	__TEXT,__cstring	ext:
+0x232fc	__TEXT,__cstring	Program
+0x23304	__TEXT,__cstring	CFNotificationCenterGetDistributedCenter
+0x2332d	__TEXT,__cstring	com.jontelang.snapper3.
+0x23345	__TEXT,__cstring	snapper3.force.open
+0x23359	__TEXT,__cstring	New Snap
+0x23362	__TEXT,__cstring	snapper3.forceinstant.open
+0x2337d	__TEXT,__cstring	Instant Snap
+0x2338a	__TEXT,__cstring	snapper3.forcefreeze.open
+0x233a4	__TEXT,__cstring	Freeze Screen & Snap
+0x233b9	__TEXT,__cstring	snapper3.openlast
+0x233cb	__TEXT,__cstring	Reopen Last Snap
+0x233dc	__TEXT,__cstring	snapper3.history
+0x233ed	__TEXT,__cstring	Snap History
+0x233fa	__TEXT,__cstring	snapper3.closecrop
+0x2340d	__TEXT,__cstring	Cancel Cropping
+0x2341d	__TEXT,__cstring	snapper3.close.all
+0x23430	__TEXT,__cstring	Close All Snaps
+0x23440	__TEXT,__cstring	snapper
+0x23448	__TEXT,__cstring	snapper2
+0x23451	__TEXT,__cstring	snapper3
+0x2345a	__TEXT,__cstring	/Library/MobileSubstrate/DynamicLibraries
+0x23484	__TEXT,__cstring	dylib
+0x2348a	__TEXT,__cstring	me.tomt000.copylog.
+0x2349e	__TEXT,__cstring	copylog.showView
+0x234af	__TEXT,__cstring	Show CopyLog
+0x234bc	__TEXT,__cstring	copylog.showFavoritesView
+0x234d6	__TEXT,__cstring	Show CopyLog Favorites
+0x234ed	__TEXT,__cstring	copylog
+0x234f5	__TEXT,__cstring	DynamicLibraries/
+0x23507	__TEXT,__cstring	TweakInject/
+0x23514	__TEXT,__cstring	.
+0x23516	__TEXT,__cstring	pause:
+0x2351d	__TEXT,__cstring	if:
+0x23521	__TEXT,__cstring	else
+0x23526	__TEXT,__cstring	endif
+0x2352c	__TEXT,__cstring	brightness:
+0x23538	__TEXT,__cstring	brightness.up:
+0x23547	__TEXT,__cstring	brightness.down:
+0x23558	__TEXT,__cstring	volume.media:
+0x23566	__TEXT,__cstring	Audio/Video
+0x23572	__TEXT,__cstring	volume.ringer:
+0x23581	__TEXT,__cstring	Ringtone
+0x2358a	__TEXT,__cstring	message:
+0x23593	__TEXT,__cstring	Triggr
+0x2359a	__TEXT,__cstring	OK
+0x2359d	__TEXT,__cstring	speak:
+0x235a4	__TEXT,__cstring	toast:
+0x235ab	__TEXT,__cstring	airplay:
+0x235b4	__TEXT,__cstring	settings:
+0x235be	__TEXT,__cstring	App-prefs:
+0x235c9	__TEXT,__cstring	BrightnessSystemClient
+0x235e0	__TEXT,__cstring	DisplayBrightness
+0x235f2	__TEXT,__cstring	AVSystemController
+0x23605	__TEXT,__cstring	  
+0x23608	__TEXT,__cstring	{
+0x2360a	__TEXT,__cstring	{battery}
+0x23614	__TEXT,__cstring	%d
+0x23617	__TEXT,__cstring	{time}
+0x2361e	__TEXT,__cstring	{date}
+0x23625	__TEXT,__cstring	Current Capacity
+0x23636	__TEXT,__cstring	Max Capacity
+0x23643	__TEXT,__cstring	MPAVRoutingController
+0x23659	__TEXT,__cstring	v16@?0@"NSArray"8
+0x2366b	__TEXT,__cstring	plist
+0x23671	__TEXT,__cstring	Title
+0x23677	__TEXT,__cstring	ItemsDirectory
+0x23686	__TEXT,__cstring	/Library/Triggr/Extensions
+0x236a1	__TEXT,__cstring	:
+0x236a3	__TEXT,__cstring	system.screenshot
+0x236b5	__TEXT,__cstring	B12@?0B8
+0x236be	__TEXT,__cstring	system.respring
+0x236ce	__TEXT,__cstring	FBSystemService
+0x236de	__TEXT,__cstring	system.nothing
+0x236ed	__TEXT,__cstring	speak.time
+0x236f8	__TEXT,__cstring	It's 
+0x236fe	__TEXT,__cstring	speak.battery
+0x2370c	__TEXT,__cstring	Battery %d percent%@
+0x23721	__TEXT,__cstring	, charging
+0x2372c	__TEXT,__cstring	speak.clipboard
+0x2373c	__TEXT,__cstring	The clipboard is empty
+0x23753	__TEXT,__cstring	clipboard.clear
+0x23763	__TEXT,__cstring	flashlight.brighter
+0x23777	__TEXT,__cstring	flashlight.dimmer
+0x23789	__TEXT,__cstring	record.video
+0x23796	__TEXT,__cstring	com.apple.camera
+0x237a7	__TEXT,__cstring	record.memo
+0x237b3	__TEXT,__cstring	com.apple.VoiceMemos
+0x237c8	__TEXT,__cstring	system.vibrate
+0x237d7	__TEXT,__cstring	system.home
+0x237e3	__TEXT,__cstring	system.lastapp
+0x237f2	__TEXT,__cstring	system.quitapp
+0x23801	__TEXT,__cstring	Triggr: Quit Current App
+0x2381a	__TEXT,__cstring	system.siri
+0x23826	__TEXT,__cstring	SiriSimpleActivationSource
+0x23841	__TEXT,__cstring	system.sleep
+0x2384e	__TEXT,__cstring	system.powerdown
+0x2385f	__TEXT,__cstring	SBMainWorkspace
+0x2386f	__TEXT,__cstring	system.restart
+0x2387e	__TEXT,__cstring	system.safemode
+0x2388e	__TEXT,__cstring	/usr/lib/ellekit/libinjector.dylib
+0x238b1	__TEXT,__cstring	/var/mobile/.eksafemode
+0x238c9	__TEXT,__cstring	system.poweroff
+0x238d9	__TEXT,__cstring	system.switcher
+0x238e9	__TEXT,__cstring	SBUIController
+0x238f8	__TEXT,__cstring	system.reachability
+0x2390c	__TEXT,__cstring	SBReachabilityManager
+0x23922	__TEXT,__cstring	system.lock
+0x2392e	__TEXT,__cstring	system.cc
+0x23938	__TEXT,__cstring	SBControlCenterController
+0x23952	__TEXT,__cstring	system.nc
+0x2395c	__TEXT,__cstring	SBCoverSheetPresentationManager
+0x2397c	__TEXT,__cstring	system.spotlight
+0x2398d	__TEXT,__cstring	media.playpause
+0x2399d	__TEXT,__cstring	media.next
+0x239a8	__TEXT,__cstring	media.previous
+0x239b7	__TEXT,__cstring	media.airplay
+0x239c5	__TEXT,__cstring	media.airplayiphone
+0x239d9	__TEXT,__cstring	system.screenrecord
+0x239ed	__TEXT,__cstring	system.closeapps
+0x239fe	__TEXT,__cstring	media.volup
+0x23a0a	__TEXT,__cstring	media.voldown
+0x23a18	__TEXT,__cstring	media.pressvolup
+0x23a29	__TEXT,__cstring	media.pressvoldown
+0x23a3c	__TEXT,__cstring	media.nowplayingapp
+0x23a50	__TEXT,__cstring	phone.answer
+0x23a5d	__TEXT,__cstring	TUCallCenter
+0x23a6a	__TEXT,__cstring	phone.end
+0x23a74	__TEXT,__cstring	phone.favorites
+0x23a84	__TEXT,__cstring	mobilephone-favorites://
+0x23a9d	__TEXT,__cstring	com.apple.mobilephone
+0x23ab3	__TEXT,__cstring	phone.recents
+0x23ac1	__TEXT,__cstring	mobilephone-recents://
+0x23ad8	__TEXT,__cstring	phone.contacts
+0x23ae7	__TEXT,__cstring	mobilephone-contacts://
+0x23aff	__TEXT,__cstring	phone.keypad
+0x23b0c	__TEXT,__cstring	mobilephone-keypad://
+0x23b22	__TEXT,__cstring	phone.voicemail
+0x23b32	__TEXT,__cstring	vmshow://
+0x23b3c	__TEXT,__cstring	compose.message
+0x23b4c	__TEXT,__cstring	sms:
+0x23b51	__TEXT,__cstring	compose.mail
+0x23b5e	__TEXT,__cstring	mailto:
+0x23b66	__TEXT,__cstring	clock.alarm
+0x23b72	__TEXT,__cstring	clock-alarm://
+0x23b81	__TEXT,__cstring	com.apple.mobiletimer
+0x23b97	__TEXT,__cstring	clock.worldclock
+0x23ba8	__TEXT,__cstring	clock-worldclock://
+0x23bbc	__TEXT,__cstring	clock.stopwatch
+0x23bcc	__TEXT,__cstring	clock-stopwatch://
+0x23bdf	__TEXT,__cstring	clock.timer
+0x23beb	__TEXT,__cstring	clock-timer://
+0x23bfa	__TEXT,__cstring	clock.bedtime
+0x23c08	__TEXT,__cstring	clock-sleep-alarm://
+0x23c1d	__TEXT,__cstring	haptic.peek
+0x23c29	__TEXT,__cstring	haptic.pop
+0x23c34	__TEXT,__cstring	haptic.nope
+0x23c40	__TEXT,__cstring	system.firstpage
+0x23c51	__TEXT,__cstring	SBIconController
+0x23c62	__TEXT,__cstring	system.back
+0x23c6e	__TEXT,__cstring	com.johndie.triggr/back
+0x23c86	__TEXT,__cstring	system.unlock
+0x23c94	__TEXT,__cstring	system.locktoggle
+0x23ca6	__TEXT,__cstring	SBUIFlashlightController
+0x23cbf	__TEXT,__cstring	level
+0x23cc5	__TEXT,__cstring	com.johndie.triggr/app-request
+0x23ce4	__TEXT,__cstring	SBBacklightController
+0x23cfa	__TEXT,__cstring	DebugSwitcherSource
+0x23d0e	__TEXT,__cstring	MPMediaControls
+0x23d1e	__TEXT,__cstring	RPScreenRecorder
+0x23d2f	__TEXT,__cstring	/System/Library/Frameworks/ReplayKit.framework/ReplayKit
+0x23d68	__TEXT,__cstring	v16@?0@8
+0x23d71	__TEXT,__cstring	SBMainSwitcherControllerCoordinator
+0x23d95	__TEXT,__cstring	SBMainSwitcherViewController
+0x23db2	__TEXT,__cstring	_volumeControl
+0x23dc1	__TEXT,__cstring	toggle
+0x23dc8	__TEXT,__cstring	on
+0x23dcb	__TEXT,__cstring	off
+0x23dcf	__TEXT,__cstring	flashlight
+0x23dda	__TEXT,__cstring	B8@?0
+0x23de0	__TEXT,__cstring	wifi
+0x23de5	__TEXT,__cstring	SBWiFiManager
+0x23df3	__TEXT,__cstring	bluetooth
+0x23dfd	__TEXT,__cstring	BluetoothManager
+0x23e0e	__TEXT,__cstring	rotation
+0x23e17	__TEXT,__cstring	SBOrientationLockManager
+0x23e30	__TEXT,__cstring	lowpower
+0x23e39	__TEXT,__cstring	_PMLowPowerMode
+0x23e49	__TEXT,__cstring	/System/Library/PrivateFrameworks/LowPowerMode.framework/LowPowerMode
+0x23e8f	__TEXT,__cstring	kPMLPMSourceSettings
+0x23ea4	__TEXT,__cstring	kPMLPMSourceControlCenter
+0x23ebe	__TEXT,__cstring	ControlCenter
+0x23ecc	__TEXT,__cstring	v20@?0B8@"NSError"12
+0x23ee1	__TEXT,__cstring	airplane
+0x23eea	__TEXT,__cstring	SBAirplaneModeController
+0x23f03	__TEXT,__cstring	cellular
+0x23f0c	__TEXT,__cstring	CTCellularDataPlanGetIsEnabled
+0x23f2b	__TEXT,__cstring	CTCellularDataPlanSetIsEnabled
+0x23f4a	__TEXT,__cstring	dnd
+0x23f4e	__TEXT,__cstring	DNDModeAssertionService
+0x23f66	__TEXT,__cstring	DNDModeAssertionDetails
+0x23f7e	__TEXT,__cstring	com.apple.donotdisturb.control-center.module
+0x23fab	__TEXT,__cstring	com.apple.control-center.manual-toggle
+0x23fd2	__TEXT,__cstring	com.apple.donotdisturb.mode.default
+0x23ff6	__TEXT,__cstring	0`
+0x23ff9	__TEXT,__cstring	darkmode
+0x24002	__TEXT,__cstring	UISUserInterfaceStyleMode
+0x2401c	__TEXT,__cstring	nightshift
+0x24027	__TEXT,__cstring	CBBlueLightClient
+0x24039	__TEXT,__cstring	autobrightness
+0x24048	__TEXT,__cstring	BKSDisplayBrightnessSetAutoBrightnessEnabled
+0x24075	__TEXT,__cstring	com.apple.backboardd
+0x2408a	__TEXT,__cstring	mobile
+0x24091	__TEXT,__cstring	BKEnableALS
+0x2409d	__TEXT,__cstring	grayscale
+0x240a7	__TEXT,__cstring	Grayscale
+0x240b1	__TEXT,__cstring	smartinvert
+0x240bd	__TEXT,__cstring	InvertColors
+0x240ca	__TEXT,__cstring	classicinvert
+0x240d8	__TEXT,__cstring	ClassicInvertColors
+0x240ec	__TEXT,__cstring	zoom
+0x240f1	__TEXT,__cstring	ZoomTouch
+0x240fb	__TEXT,__cstring	_AXS%@Enabled
+0x24109	__TEXT,__cstring	_AXS%@SetEnabled
+0x2411a	__TEXT,__cstring	keepawake
+0x24124	__TEXT,__cstring	SBIdleTimerGlobalCoordinator
+0x24141	__TEXT,__cstring	Triggr: Keep Screen Awake
+0x2415b	__TEXT,__cstring	location
+0x24164	__TEXT,__cstring	CLLocationManager
+0x24176	__TEXT,__cstring	`
+0x24178	__TEXT,__cstring	mute
+0x2417d	__TEXT,__cstring	_ringerMuted
+0x2418a	__TEXT,__cstring	_ringerControl
+0x24199	__TEXT,__cstring	!
+0x2419b	__TEXT,__cstring	wifi:
+0x241a1	__TEXT,__cstring	bt:
+0x241a5	__TEXT,__cstring	charging
+0x241ae	__TEXT,__cstring	locked
+0x241b5	__TEXT,__cstring	music
+0x241bb	__TEXT,__cstring	headphones
+0x241c6	__TEXT,__cstring	battery<
+0x241cf	__TEXT,__cstring	battery>
+0x241d8	__TEXT,__cstring	time:
+0x241de	__TEXT,__cstring	-
+0x241e0	__TEXT,__cstring	 + 
+0x241e4	__TEXT,__cstring	Menu
+0x241e9	__TEXT,__cstring	SBApplicationController
+0x24201	__TEXT,__cstring	Open 
+0x24207	__TEXT,__cstring	None
+0x2420c	__TEXT,__cstring	ItemTitle
+0x24216	__TEXT,__cstring	%@: %@
+0x2421d	__TEXT,__cstring	Shortcut: 
+0x24228	__TEXT,__cstring	URL: 
+0x2422e	__TEXT,__cstring	Command: 
+0x24238	__TEXT,__cstring	Pause %@ s
+0x24243	__TEXT,__cstring	If 
+0x24247	__TEXT,__cstring	Otherwise
+0x24251	__TEXT,__cstring	End If
+0x24258	__TEXT,__cstring	Brightness %@%%
+0x24268	__TEXT,__cstring	Brightness Up %@%%
+0x2427b	__TEXT,__cstring	Brightness Down %@%%
+0x24290	__TEXT,__cstring	Media Volume %@%%
+0x242a2	__TEXT,__cstring	Ringer Volume %@%%
+0x242b5	__TEXT,__cstring	Message: 
+0x242bf	__TEXT,__cstring	Say: 
+0x242c5	__TEXT,__cstring	Show: 
+0x242cc	__TEXT,__cstring	AirPlay to 
+0x242d8	__TEXT,__cstring	Settings: 
+0x242e3	__TEXT,__cstring	/Library/Activator/Listeners
+0x24300	__TEXT,__cstring	Info.plist
+0x2430b	__TEXT,__cstring	title
+0x24311	__TEXT,__cstring	group
+0x24317	__TEXT,__cstring	q24@?0@"NSArray"8@"NSArray"16
+0x24335	__TEXT,__cstring	Not on Wi-Fi
+0x24342	__TEXT,__cstring	On any Wi-Fi
+0x2434f	__TEXT,__cstring	Not charging
+0x2435c	__TEXT,__cstring	Charging
+0x24365	__TEXT,__cstring	Unlocked
+0x2436e	__TEXT,__cstring	Locked
+0x24375	__TEXT,__cstring	Music not playing
+0x24387	__TEXT,__cstring	Music playing
+0x24395	__TEXT,__cstring	No headphones
+0x243a3	__TEXT,__cstring	Headphones connected
+0x243b8	__TEXT,__cstring	Low Power Mode off
+0x243cb	__TEXT,__cstring	Low Power Mode on
+0x243dd	__TEXT,__cstring	Flashlight off
+0x243ec	__TEXT,__cstring	Flashlight on
+0x243fa	__TEXT,__cstring	Battery below %@%%
+0x2440d	__TEXT,__cstring	Battery above %@%%
+0x24420	__TEXT,__cstring	Between %02d:%02d and %02d:%02d
+0x24440	__TEXT,__cstring	Still true after %@ s
+0x24456	__TEXT,__cstring	WIFI
+0x2445b	__TEXT,__cstring	Wi-Fi
+0x24461	__TEXT,__cstring	Bluetooth
+0x2446b	__TEXT,__cstring	MOBILE_DATA_SETTINGS_ID
+0x24483	__TEXT,__cstring	Cellular
+0x2448c	__TEXT,__cstring	NOTIFICATIONS_ID
+0x2449d	__TEXT,__cstring	Notifications
+0x244ab	__TEXT,__cstring	Sounds
+0x244b2	__TEXT,__cstring	Sounds & Haptics
+0x244c3	__TEXT,__cstring	General
+0x244cb	__TEXT,__cstring	Control Center
+0x244da	__TEXT,__cstring	DISPLAY
+0x244e2	__TEXT,__cstring	Display & Brightness
+0x244f7	__TEXT,__cstring	Wallpaper
+0x24501	__TEXT,__cstring	BATTERY_USAGE
+0x2450f	__TEXT,__cstring	Battery
+0x24517	__TEXT,__cstring	Privacy
+0x2451f	__TEXT,__cstring	Privacy & Security
+0x24532	__TEXT,__cstring	System
+0x24539	__TEXT,__cstring	Power
+0x2453f	__TEXT,__cstring	Toggle
+0x24546	__TEXT,__cstring	Turn On
+0x2454e	__TEXT,__cstring	Turn Off
+0x24557	__TEXT,__cstring	Media
+0x2455d	__TEXT,__cstring	Phone
+0x24563	__TEXT,__cstring	Compose
+0x2456b	__TEXT,__cstring	Clock
+0x24571	__TEXT,__cstring	Haptics
+0x24579	__TEXT,__cstring	Flashlight
+0x24584	__TEXT,__cstring	Record
+0x2458b	__TEXT,__cstring	Speech & Clipboard
+0x2459e	__TEXT,__cstring	Snapper 3
+0x245a8	__TEXT,__cstring	CopyLog
+0x245b0	__TEXT,__cstring	Go to Home Screen
+0x245c2	__TEXT,__cstring	App Switcher
+0x245cf	__TEXT,__cstring	Last App
+0x245d8	__TEXT,__cstring	Quit Current App
+0x245e9	__TEXT,__cstring	Notification Center
+0x245fd	__TEXT,__cstring	Spotlight
+0x24607	__TEXT,__cstring	Reachability
+0x24614	__TEXT,__cstring	Siri
+0x24619	__TEXT,__cstring	Take Screenshot
+0x24629	__TEXT,__cstring	Screen Recording
+0x2463a	__TEXT,__cstring	Close Background Apps
+0x24650	__TEXT,__cstring	Vibrate
+0x24658	__TEXT,__cstring	Do Nothing
+0x24663	__TEXT,__cstring	First Home Screen Page
+0x2467a	__TEXT,__cstring	Back (in Apps)
+0x24689	__TEXT,__cstring	Unlock
+0x24690	__TEXT,__cstring	Lock / Unlock
+0x2469e	__TEXT,__cstring	Sleep
+0x246a4	__TEXT,__cstring	Lock Device
+0x246b0	__TEXT,__cstring	Respring
+0x246b9	__TEXT,__cstring	Power Off Slider
+0x246ca	__TEXT,__cstring	Safe Mode
+0x246d4	__TEXT,__cstring	Restart
+0x246dc	__TEXT,__cstring	Power Off
+0x246e6	__TEXT,__cstring	toggle.flashlight
+0x246f8	__TEXT,__cstring	Toggle Flashlight
+0x2470a	__TEXT,__cstring	toggle.wifi
+0x24716	__TEXT,__cstring	Toggle Wi-Fi
+0x24723	__TEXT,__cstring	toggle.bluetooth
+0x24734	__TEXT,__cstring	Toggle Bluetooth
+0x24745	__TEXT,__cstring	toggle.airplane
+0x24755	__TEXT,__cstring	Toggle Airplane Mode
+0x2476a	__TEXT,__cstring	toggle.cellular
+0x2477a	__TEXT,__cstring	Toggle Cellular Data
+0x2478f	__TEXT,__cstring	toggle.dnd
+0x2479a	__TEXT,__cstring	Toggle Do Not Disturb
+0x247b0	__TEXT,__cstring	toggle.lowpower
+0x247c0	__TEXT,__cstring	Toggle Low Power Mode
+0x247d6	__TEXT,__cstring	toggle.rotation
+0x247e6	__TEXT,__cstring	Toggle Rotation Lock
+0x247fb	__TEXT,__cstring	toggle.mute
+0x24807	__TEXT,__cstring	Toggle Mute
+0x24813	__TEXT,__cstring	toggle.darkmode
+0x24823	__TEXT,__cstring	Toggle Dark Mode
+0x24834	__TEXT,__cstring	toggle.nightshift
+0x24846	__TEXT,__cstring	Toggle Night Shift
+0x24859	__TEXT,__cstring	toggle.autobrightness
+0x2486f	__TEXT,__cstring	Toggle Auto-Brightness
+0x24886	__TEXT,__cstring	toggle.keepawake
+0x24897	__TEXT,__cstring	Toggle Keep Screen Awake
+0x248b0	__TEXT,__cstring	toggle.location
+0x248c0	__TEXT,__cstring	Toggle Location Services
+0x248d9	__TEXT,__cstring	toggle.grayscale
+0x248ea	__TEXT,__cstring	Toggle Grayscale
+0x248fb	__TEXT,__cstring	toggle.smartinvert
+0x2490e	__TEXT,__cstring	Toggle Smart Invert
+0x24922	__TEXT,__cstring	toggle.classicinvert
+0x24937	__TEXT,__cstring	Toggle Classic Invert
+0x2494d	__TEXT,__cstring	toggle.zoom
+0x24959	__TEXT,__cstring	Toggle Zoom
+0x24965	__TEXT,__cstring	on.flashlight
+0x24973	__TEXT,__cstring	Flashlight On
+0x24981	__TEXT,__cstring	on.wifi
+0x24989	__TEXT,__cstring	Wi-Fi On
+0x24992	__TEXT,__cstring	on.bluetooth
+0x2499f	__TEXT,__cstring	Bluetooth On
+0x249ac	__TEXT,__cstring	on.airplane
+0x249b8	__TEXT,__cstring	Airplane Mode On
+0x249c9	__TEXT,__cstring	on.cellular
+0x249d5	__TEXT,__cstring	Cellular Data On
+0x249e6	__TEXT,__cstring	on.dnd
+0x249ed	__TEXT,__cstring	Do Not Disturb On
+0x249ff	__TEXT,__cstring	on.lowpower
+0x24a0b	__TEXT,__cstring	Low Power Mode On
+0x24a1d	__TEXT,__cstring	on.rotation
+0x24a29	__TEXT,__cstring	Rotation Lock On
+0x24a3a	__TEXT,__cstring	on.mute
+0x24a42	__TEXT,__cstring	Mute On
+0x24a4a	__TEXT,__cstring	on.darkmode
+0x24a56	__TEXT,__cstring	Dark Mode On
+0x24a63	__TEXT,__cstring	on.nightshift
+0x24a71	__TEXT,__cstring	Night Shift On
+0x24a80	__TEXT,__cstring	on.autobrightness
+0x24a92	__TEXT,__cstring	Auto-Brightness On
+0x24aa5	__TEXT,__cstring	on.keepawake
+0x24ab2	__TEXT,__cstring	Keep Screen Awake On
+0x24ac7	__TEXT,__cstring	on.location
+0x24ad3	__TEXT,__cstring	Location Services On
+0x24ae8	__TEXT,__cstring	on.grayscale
+0x24af5	__TEXT,__cstring	Grayscale On
+0x24b02	__TEXT,__cstring	on.smartinvert
+0x24b11	__TEXT,__cstring	Smart Invert On
+0x24b21	__TEXT,__cstring	on.classicinvert
+0x24b32	__TEXT,__cstring	Classic Invert On
+0x24b44	__TEXT,__cstring	on.zoom
+0x24b4c	__TEXT,__cstring	Zoom On
+0x24b54	__TEXT,__cstring	off.flashlight
+0x24b63	__TEXT,__cstring	Flashlight Off
+0x24b72	__TEXT,__cstring	off.wifi
+0x24b7b	__TEXT,__cstring	Wi-Fi Off
+0x24b85	__TEXT,__cstring	off.bluetooth
+0x24b93	__TEXT,__cstring	Bluetooth Off
+0x24ba1	__TEXT,__cstring	off.airplane
+0x24bae	__TEXT,__cstring	Airplane Mode Off
+0x24bc0	__TEXT,__cstring	off.cellular
+0x24bcd	__TEXT,__cstring	Cellular Data Off
+0x24bdf	__TEXT,__cstring	off.dnd
+0x24be7	__TEXT,__cstring	Do Not Disturb Off
+0x24bfa	__TEXT,__cstring	off.lowpower
+0x24c07	__TEXT,__cstring	Low Power Mode Off
+0x24c1a	__TEXT,__cstring	off.rotation
+0x24c27	__TEXT,__cstring	Rotation Lock Off
+0x24c39	__TEXT,__cstring	off.mute
+0x24c42	__TEXT,__cstring	Mute Off
+0x24c4b	__TEXT,__cstring	off.darkmode
+0x24c58	__TEXT,__cstring	Dark Mode Off
+0x24c66	__TEXT,__cstring	off.nightshift
+0x24c75	__TEXT,__cstring	Night Shift Off
+0x24c85	__TEXT,__cstring	off.autobrightness
+0x24c98	__TEXT,__cstring	Auto-Brightness Off
+0x24cac	__TEXT,__cstring	off.keepawake
+0x24cba	__TEXT,__cstring	Keep Screen Awake Off
+0x24cd0	__TEXT,__cstring	off.location
+0x24cdd	__TEXT,__cstring	Location Services Off
+0x24cf3	__TEXT,__cstring	off.grayscale
+0x24d01	__TEXT,__cstring	Grayscale Off
+0x24d0f	__TEXT,__cstring	off.smartinvert
+0x24d1f	__TEXT,__cstring	Smart Invert Off
+0x24d30	__TEXT,__cstring	off.classicinvert
+0x24d42	__TEXT,__cstring	Classic Invert Off
+0x24d55	__TEXT,__cstring	off.zoom
+0x24d5e	__TEXT,__cstring	Zoom Off
+0x24d67	__TEXT,__cstring	Play / Pause
+0x24d74	__TEXT,__cstring	Next Track
+0x24d7f	__TEXT,__cstring	Previous Track
+0x24d8e	__TEXT,__cstring	Volume Up
+0x24d98	__TEXT,__cstring	Volume Down
+0x24da4	__TEXT,__cstring	Press Volume Up
+0x24db4	__TEXT,__cstring	Press Volume Down
+0x24dc6	__TEXT,__cstring	AirPlay Picker
+0x24dd5	__TEXT,__cstring	Play on iPhone
+0x24de4	__TEXT,__cstring	Open Now Playing App
+0x24df9	__TEXT,__cstring	Answer Call
+0x24e05	__TEXT,__cstring	End or Decline Call
+0x24e19	__TEXT,__cstring	Favorites
+0x24e23	__TEXT,__cstring	Recents
+0x24e2b	__TEXT,__cstring	Contacts
+0x24e34	__TEXT,__cstring	Keypad
+0x24e3b	__TEXT,__cstring	Voicemail
+0x24e45	__TEXT,__cstring	New Message
+0x24e51	__TEXT,__cstring	New Email
+0x24e5b	__TEXT,__cstring	Alarms
+0x24e62	__TEXT,__cstring	World Clock
+0x24e6e	__TEXT,__cstring	Stopwatch
+0x24e78	__TEXT,__cstring	Timer
+0x24e7e	__TEXT,__cstring	Sleep / Wake Up
+0x24e8e	__TEXT,__cstring	Light Tap
+0x24e98	__TEXT,__cstring	Strong Tap
+0x24ea3	__TEXT,__cstring	Three Taps
+0x24eae	__TEXT,__cstring	Flashlight Brighter
+0x24ec2	__TEXT,__cstring	Flashlight Dimmer
+0x24ed4	__TEXT,__cstring	Record Video
+0x24ee1	__TEXT,__cstring	Record Voice Memo
+0x24ef3	__TEXT,__cstring	Speak Time
+0x24efe	__TEXT,__cstring	Speak Battery Level
+0x24f12	__TEXT,__cstring	Speak Clipboard
+0x24f22	__TEXT,__cstring	Clear Clipboard
+0x24f32	__TEXT,__cstring	hold
+0x24f37	__TEXT,__cstring	statusbar.%@.%@
+0x24f47	__TEXT,__cstring	left
+0x24f4c	__TEXT,__cstring	right
+0x24f52	__TEXT,__cstring	statusbar.
+0x24f5d	__TEXT,__cstring	SBIconLocationRoot
+0x24f70	__TEXT,__cstring	SBIconLocationDock
+0x24f83	__TEXT,__cstring	SBIconLocationFloatingDock
+0x24f9e	__TEXT,__cstring	SBIconLocationFolder
+0x24fb3	__TEXT,__cstring	%@:%@
+0x24fb9	__TEXT,__cstring	edge.bottomleft
+0x24fc9	__TEXT,__cstring	edge.bottomright
+0x24fda	__TEXT,__cstring	edge.topleft
+0x24fe7	__TEXT,__cstring	edge.topright
+0x24ff5	__TEXT,__cstring	TGClockTrigger
+0x25004	__TEXT,__cstring	PCPersistentTimer
+0x25016	__TEXT,__cstring	/System/Library/PrivateFrameworks/PersistentConnection.framework/PersistentConnection
+0x2506c	__TEXT,__cstring	com.johndie.triggr.schedule
+0x25088	__TEXT,__cstring	v16@?0@"NSTimer"8
+0x2509a	__TEXT,__cstring	v16@?0@"NSNotification"8
+0x250b3	__TEXT,__cstring	weekdays
+0x250bc	__TEXT,__cstring	weekends
+0x250c5	__TEXT,__cstring	1234567
+0x250cd	__TEXT,__cstring	RequireUnlock
+0x250db	__TEXT,__cstring	BlockedApps
+0x250e7	__TEXT,__cstring	AllowAPI
+0x250f0	__TEXT,__cstring	LockReplaces
+0x250fd	__TEXT,__cstring	StatusBarSingleTap
+0x25110	__TEXT,__cstring	ShowBanners
+0x2511c	__TEXT,__cstring	ShortcutsInBackground
+0x25132	__TEXT,__cstring	AskBeforeRestart
+0x25143	__TEXT,__cstring	Menus
+0x25149	__TEXT,__cstring	id
+0x2514c	__TEXT,__cstring	name
+0x25151	__TEXT,__cstring	Enabled
+0x25159	__TEXT,__cstring	v32@?0@"NSString"8@16^B24
+0x25173	__TEXT,__cstring	icon.flick
+0x2517e	__TEXT,__cstring	homescreen.
+0x2518a	__TEXT,__cstring	notification.
+0x25198	__TEXT,__cstring	proximity.
+0x251a3	__TEXT,__cstring	music.
+0x251aa	__TEXT,__cstring	call.
+0x251b0	__TEXT,__cstring	com.johndie.triggr/relay-wanted
+0x251d0	__TEXT,__cstring	motion.shake
+0x251dd	__TEXT,__cstring	SBAudioRoutesChangedNotification
+0x251fe	__TEXT,__cstring	SBWifiManagerLinkDidChangeNotification
+0x25225	__TEXT,__cstring	BluetoothDeviceConnectSuccessNotification
+0x2524f	__TEXT,__cstring	BluetoothDeviceDisconnectSuccessNotification
+0x2527c	__TEXT,__cstring	battery.above:
+0x2528b	__TEXT,__cstring	battery.below:
+0x2529a	__TEXT,__cstring	com.apple.system.powersources.percent
+0x252c0	__TEXT,__cstring	app.launched:
+0x252ce	__TEXT,__cstring	BluetoothStateChangedNotification
+0x252f0	__TEXT,__cstring	com.apple.springboard.lockstate
+0x25310	__TEXT,__cstring	com.apple.springboard.hasBlankedScreen
+0x25337	__TEXT,__cstring	wifi.
+0x2533d	__TEXT,__cstring	bluetooth.
+0x25348	__TEXT,__cstring	lowpower.
+0x25352	__TEXT,__cstring	device.
+0x2535a	__TEXT,__cstring	display.
+0x25363	__TEXT,__cstring	notification.app:
+0x25375	__TEXT,__cstring	edge.leftup
+0x25381	__TEXT,__cstring	edge.leftdown
+0x2538f	__TEXT,__cstring	edge.rightup
+0x2539c	__TEXT,__cstring	edge.rightdown
+0x253ab	__TEXT,__cstring	SBWindowScene
+0x253b9	__TEXT,__cstring	edge.left
+0x253c3	__TEXT,__cstring	edge.right
+0x253ce	__TEXT,__cstring	edge.left2
+0x253d9	__TEXT,__cstring	edge.right2
+0x253e5	__TEXT,__cstring	edge.top2
+0x253ef	__TEXT,__cstring	edge.bottom2
+0x253fc	__TEXT,__cstring	carplay.
+0x25405	__TEXT,__cstring	lsclock.
+0x2540e	__TEXT,__cstring	lsclock.hold
+0x2541b	__TEXT,__cstring	lsclock.doubletap
+0x2542d	__TEXT,__cstring	lsclock.swipeleft
+0x2543f	__TEXT,__cstring	lsclock.swiperight
+0x25452	__TEXT,__cstring	lsclock.swipedown
+0x25464	__TEXT,__cstring	/System/Library/PrivateFrameworks/CarKit.framework/CarKit
+0x2549e	__TEXT,__cstring	CARSessionStatus
+0x254af	__TEXT,__cstring	time.sunrise
+0x254bc	__TEXT,__cstring	time.sunset
+0x254c8	__TEXT,__cstring	TimeZone.bundle
+0x254d8	__TEXT,__cstring	Weather.framework
+0x254ea	__TEXT,__cstring	Wea.bundle
+0x254f5	__TEXT,__cstring	Routine.bundle
+0x25504	__TEXT,__cstring	/System/Library/LocationBundles/
+0x25525	__TEXT,__cstring	lib.
+0x2552a	__TEXT,__cstring	com.johndie.triggr/ta/
+0x25541	__TEXT,__cstring	com.johndie.triggr/t/
+0x25557	__TEXT,__cstring	left.
+0x2555d	__TEXT,__cstring	right.
+0x25564	__TEXT,__cstring	tap
+0x25568	__TEXT,__cstring	doubletap
+0x25572	__TEXT,__cstring	statusbar.%@%@
+0x25581	__TEXT,__cstring	run/
+0x25586	__TEXT,__cstring	trigger/
+0x2558f	__TEXT,__cstring	menu/
+0x25595	__TEXT,__cstring	com.johndie.triggr/api/
+0x255ad	__TEXT,__cstring	icon.flickup:
+0x255bb	__TEXT,__cstring	icon.flickdown:
+0x255cb	__TEXT,__cstring	icon.flickleft:
+0x255db	__TEXT,__cstring	icon.flickright:
+0x255ec	__TEXT,__cstring	Home Button
+0x255f8	__TEXT,__cstring	Touch ID
+0x25601	__TEXT,__cstring	Light Double Tap: touch the sensor twice without clicking. Finger Match works on the Lock Screen only.
+0x25668	__TEXT,__cstring	Lock Button
+0x25674	__TEXT,__cstring	Volume Buttons
+0x25683	__TEXT,__cstring	Up, then Down is two quick presses; it runs as the second button goes down. While one is assigned, a single press waits a moment for the other button.
+0x2571a	__TEXT,__cstring	Lock + Volume
+0x25728	__TEXT,__cstring	Press the lock button and a volume button together. Holds run after half a second; keep holding and iOS's power-off slider still appears.
+0x257b2	__TEXT,__cstring	Action Button
+0x257c0	__TEXT,__cstring	Hold is what iOS uses for the button's own action. Assign Hold to replace it; Press and Double Press are extra.
+0x25830	__TEXT,__cstring	Mute Switch
+0x2583c	__TEXT,__cstring	Toggled Twice: flip it and back quickly; it runs on the flip back. While it's assigned, a single flip waits a moment.
+0x258b2	__TEXT,__cstring	Home Bar
+0x258bb	__TEXT,__cstring	Double tap the line at the bottom, inside apps. Single taps still work.
+0x25903	__TEXT,__cstring	Lock Screen Clock
+0x25915	__TEXT,__cstring	Gestures that start on the big Lock Screen clock. The rest of the Lock Screen is unchanged.
+0x25971	__TEXT,__cstring	Headset Button
+0x25980	__TEXT,__cstring	The button on wired headphones. Hold replaces Siri while it's assigned.
+0x259c8	__TEXT,__cstring	Status Bar
+0x259d3	__TEXT,__cstring	Left and Right are each half of the bar. A single tap still scrolls to the top.
+0x25a23	__TEXT,__cstring	Home Screen Icons
+0x25a35	__TEXT,__cstring	A quick flick that starts on an app or folder icon.
+0x25a69	__TEXT,__cstring	Screen Edges
+0x25a76	__TEXT,__cstring	Slide from the very edge of the screen. An assigned part of an edge stops doing its iOS gesture there, so open a trigger to see what it takes over.
+0x25b0a	__TEXT,__cstring	Home Screen Gestures
+0x25b1f	__TEXT,__cstring	On an empty part of a Home Screen page, not on an icon.
+0x25b57	__TEXT,__cstring	Multi-Finger Gestures
+0x25b6d	__TEXT,__cstring	Inside apps. The app still sees the gesture too, so pick ones it doesn't use; two- and three-finger taps and swipes are safest.
+0x25bed	__TEXT,__cstring	Motion
+0x25bf4	__TEXT,__cstring	Uses iOS's own shake detection, so no extra battery.
+0x25c29	__TEXT,__cstring	Charger & Headphones
+0x25c3e	__TEXT,__cstring	Taking out an AirPod can count as Headphones Disconnected.
+0x25c79	__TEXT,__cstring	CarPlay
+0x25c81	__TEXT,__cstring	Wired and wireless CarPlay.
+0x25c9d	__TEXT,__cstring	Sunrise & Sunset
+0x25cae	__TEXT,__cstring	Worked out from the location iOS already has. No tracking.
+0x25ce9	__TEXT,__cstring	Phone Calls
+0x25cf5	__TEXT,__cstring	Phone, FaceTime and other calling apps.
+0x25d1d	__TEXT,__cstring	Any notification. Triggr only sees which app sent it. For one app, use Custom Events.
+0x25d73	__TEXT,__cstring	Music
+0x25d79	__TEXT,__cstring	Any app in Now Playing: Music, Spotify, YouTube, podcasts…
+0x25db6	__TEXT,__cstring	Proximity Sensor
+0x25dc7	__TEXT,__cstring	The sensor by the earpiece. It stays on while the screen is on (a little battery). Wave is a quick cover; with Wave assigned, Cover waits half a second.
+0x25e60	__TEXT,__cstring	State Changes
+0x25e6e	__TEXT,__cstring	Runs after the change. Control Center's Wi-Fi button only leaves the network; Wi-Fi stays on.
+0x25ecc	__TEXT,__cstring	home.single
+0x25ed8	__TEXT,__cstring	Single Press
+0x25ee5	__TEXT,__cstring	home.double
+0x25ef1	__TEXT,__cstring	Double Press
+0x25efe	__TEXT,__cstring	home.triple
+0x25f0a	__TEXT,__cstring	Triple Press
+0x25f17	__TEXT,__cstring	home.shorthold
+0x25f26	__TEXT,__cstring	Short Hold
+0x25f31	__TEXT,__cstring	home.longhold
+0x25f3f	__TEXT,__cstring	Long Hold
+0x25f49	__TEXT,__cstring	touchid.doubletap
+0x25f5b	__TEXT,__cstring	Light Double Tap
+0x25f6c	__TEXT,__cstring	touchid.match
+0x25f7a	__TEXT,__cstring	Finger Match (Lock Screen)
+0x25f95	__TEXT,__cstring	lock.single
+0x25fa1	__TEXT,__cstring	lock.double
+0x25fad	__TEXT,__cstring	lock.triple
+0x25fb9	__TEXT,__cstring	lock.longhold
+0x25fc7	__TEXT,__cstring	Hold
+0x25fcc	__TEXT,__cstring	volume.up
+0x25fd6	__TEXT,__cstring	Up Press
+0x25fdf	__TEXT,__cstring	volume.down
+0x25feb	__TEXT,__cstring	Down Press
+0x25ff6	__TEXT,__cstring	volume.uphold
+0x26004	__TEXT,__cstring	Up Hold
+0x2600c	__TEXT,__cstring	volume.downhold
+0x2601c	__TEXT,__cstring	Down Hold
+0x26026	__TEXT,__cstring	volume.updown
+0x26034	__TEXT,__cstring	Up, then Down
+0x26042	__TEXT,__cstring	volume.downup
+0x26050	__TEXT,__cstring	Down, then Up
+0x2605e	__TEXT,__cstring	volume.both
+0x2606a	__TEXT,__cstring	Press Both
+0x26075	__TEXT,__cstring	volume.bothhold
+0x26085	__TEXT,__cstring	Hold Both
+0x2608f	__TEXT,__cstring	combo.sideup
+0x2609c	__TEXT,__cstring	combo.sidedown
+0x260ab	__TEXT,__cstring	combo.sideuphold
+0x260bc	__TEXT,__cstring	combo.sidedownhold
+0x260cf	__TEXT,__cstring	action.press
+0x260dc	__TEXT,__cstring	Press
+0x260e2	__TEXT,__cstring	action.double
+0x260f0	__TEXT,__cstring	action.hold
+0x260fc	__TEXT,__cstring	Switched to Silent
+0x2610f	__TEXT,__cstring	Switched to Ring
+0x26120	__TEXT,__cstring	mute.toggle
+0x2612c	__TEXT,__cstring	Toggled
+0x26134	__TEXT,__cstring	mute.twice
+0x2613f	__TEXT,__cstring	Toggled Twice
+0x2614d	__TEXT,__cstring	homebar.doubletap
+0x2615f	__TEXT,__cstring	Double Tap
+0x2616a	__TEXT,__cstring	Tap and Hold
+0x26177	__TEXT,__cstring	Swipe Left
+0x26182	__TEXT,__cstring	Swipe Right
+0x2618e	__TEXT,__cstring	Swipe Down
+0x26199	__TEXT,__cstring	headset.single
+0x261a8	__TEXT,__cstring	headset.hold
+0x261b5	__TEXT,__cstring	statusbar.tap
+0x261c3	__TEXT,__cstring	Tap
+0x261c7	__TEXT,__cstring	statusbar.doubletap
+0x261db	__TEXT,__cstring	statusbar.hold
+0x261ea	__TEXT,__cstring	statusbar.left.tap
+0x261fd	__TEXT,__cstring	Left Tap
+0x26206	__TEXT,__cstring	statusbar.left.doubletap
+0x2621f	__TEXT,__cstring	Left Double Tap
+0x2622f	__TEXT,__cstring	statusbar.left.hold
+0x26243	__TEXT,__cstring	Left Hold
+0x2624d	__TEXT,__cstring	statusbar.right.tap
+0x26261	__TEXT,__cstring	Right Tap
+0x2626b	__TEXT,__cstring	statusbar.right.doubletap
+0x26285	__TEXT,__cstring	Right Double Tap
+0x26296	__TEXT,__cstring	statusbar.right.hold
+0x262ab	__TEXT,__cstring	Right Hold
+0x262b6	__TEXT,__cstring	Flick Up
+0x262bf	__TEXT,__cstring	Flick Down
+0x262ca	__TEXT,__cstring	Flick Left
+0x262d5	__TEXT,__cstring	Flick Right
+0x262e1	__TEXT,__cstring	Slide In from Left
+0x262f4	__TEXT,__cstring	Slide In from Right
+0x26308	__TEXT,__cstring	Two-Finger Slide In from Left
+0x26326	__TEXT,__cstring	Two-Finger Slide In from Right
+0x26345	__TEXT,__cstring	Swipe Up from Bottom Left
+0x2635f	__TEXT,__cstring	Swipe Up from Bottom Right
+0x2637a	__TEXT,__cstring	Slide Up Along Left Edge
+0x26393	__TEXT,__cstring	Slide Down Along Left Edge
+0x263ae	__TEXT,__cstring	Slide Up Along Right Edge
+0x263c8	__TEXT,__cstring	Slide Down Along Right Edge
+0x263e4	__TEXT,__cstring	Slide Down from Top Left
+0x263fd	__TEXT,__cstring	Slide Down from Top Right
+0x26417	__TEXT,__cstring	Two-Finger Slide Down from Top
+0x26436	__TEXT,__cstring	Two-Finger Slide Up from Bottom
+0x26456	__TEXT,__cstring	Pinch In
+0x2645f	__TEXT,__cstring	Pinch Out
+0x26469	__TEXT,__cstring	Two-Finger Swipe Up
+0x2647d	__TEXT,__cstring	Two-Finger Swipe Down
+0x26493	__TEXT,__cstring	Double Tap Empty Space
+0x264aa	__TEXT,__cstring	Shake Device
+0x264b7	__TEXT,__cstring	Charger Connected
+0x264c9	__TEXT,__cstring	Charger Disconnected
+0x264de	__TEXT,__cstring	Headphones Connected
+0x264f3	__TEXT,__cstring	Headphones Disconnected
+0x2650b	__TEXT,__cstring	CarPlay Connected
+0x2651d	__TEXT,__cstring	CarPlay Disconnected
+0x26532	__TEXT,__cstring	Sunrise
+0x2653a	__TEXT,__cstring	Sunset
+0x26541	__TEXT,__cstring	Incoming Call
+0x2654f	__TEXT,__cstring	Call Answered
+0x2655d	__TEXT,__cstring	Outgoing Call
+0x2656b	__TEXT,__cstring	Call Ended
+0x26576	__TEXT,__cstring	notification.any
+0x26587	__TEXT,__cstring	Any Notification
+0x26598	__TEXT,__cstring	Playback Started
+0x265a9	__TEXT,__cstring	Playback Paused or Stopped
+0x265c4	__TEXT,__cstring	music.changed
+0x265d2	__TEXT,__cstring	Song Changed
+0x265df	__TEXT,__cstring	proximity.cover
+0x265ef	__TEXT,__cstring	Cover
+0x265f5	__TEXT,__cstring	proximity.wave
+0x26604	__TEXT,__cstring	Wave (Cover Briefly)
+0x26619	__TEXT,__cstring	Wi-Fi Turned On
+0x26629	__TEXT,__cstring	Wi-Fi Turned Off
+0x2663a	__TEXT,__cstring	Joined Wi-Fi Network
+0x2664f	__TEXT,__cstring	Left Wi-Fi Network
+0x26662	__TEXT,__cstring	Bluetooth Turned On
+0x26676	__TEXT,__cstring	Bluetooth Turned Off
+0x2668b	__TEXT,__cstring	Device Locked
+0x26699	__TEXT,__cstring	Device Unlocked
+0x266a9	__TEXT,__cstring	Screen Turned On
+0x266ba	__TEXT,__cstring	Screen Turned Off
+0x266cc	__TEXT,__cstring	home.
+0x266d2	__TEXT,__cstring	touchid.
+0x266db	__TEXT,__cstring	homebar.
+0x266e4	__TEXT,__cstring	/usr/lib/libMobileGestalt.dylib
+0x26704	__TEXT,__cstring	MGCopyAnswer
+0x26711	__TEXT,__cstring	HomeButtonType
+0x26720	__TEXT,__cstring	Run %@?
+0x26728	__TEXT,__cstring	Cancel
+0x2672f	__TEXT,__cstring	v16@?0@"UIAlertAction"8
+0x26747	__TEXT,__cstring	Run
+0x2674b	__TEXT,__cstring	Your iPhone will turn off.
+0x26766	__TEXT,__cstring	Your iPhone will restart.
+0x26780	__TEXT,__cstring	The Home Screen will restart. Open apps close.
+0x267af	__TEXT,__cstring	i
+0x267b1	__TEXT,__cstring	media.
+0x267b8	__TEXT,__cstring	VCVoiceShortcutClient
+0x267ce	__TEXT,__cstring	/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient
+0x26822	__TEXT,__cstring	WFAccessibilityWorkflowRunnerClient
+0x26846	__TEXT,__cstring	1`
+0x26849	__TEXT,__cstring	sh
+0x2684c	__TEXT,__cstring	-c
+0x2684f	__TEXT,__cstring	/dev/null
+0x26859	__TEXT,__cstring	PATH=/var/jb/usr/local/bin:/var/jb/usr/bin:/var/jb/bin:/var/jb/usr/sbin:/var/jb/sbin:/usr/bin:/bin:/usr/sbin:/sbin
+0x268cc	__TEXT,__cstring	HOME=/var/mobile
+0x268dd	__TEXT,__cstring	USER=mobile
+0x268e9	__TEXT,__cstring	LANG=en_US.UTF-8
+0x268fa	__TEXT,__cstring	/bin/sh
+0x26902	__TEXT,__cstring	/var/tmp/com.johndie.triggr-run
+0x26922	__TEXT,__cstring	%.6f-%u.plist
+0x26930	__TEXT,__cstring	Action
+0x26937	__TEXT,__cstring	com.johndie.triggr/run-request
+0x26956	__TEXT,__cstring	com.johndie.triggr/airplay-list-ready
+0x2697c	__TEXT,__cstring	/var/mobile/Library/Preferences/com.johndie.triggr.airplay.plist
+0x269bd	__TEXT,__cstring	/var/jb
+0x269c5	__TEXT,__cstring	inapp.twotap
+0x269d2	__TEXT,__cstring	Two-Finger Tap
+0x269e1	__TEXT,__cstring	inapp.threetap
+0x269f0	__TEXT,__cstring	Three-Finger Tap
+0x26a01	__TEXT,__cstring	inapp.twoup
+0x26a0d	__TEXT,__cstring	inapp.twodown
+0x26a1b	__TEXT,__cstring	inapp.twoleft
+0x26a29	__TEXT,__cstring	Two-Finger Swipe Left
+0x26a3f	__TEXT,__cstring	inapp.tworight
+0x26a4e	__TEXT,__cstring	Two-Finger Swipe Right
+0x26a65	__TEXT,__cstring	inapp.threeup
+0x26a73	__TEXT,__cstring	Three-Finger Swipe Up
+0x26a89	__TEXT,__cstring	inapp.threedown
+0x26a99	__TEXT,__cstring	Three-Finger Swipe Down
+0x26ab1	__TEXT,__cstring	inapp.threeleft
+0x26ac1	__TEXT,__cstring	Three-Finger Swipe Left
+0x26ad9	__TEXT,__cstring	inapp.threeright
+0x26aea	__TEXT,__cstring	Three-Finger Swipe Right
+0x26b03	__TEXT,__cstring	inapp.pinchin
+0x26b11	__TEXT,__cstring	inapp.pinchout
+0x26b20	__TEXT,__cstring	inapp.fourtap
+0x26b2e	__TEXT,__cstring	Four-Finger Tap
+0x26b3e	__TEXT,__cstring	inapp.fivetap
+0x26b4c	__TEXT,__cstring	Five-Finger Tap
+0x26b5c	__TEXT,__cstring	inapp.threepinchin
+0x26b6f	__TEXT,__cstring	Three-Finger Pinch
+0x26b82	__TEXT,__cstring	inapp.threepinchout
+0x26b96	__TEXT,__cstring	Three-Finger Spread
+0x26baa	__TEXT,__cstring	inapp.fourpinchin
+0x26bbc	__TEXT,__cstring	Four-Finger Pinch
+0x26bce	__TEXT,__cstring	inapp.fourpinchout
+0x26be1	__TEXT,__cstring	Four-Finger Spread
+0x26bf4	__TEXT,__cstring	inapp.fivepinchin
+0x26c06	__TEXT,__cstring	Five-Finger Pinch
+0x26c18	__TEXT,__cstring	inapp.fivepinchout
+0x26c2b	__TEXT,__cstring	Five-Finger Spread
+0x26c3e	__TEXT,__cstring	RingerSwitchEvent
+0x26c50	__TEXT,__cstring	edge.%@%@
+0x26c5a	__TEXT,__cstring	up
+0x26c5d	__TEXT,__cstring	down
+0x26c62	__TEXT,__cstring	edge.
+0x26c68	__TEXT,__cstring	combo.
+0x26c6f	__TEXT,__cstring	Q
+0x26c71	__TEXT,__cstring	/System/Library/PrivateFrameworks/MediaRemote.framework/MediaRemote
+0x26cb5	__TEXT,__cstring	MRMediaRemoteGetNowPlayingInfo
+0x26cd4	__TEXT,__cstring	v16@?0^{__CFDictionary=}8
+0x26cee	__TEXT,__cstring	kMRMediaRemoteNowPlayingInfoTitle
+0x26d10	__TEXT,__cstring	kMRMediaRemoteNowPlayingInfoArtist
+0x26d33	__TEXT,__cstring	%@
+%@
+0x26d39	__TEXT,__cstring	/var/tmp/com.johndie.triggr.actionbutton
+0x26d62	__TEXT,__cstring	Nov 10 2026 13:52:07
+0x26d77	__TEXT,__cstring	_buttonActiveAssertion
+0x26d8e	__TEXT,__cstring	_systemActionPreviewingAssertion
+0x26daf	__TEXT,__cstring	_systemActionPerformedInteractionAssertion
+0x26dda	__TEXT,__cstring	_performActionForEvent:interactionTime:
+0x26e02	__TEXT,__cstring	_inhibitActions
+0x26e12	__TEXT,__cstring	_registeredGrabbers
+0x26e26	__TEXT,__cstring	kCFAllocatorNull
+0x26e37	__TEXT,__cstring	CFDataCreateWithBytesNoCopy
+0x26e53	__TEXT,__cstring	CFPropertyListCreateWithData
+0x26e70	__TEXT,__cstring	CFPropertyListCreateFromXMLData
+0x26e90	__TEXT,__cstring	CFStringCreateWithCStringNoCopy
+0x26eb0	__TEXT,__cstring	CFDictionaryGetValue
+0x26ec5	__TEXT,__cstring	CFGetTypeID
+0x26ed1	__TEXT,__cstring	CFStringGetTypeID
+0x26ee3	__TEXT,__cstring	CFStringGetCString
+0x26ef6	__TEXT,__cstring	CFRelease
+0x26f00	__TEXT,__cstring	/System/Library/CoreServices/SystemVersion.plist
+0x26f31	__TEXT,__cstring	r
+0x26f33	__TEXT,__cstring	ProductVersion
+0x26f42	__TEXT,__cstring	%d.%d.%d
+0x26f4b	__TEXT,__objc_classname	TGShortcutRunWatcher
+0x26f60	__TEXT,__objc_classname	TGStatusBarHoldTarget
+0x26f76	__TEXT,__objc_classname	TGFlickRecognizer
+0x26f88	__TEXT,__objc_classname	TGHomeGestureTarget
+0x26f9c	__TEXT,__objc_classname	UIGestureRecognizerDelegate
+0x26fb8	__TEXT,__objc_classname	NSObject
+0x26fc1	__TEXT,__objc_classname	TGEdgeRecognizer
+0x26fd2	__TEXT,__objc_classname	TGEdgeTarget
+0x26fdf	__TEXT,__objc_classname	TGClockTarget
+0x26fed	__TEXT,__objc_classname	TGCarObserver
+0x26ffb	__TEXT,__objc_classname	TGCallWatcher
+0x27009	__TEXT,__objc_classname	CXCallObserverDelegate
+0x27020	__TEXT,__objc_classname	TGTimeTarget
+0x2702d	__TEXT,__objc_methname	T@,&,N,V_runner
+0x2703d	__TEXT,__objc_methname	T#,R
+0x27042	__TEXT,__objc_methname	_ringerChanged:
+0x27052	__TEXT,__objc_methname	T@"NSMutableDictionary",&,N,V_seen
+0x27075	__TEXT,__objc_methname	_tapRecognized:
+0x27085	__TEXT,__objc_methname	T@"NSString",C,N,V_name
+0x2709d	__TEXT,__objc_methname	allKeys
+0x270a5	__TEXT,__objc_methname	T@"NSString",R,C
+0x270b6	__TEXT,__objc_methname	connectedScenes
+0x270c6	__TEXT,__objc_methname	TB,N,V_started
+0x270d5	__TEXT,__objc_methname	containsString:
+0x270e5	__TEXT,__objc_methname	TQ,N,V_fingers
+0x270f4	__TEXT,__objc_methname	didMoveToWindow
+0x27104	__TEXT,__objc_methname	URLQueryAllowedCharacterSet
+0x27120	__TEXT,__objc_methname	enabled
+0x27128	__TEXT,__objc_methname	UTF8String
+0x27133	__TEXT,__objc_methname	handleHomeButtonDoublePressDown
+0x27153	__TEXT,__objc_methname	_accessibilityFrontMostApplication
+0x27176	__TEXT,__objc_methname	locationInView:
+0x27186	__TEXT,__objc_methname	_bounceDoubleTapRecognized:
+0x271a2	__TEXT,__objc_methname	numberOfTouches
+0x271b2	__TEXT,__objc_methname	_calculatePillFrame
+0x271c6	__TEXT,__objc_methname	performInitialButtonDownActions
+0x271e6	__TEXT,__objc_methname	_edge
+0x271ec	__TEXT,__objc_methname	present
+0x271f4	__TEXT,__objc_methname	_fired
+0x271fb	__TEXT,__objc_methname	removeObserver:
+0x2720b	__TEXT,__objc_methname	_handlePhysicalButtonEvent:
+0x27227	__TEXT,__objc_methname	setRingerMuted:
+0x27237	__TEXT,__objc_methname	_initWithDisplayIdentity:
+0x27251	__TEXT,__objc_methname	setWindowLevel:
+0x27261	__TEXT,__objc_methname	_loadFlashlightLevel
+0x27276	__TEXT,__objc_methname	started
+0x2727e	__TEXT,__objc_methname	_mediaRemoteNowPlayingInfoDidChange:
+0x272a3	__TEXT,__objc_methname	stringByAppendingPathExtension:
+0x272c3	__TEXT,__objc_methname	_notifyObserversOfEvent:
+0x272dc	__TEXT,__objc_methname	swiped:
+0x272e4	__TEXT,__objc_methname	_performDelayedHeadsetActionForAssistant
+0x2730d	__TEXT,__objc_methname	traitCollection
+0x2731d	__TEXT,__objc_methname	_performSleep
+0x2732b	__TEXT,__objc_methname	unlockUIFromSource:withOptions:
+0x2734b	__TEXT,__objc_methname	_seen
+0x27351	__TEXT,__objc_methname	.cxx_destruct
+0x2735f	__TEXT,__objc_methname	_bounceHitTest:
+0x2736f	__TEXT,__objc_methname	T@"CXCallObserver",&,N,V_observer
+0x27391	__TEXT,__objc_methname	_runner
+0x27399	__TEXT,__objc_methname	T@"NSString",?,R,C
+0x273ac	__TEXT,__objc_methname	activationState
+0x273bc	__TEXT,__objc_methname	T@"NSString",C,N,V_trigger
+0x273d7	__TEXT,__objc_methname	animateWithDuration:animations:
+0x273f7	__TEXT,__objc_methname	TB,N,V_fired
+0x27404	__TEXT,__objc_methname	containsObject:
+0x27414	__TEXT,__objc_methname	TQ,N,V_edge
+0x27420	__TEXT,__objc_methname	currentCalendar
+0x27430	__TEXT,__objc_methname	TQ,R
+0x27435	__TEXT,__objc_methname	disconnectCall:
+0x27445	__TEXT,__objc_methname	URLWithString:
+0x27454	__TEXT,__objc_methname	fingers
+0x2745c	__TEXT,__objc_methname	UUID
+0x27461	__TEXT,__objc_methname	isProxy
+0x27469	__TEXT,__objc_methname	_animateBacklightToFactor:duration:source:silently:completion:
+0x274a8	__TEXT,__objc_methname	lowercaseString
+0x274b8	__TEXT,__objc_methname	_bounceTapRecognized:
+0x274ce	__TEXT,__objc_methname	outputs
+0x274d6	__TEXT,__objc_methname	_deleteAppLayoutsMatchingBundleIdentifier:
+0x27501	__TEXT,__objc_methname	prepare
+0x27509	__TEXT,__objc_methname	_fingers
+0x27512	__TEXT,__objc_methname	release
+0x2751a	__TEXT,__objc_methname	_grabberHitTest:
+0x2752b	__TEXT,__objc_methname	set
+0x2752f	__TEXT,__objc_methname	_init
+0x27535	__TEXT,__objc_methname	setWiFiEnabled:
+0x27545	__TEXT,__objc_methname	_isGestureWithTypeAllowed:
+0x27560	__TEXT,__objc_methname	speakUtterance:
+0x27570	__TEXT,__objc_methname	_mediaRemoteNowPlayingApplicationIsPlayingDidChange:
+0x275a5	__TEXT,__objc_methname	stringByAppendingPathComponent:
+0x275c5	__TEXT,__objc_methname	_name
+0x275cb	__TEXT,__objc_methname	stringFromDate:
+0x275db	__TEXT,__objc_methname	_observer
+0x275e5	__TEXT,__objc_methname	systemRecording
+0x275f5	__TEXT,__objc_methname	_performDelayedHeadsetActionForVoiceControl
+0x27621	__TEXT,__objc_methname	trigger
+0x27629	__TEXT,__objc_methname	_revealTapRecognized:
+0x2763f	__TEXT,__objc_methname	windows
+0x27647	__TEXT,__objc_methname	_setEdgeRegionSize:
+0x2765b	__TEXT,__objc_methname	_setObjectInProximity:
+0x27672	__TEXT,__objc_methname	_setObjectInProximity:detectionMode:
+0x27697	__TEXT,__objc_methname	_setObjectInProximity:detectionMode:postToApps:
+0x276c7	__TEXT,__objc_methname	_setPasscodeVisible:animated:
+0x276e5	__TEXT,__objc_methname	_shouldEnableSystemGestureWithType:
+0x27709	__TEXT,__objc_methname	_shouldReceiveTouch:withEvent:
+0x27728	__TEXT,__objc_methname	_simulateHomeButtonPressWithCompletion:
+0x27750	__TEXT,__objc_methname	_simulateLockButtonPress
+0x27769	__TEXT,__objc_methname	_start
+0x27770	__TEXT,__objc_methname	_started
+0x27779	__TEXT,__objc_methname	_startedAt
+0x27784	__TEXT,__objc_methname	_storeFlashlightLevel:
+0x2779b	__TEXT,__objc_methname	_toggleSearch
+0x277a9	__TEXT,__objc_methname	_trigger
+0x277b2	__TEXT,__objc_methname	_updatePressCountForDownEvent
+0x277d0	__TEXT,__objc_methname	_updateRingerState:reason:
+0x277eb	__TEXT,__objc_methname	_updateRingerState:withVisuals:updatePreferenceRegister:
+0x27824	__TEXT,__objc_methname	accessibilityWorkflowsWithError:
+0x27845	__TEXT,__objc_methname	acquireIdleTimerDisableAssertionForReason:
+0x27870	__TEXT,__objc_methname	actionWithTitle:style:handler:
+0x2788f	__TEXT,__objc_methname	activateConstraints:
+0x278a4	__TEXT,__objc_methname	activateFromSource:
+0x278b8	__TEXT,__objc_methname	activateRingerHUDFromMuteSwitch:
+0x278d9	__TEXT,__objc_methname	activator:receiveEvent:
+0x278f1	__TEXT,__objc_methname	activator:receiveEvent:forListenerName:
+0x27919	__TEXT,__objc_methname	activeDisplayWindowScene
+0x27932	__TEXT,__objc_methname	activeModeAssertionWithError:
+0x27950	__TEXT,__objc_methname	addAction:
+0x2795b	__TEXT,__objc_methname	addGestureRecognizer:
+0x27971	__TEXT,__objc_methname	addGestureRecognizer:withType:
+0x27990	__TEXT,__objc_methname	addGesturesAndInteractionsIfNecessary
+0x279b6	__TEXT,__objc_methname	addObject:
+0x279c1	__TEXT,__objc_methname	addObserverForName:object:queue:usingBlock:
+0x279ed	__TEXT,__objc_methname	addSessionObserver:
+0x27a01	__TEXT,__objc_methname	addSubview:
+0x27a0d	__TEXT,__objc_methname	addTimer:forMode:
+0x27a1f	__TEXT,__objc_methname	alertControllerWithTitle:message:preferredStyle:
+0x27a50	__TEXT,__objc_methname	allItems
+0x27a59	__TEXT,__objc_methname	allObjects
+0x27a64	__TEXT,__objc_methname	allPresses
+0x27a6f	__TEXT,__objc_methname	allTouches
+0x27a7a	__TEXT,__objc_methname	alpha
+0x27a80	__TEXT,__objc_methname	animateWithDuration:animations:completion:
+0x27aab	__TEXT,__objc_methname	answerCall:
+0x27ab7	__TEXT,__objc_methname	anyObject
+0x27ac1	__TEXT,__objc_methname	applicationBundleID
+0x27ad5	__TEXT,__objc_methname	applicationWithBundleIdentifier:
+0x27af6	__TEXT,__objc_methname	array
+0x27afc	__TEXT,__objc_methname	arrayWithObjects:count:
+0x27b14	__TEXT,__objc_methname	autorelease
+0x27b20	__TEXT,__objc_methname	batteryLevel
+0x27b2d	__TEXT,__objc_methname	batteryState
+0x27b3a	__TEXT,__objc_methname	biometryType
+0x27b47	__TEXT,__objc_methname	boolValue
+0x27b51	__TEXT,__objc_methname	bounds
+0x27b58	__TEXT,__objc_methname	brightness
+0x27b63	__TEXT,__objc_methname	bundleIdentifier
+0x27b74	__TEXT,__objc_methname	buttonActions
+0x27b82	__TEXT,__objc_methname	buttonDown:
+0x27b8e	__TEXT,__objc_methname	callObserver:callChanged:
+0x27ba8	__TEXT,__objc_methname	canEvaluatePolicy:error:
+0x27bc1	__TEXT,__objc_methname	cancelVolumeEvent
+0x27bd3	__TEXT,__objc_methname	carChanged:
+0x27bdf	__TEXT,__objc_methname	caseInsensitiveCompare:
+0x27bf7	__TEXT,__objc_methname	centerXAnchor
+0x27c05	__TEXT,__objc_methname	changeTrack:eventSource:
+0x27c1e	__TEXT,__objc_methname	changeVolumeByDelta:
+0x27c33	__TEXT,__objc_methname	characterAtIndex:
+0x27c45	__TEXT,__objc_methname	characterSetWithCharactersInString:
+0x27c69	__TEXT,__objc_methname	class
+0x27c6f	__TEXT,__objc_methname	clearColor
+0x27c7a	__TEXT,__objc_methname	client:wantsProximityDetectionEnabled:
+0x27ca1	__TEXT,__objc_methname	compare:
+0x27caa	__TEXT,__objc_methname	component:fromDate:
+0x27cbe	__TEXT,__objc_methname	components:fromDate:
+0x27cd3	__TEXT,__objc_methname	componentsJoinedByString:
+0x27ced	__TEXT,__objc_methname	componentsSeparatedByString:
+0x27d0a	__TEXT,__objc_methname	conformsToProtocol:
+0x27d1e	__TEXT,__objc_methname	connectedDevices
+0x27d2f	__TEXT,__objc_methname	constraintEqualToAnchor:
+0x27d48	__TEXT,__objc_methname	constraintEqualToAnchor:constant:
+0x27d6a	__TEXT,__objc_methname	constraintEqualToConstant:
+0x27d85	__TEXT,__objc_methname	constraintLessThanOrEqualToAnchor:constant:
+0x27db1	__TEXT,__objc_methname	contentView
+0x27dbd	__TEXT,__objc_methname	contentsOfDirectoryAtPath:error:
+0x27dde	__TEXT,__objc_methname	controlCenterController
+0x27df6	__TEXT,__objc_methname	convertRect:toView:
+0x27e0a	__TEXT,__objc_methname	coolDown
+0x27e13	__TEXT,__objc_methname	coordinate
+0x27e1e	__TEXT,__objc_methname	copy
+0x27e23	__TEXT,__objc_methname	count
+0x27e29	__TEXT,__objc_methname	countByEnumeratingWithState:objects:count:
+0x27e54	__TEXT,__objc_methname	coverSheetPresentationManager
+0x27e72	__TEXT,__objc_methname	currentDevice
+0x27e80	__TEXT,__objc_methname	currentNetworkName
+0x27e93	__TEXT,__objc_methname	currentRoute
+0x27ea0	__TEXT,__objc_methname	currentSession
+0x27eaf	__TEXT,__objc_methname	data
+0x27eb4	__TEXT,__objc_methname	date
+0x27eb9	__TEXT,__objc_methname	dateByAddingTimeInterval:
+0x27ed3	__TEXT,__objc_methname	dateByAddingUnit:value:toDate:options:
+0x27efa	__TEXT,__objc_methname	dateBySettingHour:minute:second:ofDate:options:
+0x27f2a	__TEXT,__objc_methname	dateFromComponents:
+0x27f3e	__TEXT,__objc_methname	debugDescription
+0x27f4f	__TEXT,__objc_methname	decreaseVolume
+0x27f5e	__TEXT,__objc_methname	defaultCenter
+0x27f6c	__TEXT,__objc_methname	defaultDeviceWithMediaType:
+0x27f88	__TEXT,__objc_methname	defaultManager
+0x27f97	__TEXT,__objc_methname	defaultWorkspace
+0x27fa8	__TEXT,__objc_methname	description
+0x27fb4	__TEXT,__objc_methname	dictionary
+0x27fbf	__TEXT,__objc_methname	dictionaryWithContentsOfFile:
+0x27fdd	__TEXT,__objc_methname	dictionaryWithObjects:forKeys:count:
+0x28002	__TEXT,__objc_methname	direction
+0x2800c	__TEXT,__objc_methname	disconnectCurrentCallAndActivateHeld
+0x28031	__TEXT,__objc_methname	displayName
+0x2803d	__TEXT,__objc_methname	doublePress:
+0x2804a	__TEXT,__objc_methname	doubleValue
+0x28056	__TEXT,__objc_methname	edge
+0x2805b	__TEXT,__objc_methname	embeddedDisplayWindowScene
+0x28076	__TEXT,__objc_methname	enumerateKeysAndObjectsUsingBlock:
+0x28099	__TEXT,__objc_methname	exitAndRelaunch:
+0x280aa	__TEXT,__objc_methname	fetchAvailableRoutesWithCompletionHandler:
+0x280d5	__TEXT,__objc_methname	fileExistsAtPath:
+0x280e7	__TEXT,__objc_methname	fileSystemRepresentation
+0x28100	__TEXT,__objc_methname	finishWithError:cancelled:
+0x2811b	__TEXT,__objc_methname	fired
+0x28121	__TEXT,__objc_methname	fired:
+0x28128	__TEXT,__objc_methname	firstIconPageIndex
+0x2813b	__TEXT,__objc_methname	firstObject
+0x28147	__TEXT,__objc_methname	frontDisplayDidChange:
+0x2815e	__TEXT,__objc_methname	generalPasteboard
+0x28170	__TEXT,__objc_methname	gestureRecognizer:shouldBeRequiredToFailByGestureRecognizer:
+0x281ad	__TEXT,__objc_methname	gestureRecognizer:shouldReceiveEvent:
+0x281d3	__TEXT,__objc_methname	gestureRecognizer:shouldReceivePress:
+0x281f9	__TEXT,__objc_methname	gestureRecognizer:shouldReceiveTouch:
+0x2821f	__TEXT,__objc_methname	gestureRecognizer:shouldRecognizeSimultaneouslyWithGestureRecognizer:
+0x28265	__TEXT,__objc_methname	gestureRecognizer:shouldRequireFailureOfGestureRecognizer:
+0x282a0	__TEXT,__objc_methname	gestureRecognizerShouldBegin:
+0x282be	__TEXT,__objc_methname	gestureRecognizers
+0x282d1	__TEXT,__objc_methname	getBlueLightStatus:
+0x282e5	__TEXT,__objc_methname	handleHeadsetButtonDownWithClickCount:
+0x2830c	__TEXT,__objc_methname	handleHeadsetButtonUp
+0x28322	__TEXT,__objc_methname	hasConnected
+0x2832f	__TEXT,__objc_methname	hasEnded
+0x28338	__TEXT,__objc_methname	hasOpenFolder
+0x28346	__TEXT,__objc_methname	hasPrefix:
+0x28351	__TEXT,__objc_methname	hasSuffix:
+0x2835c	__TEXT,__objc_methname	hasTorch
+0x28365	__TEXT,__objc_methname	hash
+0x2836a	__TEXT,__objc_methname	heightAnchor
+0x28377	__TEXT,__objc_methname	held:
+0x2837d	__TEXT,__objc_methname	hour
+0x28382	__TEXT,__objc_methname	icon
+0x28387	__TEXT,__objc_methname	iconManager
+0x28393	__TEXT,__objc_methname	identifier
+0x2839e	__TEXT,__objc_methname	impactOccurred
+0x283ad	__TEXT,__objc_methname	incomingCall
+0x283ba	__TEXT,__objc_methname	increaseVolume
+0x283c9	__TEXT,__objc_methname	init
+0x283ce	__TEXT,__objc_methname	initWithCalendarIdentifier:
+0x283ea	__TEXT,__objc_methname	initWithDelegate:
+0x283fc	__TEXT,__objc_methname	initWithEffectiveBundlePath:
+0x28419	__TEXT,__objc_methname	initWithFireDate:interval:repeats:block:
+0x28442	__TEXT,__objc_methname	initWithFireDate:serviceIdentifier:target:selector:userInfo:
+0x2847f	__TEXT,__objc_methname	initWithOptions:
+0x28490	__TEXT,__objc_methname	initWithStyle:
+0x2849f	__TEXT,__objc_methname	initWithTarget:action:
+0x284b6	__TEXT,__objc_methname	initWithTarget:action:type:options:
+0x284da	__TEXT,__objc_methname	initWithWindowScene:
+0x284ef	__TEXT,__objc_methname	initWithWorkflowIdentifier:
+0x2850b	__TEXT,__objc_methname	initialButtonDown:
+0x2851e	__TEXT,__objc_methname	initialButtonUp:
+0x2852f	__TEXT,__objc_methname	instancesRespondToSelector:
+0x2854b	__TEXT,__objc_methname	intValue
+0x28554	__TEXT,__objc_methname	integerValue
+0x28561	__TEXT,__objc_methname	invalidate
+0x2856c	__TEXT,__objc_methname	invalidateAllActiveModeAssertionsWithError:
+0x28598	__TEXT,__objc_methname	invertedSet
+0x285a4	__TEXT,__objc_methname	isDeviceRoute
+0x285b2	__TEXT,__objc_methname	isEditing
+0x285bc	__TEXT,__objc_methname	isEqual:
+0x285c5	__TEXT,__objc_methname	isEqualToString:
+0x285d6	__TEXT,__objc_methname	isHidden
+0x285df	__TEXT,__objc_methname	isInAirplaneMode
+0x285f0	__TEXT,__objc_methname	isKindOfClass:
+0x285ff	__TEXT,__objc_methname	isLowPowerModeEnabled
+0x28615	__TEXT,__objc_methname	isMemberOfClass:
+0x28626	__TEXT,__objc_methname	isOutgoing
+0x28631	__TEXT,__objc_methname	isPlaying
+0x2863b	__TEXT,__objc_methname	isReadableFileAtPath:
+0x28651	__TEXT,__objc_methname	isRingerMuted
+0x2865f	__TEXT,__objc_methname	isSOSGestureActive
+0x28672	__TEXT,__objc_methname	isSubclassOfClass:
+0x28685	__TEXT,__objc_methname	isUILocked
+0x28690	__TEXT,__objc_methname	isUserLocked
+0x2869d	__TEXT,__objc_methname	isWidgetIcon
+0x286aa	__TEXT,__objc_methname	labelColor
+0x286b5	__TEXT,__objc_methname	lastPathComponent
+0x286c7	__TEXT,__objc_methname	launchApplicationWithIdentifier:suspended:
+0x286f2	__TEXT,__objc_methname	layer
+0x286f8	__TEXT,__objc_methname	length
+0x286ff	__TEXT,__objc_methname	level
+0x28705	__TEXT,__objc_methname	localizedCaseInsensitiveCompare:
+0x28726	__TEXT,__objc_methname	localizedCaseInsensitiveContainsString:
+0x2874e	__TEXT,__objc_methname	localizedStringFromDate:dateStyle:timeStyle:
+0x2877b	__TEXT,__objc_methname	location
+0x28784	__TEXT,__objc_methname	locationServicesEnabled
+0x2879c	__TEXT,__objc_methname	lock
+0x287a1	__TEXT,__objc_methname	lockForConfiguration:
+0x287b7	__TEXT,__objc_methname	lockHardwareButton
+0x287ca	__TEXT,__objc_methname	lockUIFromSource:withOptions:
+0x287e8	__TEXT,__objc_methname	longLongValue
+0x287f6	__TEXT,__objc_methname	longPress:
+0x28801	__TEXT,__objc_methname	mainBundle
+0x2880c	__TEXT,__objc_methname	mainDisplayManager
+0x2881f	__TEXT,__objc_methname	mainQueue
+0x28829	__TEXT,__objc_methname	mainRunLoop
+0x28835	__TEXT,__objc_methname	mainScreen
+0x28840	__TEXT,__objc_methname	minute
+0x28847	__TEXT,__objc_methname	modeValue
+0x28851	__TEXT,__objc_methname	mutableCopy
+0x2885d	__TEXT,__objc_methname	name
+0x28862	__TEXT,__objc_methname	nowPlayingApplication
+0x28878	__TEXT,__objc_methname	null
+0x2887d	__TEXT,__objc_methname	numberOfTapsRequired
+0x28892	__TEXT,__objc_methname	numberWithDouble:
+0x288a4	__TEXT,__objc_methname	numberWithInt:
+0x288b3	__TEXT,__objc_methname	numberWithInteger:
+0x288c6	__TEXT,__objc_methname	numberWithLongLong:
+0x288da	__TEXT,__objc_methname	numberWithUnsignedInteger:
+0x288f5	__TEXT,__objc_methname	numberWithUnsignedLongLong:
+0x28911	__TEXT,__objc_methname	object
+0x28918	__TEXT,__objc_methname	objectAtIndexedSubscript:
+0x28932	__TEXT,__objc_methname	objectForKeyedSubscript:
+0x2894b	__TEXT,__objc_methname	observer
+0x28954	__TEXT,__objc_methname	openApplicationWithBundleID:
+0x28971	__TEXT,__objc_methname	openURL:options:completionHandler:
+0x28994	__TEXT,__objc_methname	orderedSet
+0x2899f	__TEXT,__objc_methname	ordinalityOfUnit:inUnit:forDate:
+0x289c0	__TEXT,__objc_methname	pathExtension
+0x289ce	__TEXT,__objc_methname	performActionsForButtonDown:
+0x289eb	__TEXT,__objc_methname	performActionsForButtonLongPress:
+0x28a0d	__TEXT,__objc_methname	performActionsForButtonUp:
+0x28a28	__TEXT,__objc_methname	performDoublePressActions
+0x28a42	__TEXT,__objc_methname	performDoublePressDownActions
+0x28a60	__TEXT,__objc_methname	performDoubleTapUpActions
+0x28a7a	__TEXT,__objc_methname	performLongPressActions
+0x28a92	__TEXT,__objc_methname	performSecondButtonDownActions
+0x28ab1	__TEXT,__objc_methname	performSelector:
+0x28ac2	__TEXT,__objc_methname	performSelector:withObject:
+0x28ade	__TEXT,__objc_methname	performSelector:withObject:withObject:
+0x28b05	__TEXT,__objc_methname	performSinglePressAction
+0x28b1e	__TEXT,__objc_methname	performSinglePressUpActions
+0x28b3a	__TEXT,__objc_methname	performTakeScreenshotAction
+0x28b56	__TEXT,__objc_methname	performTriplePressActions
+0x28b70	__TEXT,__objc_methname	phase
+0x28b76	__TEXT,__objc_methname	pickRoute:
+0x28b81	__TEXT,__objc_methname	popoverPresentationController
+0x28b9f	__TEXT,__objc_methname	portType
+0x28ba8	__TEXT,__objc_methname	postNotificationWithRequest:
+0x28bc5	__TEXT,__objc_methname	presentAnimated:
+0x28bd6	__TEXT,__objc_methname	presentPowerDownTransientOverlay
+0x28bf7	__TEXT,__objc_methname	presentViewController:animated:completion:
+0x28c22	__TEXT,__objc_methname	processInfo
+0x28c2e	__TEXT,__objc_methname	proximitySensorManager
+0x28c45	__TEXT,__objc_methname	rangeOfCharacterFromSet:
+0x28c5e	__TEXT,__objc_methname	rangeOfString:
+0x28c6d	__TEXT,__objc_methname	reachabilityController
+0x28c84	__TEXT,__objc_methname	recentAppLayouts
+0x28c95	__TEXT,__objc_methname	recognized:
+0x28ca1	__TEXT,__objc_methname	removeAllObjects
+0x28cb2	__TEXT,__objc_methname	removeGestureRecognizer:
+0x28ccb	__TEXT,__objc_methname	removeObject:
+0x28cd9	__TEXT,__objc_methname	removeObjectForKey:
+0x28ced	__TEXT,__objc_methname	removeSessionObserver:
+0x28d04	__TEXT,__objc_methname	replaceOccurrencesOfString:withString:options:range:
+0x28d39	__TEXT,__objc_methname	respondsToSelector:
+0x28d4d	__TEXT,__objc_methname	retain
+0x28d54	__TEXT,__objc_methname	retainCount
+0x28d60	__TEXT,__objc_methname	ringerControl
+0x28d6e	__TEXT,__objc_methname	rootFolderController
+0x28d83	__TEXT,__objc_methname	rootViewController
+0x28d96	__TEXT,__objc_methname	routeName
+0x28da0	__TEXT,__objc_methname	runner
+0x28da7	__TEXT,__objc_methname	safeAreaLayoutGuide
+0x28dbb	__TEXT,__objc_methname	scale
+0x28dc1	__TEXT,__objc_methname	scheduleInRunLoop:
+0x28dd4	__TEXT,__objc_methname	scheduledTimerWithTimeInterval:repeats:block:
+0x28e02	__TEXT,__objc_methname	screenIsOn
+0x28e0d	__TEXT,__objc_methname	secondarySystemBackgroundColor
+0x28e2c	__TEXT,__objc_methname	sectionIdentifier
+0x28e3e	__TEXT,__objc_methname	seen
+0x28e43	__TEXT,__objc_methname	self
+0x28e48	__TEXT,__objc_methname	sendEvent:
+0x28e53	__TEXT,__objc_methname	serviceForClientIdentifier:
+0x28e6f	__TEXT,__objc_methname	sessionDidConnect:
+0x28e82	__TEXT,__objc_methname	sessionDidDisconnect:
+0x28e98	__TEXT,__objc_methname	setAlpha:
+0x28ea2	__TEXT,__objc_methname	setBackgroundColor:
+0x28eb6	__TEXT,__objc_methname	setBatteryMonitoringEnabled:
+0x28ed3	__TEXT,__objc_methname	setCancelsTouchesInView:
+0x28eec	__TEXT,__objc_methname	setCornerRadius:
+0x28efd	__TEXT,__objc_methname	setCoverSheetPresented:animated:withCompletion:
+0x28f2d	__TEXT,__objc_methname	setCurrentPageIndex:animated:
+0x28f4b	__TEXT,__objc_methname	setDelaysTouchesEnded:
+0x28f62	__TEXT,__objc_methname	setDelegate:
+0x28f6f	__TEXT,__objc_methname	setDelegate:queue:
+0x28f82	__TEXT,__objc_methname	setDirection:
+0x28f90	__TEXT,__objc_methname	setDiscoveryMode:
+0x28fa2	__TEXT,__objc_methname	setEdge:
+0x28fab	__TEXT,__objc_methname	setEdges:
+0x28fb5	__TEXT,__objc_methname	setEnabled:
+0x28fc1	__TEXT,__objc_methname	setFingers:
+0x28fcd	__TEXT,__objc_methname	setFired:
+0x28fd7	__TEXT,__objc_methname	setFont:
+0x28fe0	__TEXT,__objc_methname	setHidden:
+0x28feb	__TEXT,__objc_methname	setInAirplaneMode:
+0x28ffe	__TEXT,__objc_methname	setItems:
+0x29008	__TEXT,__objc_methname	setLevel:
+0x29012	__TEXT,__objc_methname	setLocationServicesEnabled:
+0x2902e	__TEXT,__objc_methname	setMasksToBounds:
+0x29040	__TEXT,__objc_methname	setMaximumNumberOfTouches:
+0x2905b	__TEXT,__objc_methname	setMinimumEarlyFireProportion:
+0x2907a	__TEXT,__objc_methname	setMinimumNumberOfTouches:
+0x29095	__TEXT,__objc_methname	setMinimumPressDuration:
+0x290ae	__TEXT,__objc_methname	setModeValue:
+0x290bc	__TEXT,__objc_methname	setName:
+0x290c5	__TEXT,__objc_methname	setNumberOfTapsRequired:
+0x290de	__TEXT,__objc_methname	setNumberOfTouchesRequired:
+0x290fa	__TEXT,__objc_methname	setObject:forKeyedSubscript:
+0x29117	__TEXT,__objc_methname	setObserver:
+0x29124	__TEXT,__objc_methname	setPowerMode:fromSource:withCompletion:
+0x2914c	__TEXT,__objc_methname	setProperty:forKey:
+0x29160	__TEXT,__objc_methname	setRingerMuted:withFeedback:reason:clientType:
+0x2918f	__TEXT,__objc_methname	setRootViewController:
+0x291a6	__TEXT,__objc_methname	setRunner:
+0x291b1	__TEXT,__objc_methname	setSOSGestureActive:
+0x291c6	__TEXT,__objc_methname	setSeen:
+0x291cf	__TEXT,__objc_methname	setSessionObserver:
+0x291e3	__TEXT,__objc_methname	setSourceRect:
+0x291f2	__TEXT,__objc_methname	setSourceView:
+0x29201	__TEXT,__objc_methname	setStarted:
+0x2920d	__TEXT,__objc_methname	setState:
+0x29217	__TEXT,__objc_methname	setText:
+0x29220	__TEXT,__objc_methname	setTextAlignment:
+0x29232	__TEXT,__objc_methname	setTextColor:
+0x29240	__TEXT,__objc_methname	setTimeStyle:
+0x2924e	__TEXT,__objc_methname	setTimeZone:
+0x2925b	__TEXT,__objc_methname	setTolerance:
+0x29269	__TEXT,__objc_methname	setTorchMode:
+0x29277	__TEXT,__objc_methname	setTorchModeOnWithLevel:error:
+0x29296	__TEXT,__objc_methname	setTranslatesAutoresizingMaskIntoConstraints:
+0x292c4	__TEXT,__objc_methname	setTrigger:
+0x292d0	__TEXT,__objc_methname	setUnlockActionBlock:
+0x292e6	__TEXT,__objc_methname	setUserInteractionEnabled:
+0x29301	__TEXT,__objc_methname	setValue:forKey:
+0x29312	__TEXT,__objc_methname	setVolumeTo:forCategory:
+0x2932b	__TEXT,__objc_methname	setWithArray:
+0x29339	__TEXT,__objc_methname	shared
+0x29340	__TEXT,__objc_methname	sharedAVSystemController
+0x29359	__TEXT,__objc_methname	sharedApplication
+0x2936b	__TEXT,__objc_methname	sharedInstance
+0x2937a	__TEXT,__objc_methname	sharedInstanceForMainDisplay
+0x29397	__TEXT,__objc_methname	sharedRecorder
+0x293a6	__TEXT,__objc_methname	shutdownAndReboot:
+0x293b9	__TEXT,__objc_methname	singlePress:
+0x293c6	__TEXT,__objc_methname	sleepWakeButtonInteraction
+0x293e1	__TEXT,__objc_methname	slid:
+0x293e7	__TEXT,__objc_methname	sortUsingComparator:
+0x293fc	__TEXT,__objc_methname	speechUtteranceWithString:
+0x29417	__TEXT,__objc_methname	standardClient
+0x29426	__TEXT,__objc_methname	start
+0x2942c	__TEXT,__objc_methname	startSystemRecordingWithMicrophoneEnabled:handler:
+0x2945f	__TEXT,__objc_methname	state
+0x29465	__TEXT,__objc_methname	statusBarFrame
+0x29474	__TEXT,__objc_methname	statusBarManager
+0x29485	__TEXT,__objc_methname	stopSystemRecording:
+0x2949a	__TEXT,__objc_methname	string
+0x294a1	__TEXT,__objc_methname	stringByAddingPercentEncodingWithAllowedCharacters:
+0x294d5	__TEXT,__objc_methname	stringByAppendingString:
+0x294ee	__TEXT,__objc_methname	stringValue
+0x294fa	__TEXT,__objc_methname	stringWithFormat:
+0x2950c	__TEXT,__objc_methname	stringWithUTF8String:
+0x29522	__TEXT,__objc_methname	substringFromIndex:
+0x29536	__TEXT,__objc_methname	substringToIndex:
+0x29548	__TEXT,__objc_methname	subviews
+0x29551	__TEXT,__objc_methname	superclass
+0x2955c	__TEXT,__objc_methname	superview
+0x29566	__TEXT,__objc_methname	supportsBlueLightReduction
+0x29581	__TEXT,__objc_methname	switcherController
+0x29594	__TEXT,__objc_methname	systemFontOfSize:weight:
+0x295ad	__TEXT,__objc_methname	systemGestureManager
+0x295c2	__TEXT,__objc_methname	takeModeAssertionWithDetails:error:
+0x295e6	__TEXT,__objc_methname	takeScreenshot
+0x295f5	__TEXT,__objc_methname	tapCount
+0x295fe	__TEXT,__objc_methname	terminateApplication:forReason:andReport:withDescription:completion:
+0x29643	__TEXT,__objc_methname	timeIntervalSinceDate:
+0x2965a	__TEXT,__objc_methname	timeIntervalSinceNow
+0x2966f	__TEXT,__objc_methname	timeZoneForSecondsFromGMT:
+0x2968a	__TEXT,__objc_methname	toggleMainSwitcherWithSource:animated:
+0x296b1	__TEXT,__objc_methname	togglePlayPauseForEventSource:
+0x296d0	__TEXT,__objc_methname	toggleReachability
+0x296e3	__TEXT,__objc_methname	toggleSearchFromBreadcrumbSource:withWillBeginHandler:completionHandler:
+0x2972c	__TEXT,__objc_methname	topAnchor
+0x29736	__TEXT,__objc_methname	torchLevel
+0x29741	__TEXT,__objc_methname	torchMode
+0x2974b	__TEXT,__objc_methname	touchesBegan:withEvent:
+0x29763	__TEXT,__objc_methname	touchesCancelled:withEvent:
+0x2977f	__TEXT,__objc_methname	touchesEnded:withEvent:
+0x29797	__TEXT,__objc_methname	touchesMoved:withEvent:
+0x297af	__TEXT,__objc_methname	translationInView:
+0x297c2	__TEXT,__objc_methname	triggerFor:
+0x297ce	__TEXT,__objc_methname	triplePress:
+0x297db	__TEXT,__objc_methname	type
+0x297e0	__TEXT,__objc_methname	unlock
+0x297e7	__TEXT,__objc_methname	unlockForConfiguration
+0x297fe	__TEXT,__objc_methname	unsignedIntegerValue
+0x29813	__TEXT,__objc_methname	userInfo
+0x2981c	__TEXT,__objc_methname	userInterfaceStyle
+0x2982f	__TEXT,__objc_methname	userRequestedAssertionDetailsWithIdentifier:modeIdentifier:lifetime:
+0x29874	__TEXT,__objc_methname	valueForKey:
+0x29881	__TEXT,__objc_methname	view
+0x29886	__TEXT,__objc_methname	volumeControl
+0x29894	__TEXT,__objc_methname	volumeDecreasePress:
+0x298a9	__TEXT,__objc_methname	volumeDecreasePressDownWithModifiers:
+0x298cf	__TEXT,__objc_methname	volumeDecreasePressUp
+0x298e5	__TEXT,__objc_methname	volumeHardwareButton
+0x298fa	__TEXT,__objc_methname	volumeIncreasePress:
+0x2990f	__TEXT,__objc_methname	volumeIncreasePressDownWithModifiers:
+0x29935	__TEXT,__objc_methname	volumeIncreasePressUp
+0x2994b	__TEXT,__objc_methname	volumeStepDown
+0x2995a	__TEXT,__objc_methname	volumeStepUp
+0x29967	__TEXT,__objc_methname	warmUp
+0x2996e	__TEXT,__objc_methname	wiFiEnabled
+0x2997a	__TEXT,__objc_methname	widthAnchor
+0x29986	__TEXT,__objc_methname	window
+0x2998d	__TEXT,__objc_methname	windowScene
+0x29999	__TEXT,__objc_methname	workflowRunnerClient:didFinishRunningWorkflowWithAllResults:error:cancelled:
+0x299e6	__TEXT,__objc_methname	workflowRunnerClient:didFinishRunningWorkflowWithError:cancelled:
+0x29a28	__TEXT,__objc_methname	workflowRunnerClient:didFinishRunningWorkflowWithOutput:error:cancelled:
+0x29a71	__TEXT,__objc_methname	workflowRunnerClient:didStartRunningWorkflowWithProgress:
+0x29aab	__TEXT,__objc_methname	writeToFile:atomically:
+0x29ac3	__TEXT,__objc_methname	zone
+0x29d4a	__TEXT,__ustring	Not on “%@”
+0x29d62	__TEXT,__ustring	On “%@”
+0x29d72	__TEXT,__ustring	“%@” not connected
+0x29d98	__TEXT,__ustring	“%@” connected

@@ -1,0 +1,591 @@
+addr	section	text
+0x100004ac0	__TEXT,__cstring	list
+0x100004ac5	__TEXT,__cstring	AllowAPI
+0x100004ace	__TEXT,__cstring	triggr: turn on Settings → Triggr → Allow API first.
+
+0x100004b08	__TEXT,__cstring	run
+0x100004b0c	__TEXT,__cstring	triggr: unknown action '%s' (see: triggr list)
+
+0x100004b3c	__TEXT,__cstring	run/
+0x100004b41	__TEXT,__cstring	trigger
+0x100004b49	__TEXT,__cstring	triggr: unknown trigger '%s' (see: triggr list)
+
+0x100004b7a	__TEXT,__cstring	trigger/
+0x100004b83	__TEXT,__cstring	menu
+0x100004b88	__TEXT,__cstring	Menus
+0x100004b8e	__TEXT,__cstring	name
+0x100004b93	__TEXT,__cstring	menu/
+0x100004b99	__TEXT,__cstring	id
+0x100004b9c	__TEXT,__cstring	triggr: no menu named '%s'
+
+0x100004bb8	__TEXT,__cstring	usage: triggr run <action>        run a built-in action (see: triggr list)
+       triggr trigger <trigger>   run what's assigned to a trigger
+       triggr menu <name>         show one of your menus
+       triggr list                list actions and triggers
+
+0x100004cbc	__TEXT,__cstring	  %-22s %s
+
+0x100004cc8	__TEXT,__cstring	System
+0x100004ccf	__TEXT,__cstring	Power
+0x100004cd5	__TEXT,__cstring	Toggle
+0x100004cdc	__TEXT,__cstring	Turn On
+0x100004ce4	__TEXT,__cstring	Turn Off
+0x100004ced	__TEXT,__cstring	Media
+0x100004cf3	__TEXT,__cstring	Phone
+0x100004cf9	__TEXT,__cstring	Compose
+0x100004d01	__TEXT,__cstring	Clock
+0x100004d07	__TEXT,__cstring	Haptics
+0x100004d0f	__TEXT,__cstring	Flashlight
+0x100004d1a	__TEXT,__cstring	Record
+0x100004d21	__TEXT,__cstring	Speech & Clipboard
+0x100004d34	__TEXT,__cstring	Snapper 3
+0x100004d3e	__TEXT,__cstring	CopyLog
+0x100004d46	__TEXT,__cstring	system.home
+0x100004d52	__TEXT,__cstring	Go to Home Screen
+0x100004d64	__TEXT,__cstring	system.switcher
+0x100004d74	__TEXT,__cstring	App Switcher
+0x100004d81	__TEXT,__cstring	system.lastapp
+0x100004d90	__TEXT,__cstring	Last App
+0x100004d99	__TEXT,__cstring	system.quitapp
+0x100004da8	__TEXT,__cstring	Quit Current App
+0x100004db9	__TEXT,__cstring	system.cc
+0x100004dc3	__TEXT,__cstring	Control Center
+0x100004dd2	__TEXT,__cstring	system.nc
+0x100004ddc	__TEXT,__cstring	Notification Center
+0x100004df0	__TEXT,__cstring	system.spotlight
+0x100004e01	__TEXT,__cstring	Spotlight
+0x100004e0b	__TEXT,__cstring	system.reachability
+0x100004e1f	__TEXT,__cstring	Reachability
+0x100004e2c	__TEXT,__cstring	system.siri
+0x100004e38	__TEXT,__cstring	Siri
+0x100004e3d	__TEXT,__cstring	system.screenshot
+0x100004e4f	__TEXT,__cstring	Take Screenshot
+0x100004e5f	__TEXT,__cstring	system.screenrecord
+0x100004e73	__TEXT,__cstring	Screen Recording
+0x100004e84	__TEXT,__cstring	system.closeapps
+0x100004e95	__TEXT,__cstring	Close Background Apps
+0x100004eab	__TEXT,__cstring	system.vibrate
+0x100004eba	__TEXT,__cstring	Vibrate
+0x100004ec2	__TEXT,__cstring	system.nothing
+0x100004ed1	__TEXT,__cstring	Do Nothing
+0x100004edc	__TEXT,__cstring	system.firstpage
+0x100004eed	__TEXT,__cstring	First Home Screen Page
+0x100004f04	__TEXT,__cstring	system.back
+0x100004f10	__TEXT,__cstring	Back (in Apps)
+0x100004f1f	__TEXT,__cstring	system.unlock
+0x100004f2d	__TEXT,__cstring	Unlock
+0x100004f34	__TEXT,__cstring	system.locktoggle
+0x100004f46	__TEXT,__cstring	Lock / Unlock
+0x100004f54	__TEXT,__cstring	system.sleep
+0x100004f61	__TEXT,__cstring	Sleep
+0x100004f67	__TEXT,__cstring	system.lock
+0x100004f73	__TEXT,__cstring	Lock Device
+0x100004f7f	__TEXT,__cstring	system.respring
+0x100004f8f	__TEXT,__cstring	Respring
+0x100004f98	__TEXT,__cstring	system.powerdown
+0x100004fa9	__TEXT,__cstring	Power Off Slider
+0x100004fba	__TEXT,__cstring	system.safemode
+0x100004fca	__TEXT,__cstring	Safe Mode
+0x100004fd4	__TEXT,__cstring	system.restart
+0x100004fe3	__TEXT,__cstring	Restart
+0x100004feb	__TEXT,__cstring	system.poweroff
+0x100004ffb	__TEXT,__cstring	Power Off
+0x100005005	__TEXT,__cstring	toggle.flashlight
+0x100005017	__TEXT,__cstring	Toggle Flashlight
+0x100005029	__TEXT,__cstring	toggle.wifi
+0x100005035	__TEXT,__cstring	Toggle Wi-Fi
+0x100005042	__TEXT,__cstring	toggle.bluetooth
+0x100005053	__TEXT,__cstring	Toggle Bluetooth
+0x100005064	__TEXT,__cstring	toggle.airplane
+0x100005074	__TEXT,__cstring	Toggle Airplane Mode
+0x100005089	__TEXT,__cstring	toggle.cellular
+0x100005099	__TEXT,__cstring	Toggle Cellular Data
+0x1000050ae	__TEXT,__cstring	toggle.dnd
+0x1000050b9	__TEXT,__cstring	Toggle Do Not Disturb
+0x1000050cf	__TEXT,__cstring	toggle.lowpower
+0x1000050df	__TEXT,__cstring	Toggle Low Power Mode
+0x1000050f5	__TEXT,__cstring	toggle.rotation
+0x100005105	__TEXT,__cstring	Toggle Rotation Lock
+0x10000511a	__TEXT,__cstring	toggle.mute
+0x100005126	__TEXT,__cstring	Toggle Mute
+0x100005132	__TEXT,__cstring	toggle.darkmode
+0x100005142	__TEXT,__cstring	Toggle Dark Mode
+0x100005153	__TEXT,__cstring	toggle.nightshift
+0x100005165	__TEXT,__cstring	Toggle Night Shift
+0x100005178	__TEXT,__cstring	toggle.autobrightness
+0x10000518e	__TEXT,__cstring	Toggle Auto-Brightness
+0x1000051a5	__TEXT,__cstring	toggle.keepawake
+0x1000051b6	__TEXT,__cstring	Toggle Keep Screen Awake
+0x1000051cf	__TEXT,__cstring	toggle.location
+0x1000051df	__TEXT,__cstring	Toggle Location Services
+0x1000051f8	__TEXT,__cstring	toggle.grayscale
+0x100005209	__TEXT,__cstring	Toggle Grayscale
+0x10000521a	__TEXT,__cstring	toggle.smartinvert
+0x10000522d	__TEXT,__cstring	Toggle Smart Invert
+0x100005241	__TEXT,__cstring	toggle.classicinvert
+0x100005256	__TEXT,__cstring	Toggle Classic Invert
+0x10000526c	__TEXT,__cstring	toggle.zoom
+0x100005278	__TEXT,__cstring	Toggle Zoom
+0x100005284	__TEXT,__cstring	on.flashlight
+0x100005292	__TEXT,__cstring	Flashlight On
+0x1000052a0	__TEXT,__cstring	on.wifi
+0x1000052a8	__TEXT,__cstring	Wi-Fi On
+0x1000052b1	__TEXT,__cstring	on.bluetooth
+0x1000052be	__TEXT,__cstring	Bluetooth On
+0x1000052cb	__TEXT,__cstring	on.airplane
+0x1000052d7	__TEXT,__cstring	Airplane Mode On
+0x1000052e8	__TEXT,__cstring	on.cellular
+0x1000052f4	__TEXT,__cstring	Cellular Data On
+0x100005305	__TEXT,__cstring	on.dnd
+0x10000530c	__TEXT,__cstring	Do Not Disturb On
+0x10000531e	__TEXT,__cstring	on.lowpower
+0x10000532a	__TEXT,__cstring	Low Power Mode On
+0x10000533c	__TEXT,__cstring	on.rotation
+0x100005348	__TEXT,__cstring	Rotation Lock On
+0x100005359	__TEXT,__cstring	on.mute
+0x100005361	__TEXT,__cstring	Mute On
+0x100005369	__TEXT,__cstring	on.darkmode
+0x100005375	__TEXT,__cstring	Dark Mode On
+0x100005382	__TEXT,__cstring	on.nightshift
+0x100005390	__TEXT,__cstring	Night Shift On
+0x10000539f	__TEXT,__cstring	on.autobrightness
+0x1000053b1	__TEXT,__cstring	Auto-Brightness On
+0x1000053c4	__TEXT,__cstring	on.keepawake
+0x1000053d1	__TEXT,__cstring	Keep Screen Awake On
+0x1000053e6	__TEXT,__cstring	on.location
+0x1000053f2	__TEXT,__cstring	Location Services On
+0x100005407	__TEXT,__cstring	on.grayscale
+0x100005414	__TEXT,__cstring	Grayscale On
+0x100005421	__TEXT,__cstring	on.smartinvert
+0x100005430	__TEXT,__cstring	Smart Invert On
+0x100005440	__TEXT,__cstring	on.classicinvert
+0x100005451	__TEXT,__cstring	Classic Invert On
+0x100005463	__TEXT,__cstring	on.zoom
+0x10000546b	__TEXT,__cstring	Zoom On
+0x100005473	__TEXT,__cstring	off.flashlight
+0x100005482	__TEXT,__cstring	Flashlight Off
+0x100005491	__TEXT,__cstring	off.wifi
+0x10000549a	__TEXT,__cstring	Wi-Fi Off
+0x1000054a4	__TEXT,__cstring	off.bluetooth
+0x1000054b2	__TEXT,__cstring	Bluetooth Off
+0x1000054c0	__TEXT,__cstring	off.airplane
+0x1000054cd	__TEXT,__cstring	Airplane Mode Off
+0x1000054df	__TEXT,__cstring	off.cellular
+0x1000054ec	__TEXT,__cstring	Cellular Data Off
+0x1000054fe	__TEXT,__cstring	off.dnd
+0x100005506	__TEXT,__cstring	Do Not Disturb Off
+0x100005519	__TEXT,__cstring	off.lowpower
+0x100005526	__TEXT,__cstring	Low Power Mode Off
+0x100005539	__TEXT,__cstring	off.rotation
+0x100005546	__TEXT,__cstring	Rotation Lock Off
+0x100005558	__TEXT,__cstring	off.mute
+0x100005561	__TEXT,__cstring	Mute Off
+0x10000556a	__TEXT,__cstring	off.darkmode
+0x100005577	__TEXT,__cstring	Dark Mode Off
+0x100005585	__TEXT,__cstring	off.nightshift
+0x100005594	__TEXT,__cstring	Night Shift Off
+0x1000055a4	__TEXT,__cstring	off.autobrightness
+0x1000055b7	__TEXT,__cstring	Auto-Brightness Off
+0x1000055cb	__TEXT,__cstring	off.keepawake
+0x1000055d9	__TEXT,__cstring	Keep Screen Awake Off
+0x1000055ef	__TEXT,__cstring	off.location
+0x1000055fc	__TEXT,__cstring	Location Services Off
+0x100005612	__TEXT,__cstring	off.grayscale
+0x100005620	__TEXT,__cstring	Grayscale Off
+0x10000562e	__TEXT,__cstring	off.smartinvert
+0x10000563e	__TEXT,__cstring	Smart Invert Off
+0x10000564f	__TEXT,__cstring	off.classicinvert
+0x100005661	__TEXT,__cstring	Classic Invert Off
+0x100005674	__TEXT,__cstring	off.zoom
+0x10000567d	__TEXT,__cstring	Zoom Off
+0x100005686	__TEXT,__cstring	media.playpause
+0x100005696	__TEXT,__cstring	Play / Pause
+0x1000056a3	__TEXT,__cstring	media.next
+0x1000056ae	__TEXT,__cstring	Next Track
+0x1000056b9	__TEXT,__cstring	media.previous
+0x1000056c8	__TEXT,__cstring	Previous Track
+0x1000056d7	__TEXT,__cstring	media.volup
+0x1000056e3	__TEXT,__cstring	Volume Up
+0x1000056ed	__TEXT,__cstring	media.voldown
+0x1000056fb	__TEXT,__cstring	Volume Down
+0x100005707	__TEXT,__cstring	media.pressvolup
+0x100005718	__TEXT,__cstring	Press Volume Up
+0x100005728	__TEXT,__cstring	media.pressvoldown
+0x10000573b	__TEXT,__cstring	Press Volume Down
+0x10000574d	__TEXT,__cstring	media.airplay
+0x10000575b	__TEXT,__cstring	AirPlay Picker
+0x10000576a	__TEXT,__cstring	media.airplayiphone
+0x10000577e	__TEXT,__cstring	Play on iPhone
+0x10000578d	__TEXT,__cstring	media.nowplayingapp
+0x1000057a1	__TEXT,__cstring	Open Now Playing App
+0x1000057b6	__TEXT,__cstring	phone.answer
+0x1000057c3	__TEXT,__cstring	Answer Call
+0x1000057cf	__TEXT,__cstring	phone.end
+0x1000057d9	__TEXT,__cstring	End or Decline Call
+0x1000057ed	__TEXT,__cstring	phone.favorites
+0x1000057fd	__TEXT,__cstring	Favorites
+0x100005807	__TEXT,__cstring	phone.recents
+0x100005815	__TEXT,__cstring	Recents
+0x10000581d	__TEXT,__cstring	phone.contacts
+0x10000582c	__TEXT,__cstring	Contacts
+0x100005835	__TEXT,__cstring	phone.keypad
+0x100005842	__TEXT,__cstring	Keypad
+0x100005849	__TEXT,__cstring	phone.voicemail
+0x100005859	__TEXT,__cstring	Voicemail
+0x100005863	__TEXT,__cstring	compose.message
+0x100005873	__TEXT,__cstring	New Message
+0x10000587f	__TEXT,__cstring	compose.mail
+0x10000588c	__TEXT,__cstring	New Email
+0x100005896	__TEXT,__cstring	clock.alarm
+0x1000058a2	__TEXT,__cstring	Alarms
+0x1000058a9	__TEXT,__cstring	clock.worldclock
+0x1000058ba	__TEXT,__cstring	World Clock
+0x1000058c6	__TEXT,__cstring	clock.stopwatch
+0x1000058d6	__TEXT,__cstring	Stopwatch
+0x1000058e0	__TEXT,__cstring	clock.timer
+0x1000058ec	__TEXT,__cstring	Timer
+0x1000058f2	__TEXT,__cstring	clock.bedtime
+0x100005900	__TEXT,__cstring	Sleep / Wake Up
+0x100005910	__TEXT,__cstring	haptic.peek
+0x10000591c	__TEXT,__cstring	Light Tap
+0x100005926	__TEXT,__cstring	haptic.pop
+0x100005931	__TEXT,__cstring	Strong Tap
+0x10000593c	__TEXT,__cstring	haptic.nope
+0x100005948	__TEXT,__cstring	Three Taps
+0x100005953	__TEXT,__cstring	flashlight.brighter
+0x100005967	__TEXT,__cstring	Flashlight Brighter
+0x10000597b	__TEXT,__cstring	flashlight.dimmer
+0x10000598d	__TEXT,__cstring	Flashlight Dimmer
+0x10000599f	__TEXT,__cstring	record.video
+0x1000059ac	__TEXT,__cstring	Record Video
+0x1000059b9	__TEXT,__cstring	record.memo
+0x1000059c5	__TEXT,__cstring	Record Voice Memo
+0x1000059d7	__TEXT,__cstring	speak.time
+0x1000059e2	__TEXT,__cstring	Speak Time
+0x1000059ed	__TEXT,__cstring	speak.battery
+0x1000059fb	__TEXT,__cstring	Speak Battery Level
+0x100005a0f	__TEXT,__cstring	speak.clipboard
+0x100005a1f	__TEXT,__cstring	Speak Clipboard
+0x100005a2f	__TEXT,__cstring	clipboard.clear
+0x100005a3f	__TEXT,__cstring	Clear Clipboard
+0x100005a4f	__TEXT,__cstring	snapper3.force.open
+0x100005a63	__TEXT,__cstring	New Snap
+0x100005a6c	__TEXT,__cstring	snapper3.forceinstant.open
+0x100005a87	__TEXT,__cstring	Instant Snap
+0x100005a94	__TEXT,__cstring	snapper3.forcefreeze.open
+0x100005aae	__TEXT,__cstring	Freeze Screen & Snap
+0x100005ac3	__TEXT,__cstring	snapper3.openlast
+0x100005ad5	__TEXT,__cstring	Reopen Last Snap
+0x100005ae6	__TEXT,__cstring	snapper3.history
+0x100005af7	__TEXT,__cstring	Snap History
+0x100005b04	__TEXT,__cstring	snapper3.closecrop
+0x100005b17	__TEXT,__cstring	Cancel Cropping
+0x100005b27	__TEXT,__cstring	snapper3.close.all
+0x100005b3a	__TEXT,__cstring	Close All Snaps
+0x100005b4a	__TEXT,__cstring	copylog.showView
+0x100005b5b	__TEXT,__cstring	Show CopyLog
+0x100005b68	__TEXT,__cstring	copylog.showFavoritesView
+0x100005b82	__TEXT,__cstring	Show CopyLog Favorites
+0x100005b99	__TEXT,__cstring	Home Button
+0x100005ba5	__TEXT,__cstring	Touch ID
+0x100005bae	__TEXT,__cstring	Light Double Tap: touch the sensor twice without clicking. Finger Match works on the Lock Screen only.
+0x100005c15	__TEXT,__cstring	Lock Button
+0x100005c21	__TEXT,__cstring	Volume Buttons
+0x100005c30	__TEXT,__cstring	Up, then Down is two quick presses; it runs as the second button goes down. While one is assigned, a single press waits a moment for the other button.
+0x100005cc7	__TEXT,__cstring	Lock + Volume
+0x100005cd5	__TEXT,__cstring	Press the lock button and a volume button together. Holds run after half a second; keep holding and iOS's power-off slider still appears.
+0x100005d5f	__TEXT,__cstring	Action Button
+0x100005d6d	__TEXT,__cstring	Hold is what iOS uses for the button's own action. Assign Hold to replace it; Press and Double Press are extra.
+0x100005ddd	__TEXT,__cstring	Mute Switch
+0x100005de9	__TEXT,__cstring	Toggled Twice: flip it and back quickly; it runs on the flip back. While it's assigned, a single flip waits a moment.
+0x100005e5f	__TEXT,__cstring	Home Bar
+0x100005e68	__TEXT,__cstring	Double tap the line at the bottom, inside apps. Single taps still work.
+0x100005eb0	__TEXT,__cstring	Lock Screen Clock
+0x100005ec2	__TEXT,__cstring	Gestures that start on the big Lock Screen clock. The rest of the Lock Screen is unchanged.
+0x100005f1e	__TEXT,__cstring	Headset Button
+0x100005f2d	__TEXT,__cstring	The button on wired headphones. Hold replaces Siri while it's assigned.
+0x100005f75	__TEXT,__cstring	Status Bar
+0x100005f80	__TEXT,__cstring	Left and Right are each half of the bar. A single tap still scrolls to the top.
+0x100005fd0	__TEXT,__cstring	Home Screen Icons
+0x100005fe2	__TEXT,__cstring	A quick flick that starts on an app or folder icon.
+0x100006016	__TEXT,__cstring	Screen Edges
+0x100006023	__TEXT,__cstring	Slide from the very edge of the screen. An assigned part of an edge stops doing its iOS gesture there, so open a trigger to see what it takes over.
+0x1000060b7	__TEXT,__cstring	Home Screen Gestures
+0x1000060cc	__TEXT,__cstring	On an empty part of a Home Screen page, not on an icon.
+0x100006104	__TEXT,__cstring	Multi-Finger Gestures
+0x10000611a	__TEXT,__cstring	Inside apps. The app still sees the gesture too, so pick ones it doesn't use; two- and three-finger taps and swipes are safest.
+0x10000619a	__TEXT,__cstring	Motion
+0x1000061a1	__TEXT,__cstring	Uses iOS's own shake detection, so no extra battery.
+0x1000061d6	__TEXT,__cstring	Charger & Headphones
+0x1000061eb	__TEXT,__cstring	Taking out an AirPod can count as Headphones Disconnected.
+0x100006226	__TEXT,__cstring	CarPlay
+0x10000622e	__TEXT,__cstring	Wired and wireless CarPlay.
+0x10000624a	__TEXT,__cstring	Sunrise & Sunset
+0x10000625b	__TEXT,__cstring	Worked out from the location iOS already has. No tracking.
+0x100006296	__TEXT,__cstring	Phone Calls
+0x1000062a2	__TEXT,__cstring	Phone, FaceTime and other calling apps.
+0x1000062ca	__TEXT,__cstring	Notifications
+0x1000062d8	__TEXT,__cstring	Any notification. Triggr only sees which app sent it. For one app, use Custom Events.
+0x10000632e	__TEXT,__cstring	Music
+0x100006334	__TEXT,__cstring	Any app in Now Playing: Music, Spotify, YouTube, podcasts…
+0x100006371	__TEXT,__cstring	Proximity Sensor
+0x100006382	__TEXT,__cstring	The sensor by the earpiece. It stays on while the screen is on (a little battery). Wave is a quick cover; with Wave assigned, Cover waits half a second.
+0x10000641b	__TEXT,__cstring	State Changes
+0x100006429	__TEXT,__cstring	Runs after the change. Control Center's Wi-Fi button only leaves the network; Wi-Fi stays on.
+0x100006487	__TEXT,__cstring	home.single
+0x100006493	__TEXT,__cstring	Single Press
+0x1000064a0	__TEXT,__cstring	home.double
+0x1000064ac	__TEXT,__cstring	Double Press
+0x1000064b9	__TEXT,__cstring	home.triple
+0x1000064c5	__TEXT,__cstring	Triple Press
+0x1000064d2	__TEXT,__cstring	home.shorthold
+0x1000064e1	__TEXT,__cstring	Short Hold
+0x1000064ec	__TEXT,__cstring	home.longhold
+0x1000064fa	__TEXT,__cstring	Long Hold
+0x100006504	__TEXT,__cstring	touchid.doubletap
+0x100006516	__TEXT,__cstring	Light Double Tap
+0x100006527	__TEXT,__cstring	touchid.match
+0x100006535	__TEXT,__cstring	Finger Match (Lock Screen)
+0x100006550	__TEXT,__cstring	lock.single
+0x10000655c	__TEXT,__cstring	lock.double
+0x100006568	__TEXT,__cstring	lock.triple
+0x100006574	__TEXT,__cstring	lock.longhold
+0x100006582	__TEXT,__cstring	Hold
+0x100006587	__TEXT,__cstring	volume.up
+0x100006591	__TEXT,__cstring	Up Press
+0x10000659a	__TEXT,__cstring	volume.down
+0x1000065a6	__TEXT,__cstring	Down Press
+0x1000065b1	__TEXT,__cstring	volume.uphold
+0x1000065bf	__TEXT,__cstring	Up Hold
+0x1000065c7	__TEXT,__cstring	volume.downhold
+0x1000065d7	__TEXT,__cstring	Down Hold
+0x1000065e1	__TEXT,__cstring	volume.updown
+0x1000065ef	__TEXT,__cstring	Up, then Down
+0x1000065fd	__TEXT,__cstring	volume.downup
+0x10000660b	__TEXT,__cstring	Down, then Up
+0x100006619	__TEXT,__cstring	volume.both
+0x100006625	__TEXT,__cstring	Press Both
+0x100006630	__TEXT,__cstring	volume.bothhold
+0x100006640	__TEXT,__cstring	Hold Both
+0x10000664a	__TEXT,__cstring	combo.sideup
+0x100006657	__TEXT,__cstring	combo.sidedown
+0x100006666	__TEXT,__cstring	combo.sideuphold
+0x100006677	__TEXT,__cstring	combo.sidedownhold
+0x10000668a	__TEXT,__cstring	action.press
+0x100006697	__TEXT,__cstring	Press
+0x10000669d	__TEXT,__cstring	action.double
+0x1000066ab	__TEXT,__cstring	action.hold
+0x1000066b7	__TEXT,__cstring	mute.silent
+0x1000066c3	__TEXT,__cstring	Switched to Silent
+0x1000066d6	__TEXT,__cstring	mute.ring
+0x1000066e0	__TEXT,__cstring	Switched to Ring
+0x1000066f1	__TEXT,__cstring	mute.toggle
+0x1000066fd	__TEXT,__cstring	Toggled
+0x100006705	__TEXT,__cstring	mute.twice
+0x100006710	__TEXT,__cstring	Toggled Twice
+0x10000671e	__TEXT,__cstring	homebar.doubletap
+0x100006730	__TEXT,__cstring	Double Tap
+0x10000673b	__TEXT,__cstring	lsclock.hold
+0x100006748	__TEXT,__cstring	Tap and Hold
+0x100006755	__TEXT,__cstring	lsclock.doubletap
+0x100006767	__TEXT,__cstring	lsclock.swipeleft
+0x100006779	__TEXT,__cstring	Swipe Left
+0x100006784	__TEXT,__cstring	lsclock.swiperight
+0x100006797	__TEXT,__cstring	Swipe Right
+0x1000067a3	__TEXT,__cstring	lsclock.swipedown
+0x1000067b5	__TEXT,__cstring	Swipe Down
+0x1000067c0	__TEXT,__cstring	headset.single
+0x1000067cf	__TEXT,__cstring	headset.hold
+0x1000067dc	__TEXT,__cstring	statusbar.tap
+0x1000067ea	__TEXT,__cstring	Tap
+0x1000067ee	__TEXT,__cstring	statusbar.doubletap
+0x100006802	__TEXT,__cstring	statusbar.hold
+0x100006811	__TEXT,__cstring	statusbar.left.tap
+0x100006824	__TEXT,__cstring	Left Tap
+0x10000682d	__TEXT,__cstring	statusbar.left.doubletap
+0x100006846	__TEXT,__cstring	Left Double Tap
+0x100006856	__TEXT,__cstring	statusbar.left.hold
+0x10000686a	__TEXT,__cstring	Left Hold
+0x100006874	__TEXT,__cstring	statusbar.right.tap
+0x100006888	__TEXT,__cstring	Right Tap
+0x100006892	__TEXT,__cstring	statusbar.right.doubletap
+0x1000068ac	__TEXT,__cstring	Right Double Tap
+0x1000068bd	__TEXT,__cstring	statusbar.right.hold
+0x1000068d2	__TEXT,__cstring	Right Hold
+0x1000068dd	__TEXT,__cstring	statusbar.swipeleft
+0x1000068f1	__TEXT,__cstring	statusbar.swiperight
+0x100006906	__TEXT,__cstring	icon.flickup
+0x100006913	__TEXT,__cstring	Flick Up
+0x10000691c	__TEXT,__cstring	icon.flickdown
+0x10000692b	__TEXT,__cstring	Flick Down
+0x100006936	__TEXT,__cstring	icon.flickleft
+0x100006945	__TEXT,__cstring	Flick Left
+0x100006950	__TEXT,__cstring	icon.flickright
+0x100006960	__TEXT,__cstring	Flick Right
+0x10000696c	__TEXT,__cstring	edge.left
+0x100006976	__TEXT,__cstring	Slide In from Left
+0x100006989	__TEXT,__cstring	edge.right
+0x100006994	__TEXT,__cstring	Slide In from Right
+0x1000069a8	__TEXT,__cstring	edge.left2
+0x1000069b3	__TEXT,__cstring	Two-Finger Slide In from Left
+0x1000069d1	__TEXT,__cstring	edge.right2
+0x1000069dd	__TEXT,__cstring	Two-Finger Slide In from Right
+0x1000069fc	__TEXT,__cstring	edge.bottomleft
+0x100006a0c	__TEXT,__cstring	Swipe Up from Bottom Left
+0x100006a26	__TEXT,__cstring	edge.bottomright
+0x100006a37	__TEXT,__cstring	Swipe Up from Bottom Right
+0x100006a52	__TEXT,__cstring	edge.leftup
+0x100006a5e	__TEXT,__cstring	Slide Up Along Left Edge
+0x100006a77	__TEXT,__cstring	edge.leftdown
+0x100006a85	__TEXT,__cstring	Slide Down Along Left Edge
+0x100006aa0	__TEXT,__cstring	edge.rightup
+0x100006aad	__TEXT,__cstring	Slide Up Along Right Edge
+0x100006ac7	__TEXT,__cstring	edge.rightdown
+0x100006ad6	__TEXT,__cstring	Slide Down Along Right Edge
+0x100006af2	__TEXT,__cstring	edge.topleft
+0x100006aff	__TEXT,__cstring	Slide Down from Top Left
+0x100006b18	__TEXT,__cstring	edge.topright
+0x100006b26	__TEXT,__cstring	Slide Down from Top Right
+0x100006b40	__TEXT,__cstring	edge.top2
+0x100006b4a	__TEXT,__cstring	Two-Finger Slide Down from Top
+0x100006b69	__TEXT,__cstring	edge.bottom2
+0x100006b76	__TEXT,__cstring	Two-Finger Slide Up from Bottom
+0x100006b96	__TEXT,__cstring	homescreen.pinchin
+0x100006ba9	__TEXT,__cstring	Pinch In
+0x100006bb2	__TEXT,__cstring	homescreen.pinchout
+0x100006bc6	__TEXT,__cstring	Pinch Out
+0x100006bd0	__TEXT,__cstring	homescreen.twoup
+0x100006be1	__TEXT,__cstring	Two-Finger Swipe Up
+0x100006bf5	__TEXT,__cstring	homescreen.twodown
+0x100006c08	__TEXT,__cstring	Two-Finger Swipe Down
+0x100006c1e	__TEXT,__cstring	homescreen.doubletap
+0x100006c33	__TEXT,__cstring	Double Tap Empty Space
+0x100006c4a	__TEXT,__cstring	inapp.twotap
+0x100006c57	__TEXT,__cstring	Two-Finger Tap
+0x100006c66	__TEXT,__cstring	inapp.threetap
+0x100006c75	__TEXT,__cstring	Three-Finger Tap
+0x100006c86	__TEXT,__cstring	inapp.twoup
+0x100006c92	__TEXT,__cstring	inapp.twodown
+0x100006ca0	__TEXT,__cstring	inapp.twoleft
+0x100006cae	__TEXT,__cstring	Two-Finger Swipe Left
+0x100006cc4	__TEXT,__cstring	inapp.tworight
+0x100006cd3	__TEXT,__cstring	Two-Finger Swipe Right
+0x100006cea	__TEXT,__cstring	inapp.threeup
+0x100006cf8	__TEXT,__cstring	Three-Finger Swipe Up
+0x100006d0e	__TEXT,__cstring	inapp.threedown
+0x100006d1e	__TEXT,__cstring	Three-Finger Swipe Down
+0x100006d36	__TEXT,__cstring	inapp.threeleft
+0x100006d46	__TEXT,__cstring	Three-Finger Swipe Left
+0x100006d5e	__TEXT,__cstring	inapp.threeright
+0x100006d6f	__TEXT,__cstring	Three-Finger Swipe Right
+0x100006d88	__TEXT,__cstring	inapp.pinchin
+0x100006d96	__TEXT,__cstring	inapp.pinchout
+0x100006da5	__TEXT,__cstring	inapp.fourtap
+0x100006db3	__TEXT,__cstring	Four-Finger Tap
+0x100006dc3	__TEXT,__cstring	inapp.fivetap
+0x100006dd1	__TEXT,__cstring	Five-Finger Tap
+0x100006de1	__TEXT,__cstring	inapp.threepinchin
+0x100006df4	__TEXT,__cstring	Three-Finger Pinch
+0x100006e07	__TEXT,__cstring	inapp.threepinchout
+0x100006e1b	__TEXT,__cstring	Three-Finger Spread
+0x100006e2f	__TEXT,__cstring	inapp.fourpinchin
+0x100006e41	__TEXT,__cstring	Four-Finger Pinch
+0x100006e53	__TEXT,__cstring	inapp.fourpinchout
+0x100006e66	__TEXT,__cstring	Four-Finger Spread
+0x100006e79	__TEXT,__cstring	inapp.fivepinchin
+0x100006e8b	__TEXT,__cstring	Five-Finger Pinch
+0x100006e9d	__TEXT,__cstring	inapp.fivepinchout
+0x100006eb0	__TEXT,__cstring	Five-Finger Spread
+0x100006ec3	__TEXT,__cstring	motion.shake
+0x100006ed0	__TEXT,__cstring	Shake Device
+0x100006edd	__TEXT,__cstring	power.connected
+0x100006eed	__TEXT,__cstring	Charger Connected
+0x100006eff	__TEXT,__cstring	power.disconnected
+0x100006f12	__TEXT,__cstring	Charger Disconnected
+0x100006f27	__TEXT,__cstring	headphones.in
+0x100006f35	__TEXT,__cstring	Headphones Connected
+0x100006f4a	__TEXT,__cstring	headphones.out
+0x100006f59	__TEXT,__cstring	Headphones Disconnected
+0x100006f71	__TEXT,__cstring	carplay.connected
+0x100006f83	__TEXT,__cstring	CarPlay Connected
+0x100006f95	__TEXT,__cstring	carplay.disconnected
+0x100006faa	__TEXT,__cstring	CarPlay Disconnected
+0x100006fbf	__TEXT,__cstring	time.sunrise
+0x100006fcc	__TEXT,__cstring	Sunrise
+0x100006fd4	__TEXT,__cstring	time.sunset
+0x100006fe0	__TEXT,__cstring	Sunset
+0x100006fe7	__TEXT,__cstring	call.incoming
+0x100006ff5	__TEXT,__cstring	Incoming Call
+0x100007003	__TEXT,__cstring	call.answered
+0x100007011	__TEXT,__cstring	Call Answered
+0x10000701f	__TEXT,__cstring	call.outgoing
+0x10000702d	__TEXT,__cstring	Outgoing Call
+0x10000703b	__TEXT,__cstring	call.ended
+0x100007046	__TEXT,__cstring	Call Ended
+0x100007051	__TEXT,__cstring	notification.any
+0x100007062	__TEXT,__cstring	Any Notification
+0x100007073	__TEXT,__cstring	music.started
+0x100007081	__TEXT,__cstring	Playback Started
+0x100007092	__TEXT,__cstring	music.stopped
+0x1000070a0	__TEXT,__cstring	Playback Paused or Stopped
+0x1000070bb	__TEXT,__cstring	music.changed
+0x1000070c9	__TEXT,__cstring	Song Changed
+0x1000070d6	__TEXT,__cstring	proximity.cover
+0x1000070e6	__TEXT,__cstring	Cover
+0x1000070ec	__TEXT,__cstring	proximity.wave
+0x1000070fb	__TEXT,__cstring	Wave (Cover Briefly)
+0x100007110	__TEXT,__cstring	wifi.on
+0x100007118	__TEXT,__cstring	Wi-Fi Turned On
+0x100007128	__TEXT,__cstring	wifi.off
+0x100007131	__TEXT,__cstring	Wi-Fi Turned Off
+0x100007142	__TEXT,__cstring	wifi.joined
+0x10000714e	__TEXT,__cstring	Joined Wi-Fi Network
+0x100007163	__TEXT,__cstring	wifi.left
+0x10000716d	__TEXT,__cstring	Left Wi-Fi Network
+0x100007180	__TEXT,__cstring	bluetooth.on
+0x10000718d	__TEXT,__cstring	Bluetooth Turned On
+0x1000071a1	__TEXT,__cstring	bluetooth.off
+0x1000071af	__TEXT,__cstring	Bluetooth Turned Off
+0x1000071c4	__TEXT,__cstring	lowpower.on
+0x1000071d0	__TEXT,__cstring	lowpower.off
+0x1000071dd	__TEXT,__cstring	device.locked
+0x1000071eb	__TEXT,__cstring	Device Locked
+0x1000071f9	__TEXT,__cstring	device.unlocked
+0x100007209	__TEXT,__cstring	Device Unlocked
+0x100007219	__TEXT,__cstring	display.on
+0x100007224	__TEXT,__cstring	Screen Turned On
+0x100007235	__TEXT,__cstring	display.off
+0x100007241	__TEXT,__cstring	Screen Turned Off
+0x100007253	__TEXT,__cstring	com.johndie.triggr
+0x100007266	__TEXT,__cstring	mobile
+0x10000726d	__TEXT,__cstring	com.johndie.triggr/api/
+0x100007285	__TEXT,__cstring	triggr: couldn't send (notify status %u)
+
+0x1000072af	__TEXT,__cstring	lib.
+0x1000072b4	__TEXT,__cstring	wifi.joined:
+0x1000072c1	__TEXT,__cstring	wifi.left:
+0x1000072cc	__TEXT,__cstring	bt.connected:
+0x1000072da	__TEXT,__cstring	bt.disconnected:
+0x1000072eb	__TEXT,__cstring	battery.above:
+0x1000072fa	__TEXT,__cstring	battery.below:
+0x100007309	__TEXT,__cstring	app.launched:
+0x100007317	__TEXT,__cstring	notification.app:
+0x100007329	__TEXT,__cstring	time:
+0x10000732f	__TEXT,__cstring	icon.flickup:
+0x10000733d	__TEXT,__cstring	icon.flickdown:
+0x10000734d	__TEXT,__cstring	icon.flickleft:
+0x10000735d	__TEXT,__cstring	icon.flickright:
+0x10000736e	__TEXT,__cstring	Actions (triggr run <action>):
+0x10000738d	__TEXT,__cstring	
+Triggers (triggr trigger <trigger>; runs only if assigned):
+0x1000073ca	__TEXT,__objc_methname	UTF8String
+0x1000073d5	__TEXT,__objc_methname	boolValue
+0x1000073df	__TEXT,__objc_methname	caseInsensitiveCompare:
+0x1000073f7	__TEXT,__objc_methname	countByEnumeratingWithState:objects:count:
+0x100007422	__TEXT,__objc_methname	description
+0x10000742e	__TEXT,__objc_methname	hasPrefix:
+0x100007439	__TEXT,__objc_methname	isEqualToString:
+0x10000744a	__TEXT,__objc_methname	length
+0x100007451	__TEXT,__objc_methname	objectForKeyedSubscript:
+0x10000746a	__TEXT,__objc_methname	stringByAppendingString:
+0x100007483	__TEXT,__objc_methname	stringWithUTF8String:

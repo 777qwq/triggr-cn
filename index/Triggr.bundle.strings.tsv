@@ -1,0 +1,1970 @@
+addr	section	text
+0x2cbbc	__TEXT,__cstring	tgMode
+0x2cbc3	__TEXT,__cstring	tgTrigger
+0x2cbcd	__TEXT,__cstring	com.johndie.triggr
+0x2cbe0	__TEXT,__cstring	defaults
+0x2cbe9	__TEXT,__cstring	key
+0x2cbed	__TEXT,__cstring	com.johndie.triggr/prefs-changed
+0x2cc0e	__TEXT,__cstring	PostNotification
+0x2cc20	__TEXT,__cstring	v8@?0
+0x2cc26	__TEXT,__cstring	Undo
+0x2cc2b	__TEXT,__cstring	TestAssignment
+0x2cc3a	__TEXT,__cstring	com.johndie.triggr/test
+0x2cc52	__TEXT,__cstring	tgMenuEditor
+0x2cc5f	__TEXT,__cstring	Run
+0x2cc63	__TEXT,__cstring	v32@?0@"UIContextualAction"8@"UIView"16@?<v@?B>24
+0x2cc95	__TEXT,__cstring	play.fill
+0x2cc9f	__TEXT,__cstring	Run Now
+0x2cca7	__TEXT,__cstring	v16@?0@"UIAction"8
+0x2ccba	__TEXT,__cstring	trash
+0x2ccc0	__TEXT,__cstring	@"UIMenu"16@?0@"NSArray"8
+0x2ccda	__TEXT,__cstring	StatusBarSingleTap
+0x2cced	__TEXT,__cstring	LockReplaces
+0x2ccfa	__TEXT,__cstring	anywhere
+0x2cd03	__TEXT,__cstring	Anywhere: 
+0x2cd0e	__TEXT,__cstring	Default: 
+0x2cd18	__TEXT,__cstring	
+0x2cd1a	__TEXT,__cstring	Scheduled Time
+0x2cd29	__TEXT,__cstring	Every Day
+0x2cd33	__TEXT,__cstring	Weekdays
+0x2cd3c	__TEXT,__cstring	Weekends
+0x2cd45	__TEXT,__cstring	Custom
+0x2cd4c	__TEXT,__cstring	Runs at this time on the selected days. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.
+0x2cdd1	__TEXT,__cstring	%ld
+0x2cdd5	__TEXT,__cstring	1234567
+0x2cddd	__TEXT,__cstring	23456
+0x2cde3	__TEXT,__cstring	17
+0x2cde6	__TEXT,__cstring	daily
+0x2cdec	__TEXT,__cstring	weekdays
+0x2cdf5	__TEXT,__cstring	weekends
+0x2cdfe	__TEXT,__cstring	%@%02ld%02ld:%@
+0x2ce0e	__TEXT,__cstring	time:
+0x2ce14	__TEXT,__cstring	
+0x2ce16	__TEXT,__cstring	Steps
+0x2ce1c	__TEXT,__cstring	Add Pause
+0x2ce26	__TEXT,__cstring	if:
+0x2ce2a	__TEXT,__cstring	endif
+0x2ce30	__TEXT,__cstring	else
+0x2ce35	__TEXT,__cstring	item
+0x2ce3a	__TEXT,__cstring	pause:
+0x2ce41	__TEXT,__cstring	Actions run top to bottom. Drag to reorder. Tap an action to add a pause after it or to run it only if something is true; tap an If to change it or add Otherwise.
+0x2cee4	__TEXT,__cstring	No actions yet: pick some first.
+0x2cf05	__TEXT,__cstring	v16@?0@"NSString"8
+0x2cf18	__TEXT,__cstring	v16@?0@"UIAlertAction"8
+0x2cf30	__TEXT,__cstring	Add Otherwise
+0x2cf3e	__TEXT,__cstring	Remove If (Keep Actions)
+0x2cf57	__TEXT,__cstring	Add Pause After
+0x2cf67	__TEXT,__cstring	Cancel
+0x2cf6e	__TEXT,__cstring	Pauses go between two actions. Pick at least two actions first, or tap an action to add a pause after it.
+0x2cfd8	__TEXT,__cstring	OK
+0x2cfdb	__TEXT,__cstring	1
+0x2cfdd	__TEXT,__cstring	Pause
+0x2cfe3	__TEXT,__cstring	v16@?0@"UITextField"8
+0x2cff9	__TEXT,__cstring	Save
+0x2cffe	__TEXT,__cstring	,
+0x2d000	__TEXT,__cstring	.
+0x2d002	__TEXT,__cstring	%@%g
+0x2d007	__TEXT,__cstring	Search Actions
+0x2d016	__TEXT,__cstring	Test
+0x2d01b	__TEXT,__cstring	RecentActions
+0x2d029	__TEXT,__cstring	menu:
+0x2d02f	__TEXT,__cstring	recent
+0x2d036	__TEXT,__cstring	Nothing picked: it does its normal thing (%@). An action you pick runs instead. To keep %@ some of the time, add Only If.
+0x2d0b0	__TEXT,__cstring	Nothing picked: it does its normal thing (%@).
+0x2d0df	__TEXT,__cstring	Tap the actions this menu should offer.
+0x2d107	__TEXT,__cstring	Tap an action below. Pick several to run them in order.
+0x2d13f	__TEXT,__cstring	Anywhere runs %@; picking here replaces it %@.
+0x2d16e	__TEXT,__cstring	Only %@.
+0x2d177	__TEXT,__cstring	In This Menu
+0x2d184	__TEXT,__cstring	Runs in This Order
+0x2d197	__TEXT,__cstring	Selected
+0x2d1a0	__TEXT,__cstring	 
+0x2d1a2	__TEXT,__cstring	footerText
+0x2d1ad	__TEXT,__cstring	%lu.  %@
+0x2d1b6	__TEXT,__cstring	tgPicked
+0x2d1bf	__TEXT,__cstring	Order, Pauses & If
+0x2d1d2	__TEXT,__cstring	tgOrder
+0x2d1da	__TEXT,__cstring	Remove All
+0x2d1e5	__TEXT,__cstring	tgClear
+0x2d1ed	__TEXT,__cstring	Only If
+0x2d1f5	__TEXT,__cstring	All of these must be true, or it does its normal thing.
+0x2d22d	__TEXT,__cstring	Optional. For example: only while the flashlight is on, only on your home Wi-Fi, or only at night.
+0x2d290	__TEXT,__cstring	tgCondition
+0x2d29c	__TEXT,__cstring	after:
+0x2d2a3	__TEXT,__cstring	hourglass
+0x2d2ad	__TEXT,__cstring	checkmark.circle.fill
+0x2d2c3	__TEXT,__cstring	tgAddCondition
+0x2d2d2	__TEXT,__cstring	plus.circle.fill
+0x2d2e3	__TEXT,__cstring	Actions
+0x2d2eb	__TEXT,__cstring	Recently Used
+0x2d2f9	__TEXT,__cstring	tgCategory
+0x2d304	__TEXT,__cstring	clock.arrow.circlepath
+0x2d31b	__TEXT,__cstring	ext:
+0x2d320	__TEXT,__cstring	%@%@:%@
+0x2d328	__TEXT,__cstring	lib:
+0x2d32d	__TEXT,__cstring	classics
+0x2d336	__TEXT,__cstring	system
+0x2d33d	__TEXT,__cstring	power
+0x2d343	__TEXT,__cstring	media
+0x2d349	__TEXT,__cstring	phone
+0x2d34f	__TEXT,__cstring	compose
+0x2d357	__TEXT,__cstring	clock
+0x2d35d	__TEXT,__cstring	haptics
+0x2d365	__TEXT,__cstring	record
+0x2d36c	__TEXT,__cstring	snapper3
+0x2d375	__TEXT,__cstring	copylog
+0x2d37d	__TEXT,__cstring	airplay:
+0x2d386	__TEXT,__cstring	Speaker or TV name, as it appears in the AirPlay menu (part of it is enough)
+0x2d3d3	__TEXT,__cstring	switches
+0x2d3dc	__TEXT,__cstring	tgSwitch
+0x2d3e5	__TEXT,__cstring	levels
+0x2d3ec	__TEXT,__cstring	brightness:
+0x2d3f8	__TEXT,__cstring	brightness.up:
+0x2d407	__TEXT,__cstring	brightness.down:
+0x2d418	__TEXT,__cstring	volume.media:
+0x2d426	__TEXT,__cstring	volume.ringer:
+0x2d435	__TEXT,__cstring	open
+0x2d43a	__TEXT,__cstring	useSearchBar
+0x2d447	__TEXT,__cstring	sectionType
+0x2d453	__TEXT,__cstring	Visible
+0x2d45b	__TEXT,__cstring	sections
+0x2d464	__TEXT,__cstring	app:
+0x2d469	__TEXT,__cstring	tgCommandPrefix
+0x2d479	__TEXT,__cstring	settings:
+0x2d483	__TEXT,__cstring	url:
+0x2d488	__TEXT,__cstring	text
+0x2d48d	__TEXT,__cstring	message:
+0x2d496	__TEXT,__cstring	Text to show in an alert
+0x2d4af	__TEXT,__cstring	speak:
+0x2d4b6	__TEXT,__cstring	Text for the device to say
+0x2d4d1	__TEXT,__cstring	toast:
+0x2d4d8	__TEXT,__cstring	Shown in a small banner. {battery}, {time} and {date} are filled in.
+0x2d51d	__TEXT,__cstring	shell:
+0x2d524	__TEXT,__cstring	Shell command. Runs with the jailbreak's sh -c as the mobile user.
+0x2d567	__TEXT,__cstring	shortcuts
+0x2d571	__TEXT,__cstring	shortcut:
+0x2d57b	__TEXT,__cstring	Shortcut name, exactly as in the Shortcuts app
+0x2d5aa	__TEXT,__cstring	activator
+0x2d5b4	__TEXT,__cstring	activator:
+0x2d5bf	__TEXT,__cstring	%@: %@
+0x2d5c6	__TEXT,__cstring	menus
+0x2d5cc	__TEXT,__cstring	id
+0x2d5cf	__TEXT,__cstring	name
+0x2d5d4	__TEXT,__cstring	tgAction
+0x2d5dd	__TEXT,__cstring	tgPrompt
+0x2d5e6	__TEXT,__cstring	toggle
+0x2d5ed	__TEXT,__cstring	Toggle
+0x2d5f4	__TEXT,__cstring	on
+0x2d5f7	__TEXT,__cstring	On
+0x2d5fa	__TEXT,__cstring	off
+0x2d5fe	__TEXT,__cstring	Off
+0x2d602	__TEXT,__cstring	%@.%@
+0x2d608	__TEXT,__cstring	Heads Up
+0x2d611	__TEXT,__cstring	Add Anyway
+0x2d61c	__TEXT,__cstring	!
+0x2d61e	__TEXT,__cstring	battery
+0x2d626	__TEXT,__cstring	:
+0x2d628	__TEXT,__cstring	wifi
+0x2d62d	__TEXT,__cstring	bt
+0x2d630	__TEXT,__cstring	Remove
+0x2d637	__TEXT,__cstring	toggle.
+0x2d63f	__TEXT,__cstring	on.
+0x2d643	__TEXT,__cstring	off.
+0x2d648	__TEXT,__cstring	B32@?0@"NSString"8Q16^B24
+0x2d662	__TEXT,__cstring	, 
+0x2d665	__TEXT,__cstring	v16@?0@"UIGraphicsImageRendererContext"8
+0x2d68e	__TEXT,__cstring	iconImage
+0x2d698	__TEXT,__cstring	chevron.down
+0x2d6a5	__TEXT,__cstring	chevron.right
+0x2d6b3	__TEXT,__cstring	%lu
+0x2d6b7	__TEXT,__cstring	Turn On
+0x2d6bf	__TEXT,__cstring	Turn Off
+0x2d6c8	__TEXT,__cstring	checked
+0x2d6d0	__TEXT,__cstring	/var/mobile/Library/Preferences/com.johndie.triggr.airplay.plist
+0x2d711	__TEXT,__cstring	AirPlay To
+0x2d71c	__TEXT,__cstring	No speakers or TVs found right now. You can still type a name.
+0x2d75b	__TEXT,__cstring	com.johndie.triggr/airplay-list-ready
+0x2d781	__TEXT,__cstring	v12@?0i8
+0x2d78a	__TEXT,__cstring	com.johndie.triggr/airplay-list
+0x2d7aa	__TEXT,__cstring	Open Settings Page
+0x2d7bd	__TEXT,__cstring	Remove All Actions
+0x2d7d0	__TEXT,__cstring	v16@?0@"NSArray"8
+0x2d7e2	__TEXT,__cstring	10
+0x2d7e5	__TEXT,__cstring	%d
+0x2d7e8	__TEXT,__cstring	
+0x2d7eb	__TEXT,__cstring	Custom Events
+0x2d7f9	__TEXT,__cstring	q24@?0@"PSSpecifier"8@"PSSpecifier"16
+0x2d81f	__TEXT,__cstring	tgGroup
+0x2d827	__TEXT,__cstring	tgLibGroup
+0x2d832	__TEXT,__cstring	Triggers
+0x2d83b	__TEXT,__cstring	Footer
+0x2d842	__TEXT,__cstring	%@Added by %@ through libtriggr.
+0x2d863	__TEXT,__cstring	lib.
+0x2d868	__TEXT,__cstring	Assigned presses replace the button's own action.
+0x2d89a	__TEXT,__cstring	Assigned presses run alongside the button's own action.
+0x2d8d2	__TEXT,__cstring	%@ %@
+0x2d8d8	__TEXT,__cstring	 Double and Triple Press take over Wallet and the Accessibility Shortcut.
+0x2d922	__TEXT,__cstring	 Single taps are off in Options.
+0x2d943	__TEXT,__cstring	Swipe left on an event to delete it.
+0x2d968	__TEXT,__cstring	No custom events yet. Add one below, then pick what it runs.
+0x2d9a5	__TEXT,__cstring	Add Event
+0x2d9af	__TEXT,__cstring	Joined Wi-Fi Network
+0x2d9c4	__TEXT,__cstring	wifi.joined:
+0x2d9d1	__TEXT,__cstring	Left Wi-Fi Network
+0x2d9e4	__TEXT,__cstring	wifi.left:
+0x2d9ef	__TEXT,__cstring	Bluetooth Device Connected
+0x2da0a	__TEXT,__cstring	bt.connected:
+0x2da18	__TEXT,__cstring	Bluetooth Device Disconnected
+0x2da36	__TEXT,__cstring	bt.disconnected:
+0x2da47	__TEXT,__cstring	Battery Rises Above
+0x2da5b	__TEXT,__cstring	battery.above:
+0x2da6a	__TEXT,__cstring	Battery Drops Below
+0x2da7e	__TEXT,__cstring	battery.below:
+0x2da8d	__TEXT,__cstring	tgAddEvent
+0x2da98	__TEXT,__cstring	App Opened
+0x2daa3	__TEXT,__cstring	Notification From App
+0x2dab9	__TEXT,__cstring	App Icon Flicked
+0x2daca	__TEXT,__cstring	/
+0x2dacc	__TEXT,__cstring	Delete
+0x2dad3	__TEXT,__cstring	Clear
+0x2dad9	__TEXT,__cstring	Flick on %@
+0x2dae5	__TEXT,__cstring	Runs instead of the plain icon flick in that direction.
+0x2db1d	__TEXT,__cstring	icon.flickup:
+0x2db2b	__TEXT,__cstring	icon.flickdown:
+0x2db3b	__TEXT,__cstring	icon.flickleft:
+0x2db4b	__TEXT,__cstring	icon.flickright:
+0x2db5c	__TEXT,__cstring	app.launched:
+0x2db6a	__TEXT,__cstring	notification.app:
+0x2db7c	__TEXT,__cstring	Next
+0x2db81	__TEXT,__cstring	
+0x2db84	__TEXT,__cstring	Assigned
+0x2db8d	__TEXT,__cstring	Tap one to change it, or swipe left to remove it.
+0x2dbbf	__TEXT,__cstring	Nothing is assigned %@ yet.
+0x2dbdb	__TEXT,__cstring	i
+0x2dbdd	__TEXT,__cstring	alignment
+0x2dbe7	__TEXT,__cstring	PSTableCell
+0x2dbf3	__TEXT,__cstring	cellClass
+0x2dbfd	__TEXT,__cstring	tgDestructive
+0x2dc0b	__TEXT,__cstring	Remove all %lu assignments %@? Those triggers go back to their normal behaviour.
+0x2dc5c	__TEXT,__cstring	
+0x2dc5e	__TEXT,__cstring	tgTitle
+0x2dc66	__TEXT,__cstring	Pick a button or gesture, then what it does. It works everywhere, unless you give it something else in one of the Places.
+0x2dce0	__TEXT,__cstring	Only %@. Replaces %@ for the same trigger.
+0x2dd0b	__TEXT,__cstring	In Apps and Anywhere
+0x2dd20	__TEXT,__cstring	Anywhere
+0x2dd29	__TEXT,__cstring	checklist
+0x2dd33	__TEXT,__cstring	Buttons
+0x2dd3b	__TEXT,__cstring	Touch
+0x2dd41	__TEXT,__cstring	Sensors
+0x2dd49	__TEXT,__cstring	Events
+0x2dd50	__TEXT,__cstring	home
+0x2dd55	__TEXT,__cstring	app
+0x2dd59	__TEXT,__cstring	lock
+0x2dd5e	__TEXT,__cstring	More
+0x2dd63	__TEXT,__cstring	puzzlepiece.extension.fill
+0x2dd7e	__TEXT,__cstring	sparkles
+0x2dd87	__TEXT,__cstring	In Specific Apps
+0x2dd98	__TEXT,__cstring	Give one app its own assignments: inside it they replace In Apps' and Anywhere's for the same trigger, everywhere else nothing changes.
+0x2de20	__TEXT,__cstring	q24@?0@"NSString"8@"NSString"16
+0x2de40	__TEXT,__cstring	tgCount
+0x2de48	__TEXT,__cstring	Menus
+0x2de4e	__TEXT,__cstring	menu/
+0x2de54	__TEXT,__cstring	tgMenuID
+0x2de5d	__TEXT,__cstring	A menu pops up a list of actions to choose from. Assign it to a trigger from the action picker's Menus category. Swipe left on a menu to delete it.
+0x2def1	__TEXT,__cstring	A menu pops up a list of actions to choose from. Make one, then assign it to a trigger from the action picker.
+0x2df60	__TEXT,__cstring	new
+0x2df64	__TEXT,__cstring	tgMenuCommand
+0x2df72	__TEXT,__cstring	1 action
+0x2df7b	__TEXT,__cstring	%lu actions
+0x2df87	__TEXT,__cstring	New Menu
+0x2df90	__TEXT,__cstring	Name shown at the top of the menu
+0x2dfb2	__TEXT,__cstring	Create
+0x2dfb9	__TEXT,__cstring	B24@?0@"NSDictionary"8@"NSDictionary"16
+0x2dfe1	__TEXT,__cstring	Profiles
+0x2dfea	__TEXT,__cstring	ActiveProfile
+0x2dff8	__TEXT,__cstring	v32@?0@"NSString"8@16^B24
+0x2e012	__TEXT,__cstring	Profiles, Sharing & Reset
+0x2e02c	__TEXT,__cstring	Tap a profile to switch to it or export it; swipe left to delete it. Switching saves your current setup into the active profile first, so nothing is lost.
+0x2e0c7	__TEXT,__cstring	tgProfile
+0x2e0d1	__TEXT,__cstring	save
+0x2e0d6	__TEXT,__cstring	Share
+0x2e0dc	__TEXT,__cstring	Export makes a file you can send with AirDrop, Messages or Files. Import replaces your current setup after showing what it contains.
+0x2e161	__TEXT,__cstring	export
+0x2e168	__TEXT,__cstring	import
+0x2e16f	__TEXT,__cstring	Clears every assignment, menu and setting, and turns off Allow API (Replace Button Actions goes back on). Saved profiles are kept.
+0x2e1f2	__TEXT,__cstring	reset
+0x2e1f8	__TEXT,__cstring	tgCommand
+0x2e202	__TEXT,__cstring	Active
+0x2e209	__TEXT,__cstring	Triggr Setup
+0x2e216	__TEXT,__cstring	Reset to Defaults?
+0x2e229	__TEXT,__cstring	Every assignment, menu and setting is cleared. Saved profiles are kept.
+0x2e271	__TEXT,__cstring	Reset
+0x2e277	__TEXT,__cstring	AllowAPI
+0x2e280	__TEXT,__cstring	Switch To
+0x2e28a	__TEXT,__cstring	Export
+0x2e291	__TEXT,__cstring	Save Profile
+0x2e29e	__TEXT,__cstring	Saves your current assignments, menus and settings. An existing profile with this name is replaced.
+0x2e302	__TEXT,__cstring	Name
+0x2e307	__TEXT,__cstring	
+
+It includes the Wi-Fi network and Bluetooth device names used in your events.
+0x2e357	__TEXT,__cstring	
+
+It includes your shell commands; check they don't contain anything private.
+0x2e3a5	__TEXT,__cstring	Export Setup
+0x2e3b2	__TEXT,__cstring	Triggr
+0x2e3b9	__TEXT,__cstring	setup
+0x2e3bf	__TEXT,__cstring	/\:
+0x2e3c3	__TEXT,__cstring	-
+0x2e3c5	__TEXT,__cstring	.json
+0x2e3cb	__TEXT,__cstring	Not a Triggr Setup
+0x2e3de	__TEXT,__cstring	That file isn't a setup exported from Triggr.
+0x2e40c	__TEXT,__cstring	
+
+This replaces your current setup. Save it as a profile first if you want to keep it.
+0x2e463	__TEXT,__cstring	
+
+This setup runs shell commands on your device. Only import setups from people you trust.
+0x2e4be	__TEXT,__cstring	Import Setup?
+0x2e4cc	__TEXT,__cstring	Replace My Setup
+0x2e4dd	__TEXT,__cstring	Options
+0x2e4e5	__TEXT,__cstring	On: an assigned press runs instead of the button's own action. Off: both run. Waking, Emergency SOS and force restart always work.
+0x2e568	__TEXT,__cstring	Replace Button Actions
+0x2e57f	__TEXT,__cstring	default
+0x2e587	__TEXT,__cstring	When an Action Runs
+0x2e59b	__TEXT,__cstring	A banner names what just ran. Haptic Feedback is a small tap; it follows iOS's System Haptics setting.
+0x2e602	__TEXT,__cstring	Show Banners
+0x2e60f	__TEXT,__cstring	ShowBanners
+0x2e61b	__TEXT,__cstring	Haptic Feedback
+0x2e62b	__TEXT,__cstring	Haptics
+0x2e633	__TEXT,__cstring	Soft
+0x2e638	__TEXT,__cstring	Light
+0x2e63e	__TEXT,__cstring	Medium
+0x2e645	__TEXT,__cstring	Strong
+0x2e64c	__TEXT,__cstring	Restarting
+0x2e657	__TEXT,__cstring	Respring, Restart and Power Off ask before they run, from a trigger or from Run Now. Safe Mode never asks, so it always works when a tweak gets stuck.
+0x2e6ee	__TEXT,__cstring	Ask Before Restarting
+0x2e704	__TEXT,__cstring	AskBeforeRestart
+0x2e715	__TEXT,__cstring	Shortcuts
+0x2e71f	__TEXT,__cstring	On: Shortcuts run like Back Tap runs them, without opening the app. Off: the Shortcuts app opens.
+0x2e781	__TEXT,__cstring	Run in Background
+0x2e793	__TEXT,__cstring	ShortcutsInBackground
+0x2e7a9	__TEXT,__cstring	Apps
+0x2e7ae	__TEXT,__cstring	Triggr ignores triggers while one of these apps is open, like a game that uses the volume buttons.
+0x2e811	__TEXT,__cstring	Block List
+0x2e81c	__TEXT,__cstring	Status Bar
+0x2e827	__TEXT,__cstring	Lets the status bar's single-tap triggers run. Double Tap and Hold always work.
+0x2e877	__TEXT,__cstring	Experimental on Face ID iPhones, so it starts off: a tap at the top can begin pulling down Control Center. Double Tap and Hold always work.
+0x2e903	__TEXT,__cstring	Single Taps
+0x2e90f	__TEXT,__cstring	Lock Screen
+0x2e91b	__TEXT,__cstring	Apps and Shortcuts always wait for you to unlock. With this on, shell commands wait too.
+0x2e974	__TEXT,__cstring	Commands Need Passcode
+0x2e98b	__TEXT,__cstring	RequireUnlock
+0x2e999	__TEXT,__cstring	Advanced
+0x2e9a2	__TEXT,__cstring	Lets other tweaks and the triggr command run your triggers and built-in actions (never commands or apps). Leave off unless you use it.
+0x2ea29	__TEXT,__cstring	Allow API
+0x2ea33	__TEXT,__cstring	Save and switch setups, share them as a file, or reset Triggr to its defaults.
+0x2ea82	__TEXT,__cstring	BlockedApps
+0x2ea8e	__TEXT,__cstring	tgDetail
+0x2ea97	__TEXT,__cstring	Guide
+0x2ea9d	__TEXT,__cstring	How It Works
+0x2eaaa	__TEXT,__cstring	Nothing changes until you assign something. A button with nothing assigned keeps doing its normal thing.
+0x2eb13	__TEXT,__cstring	1. Pick a trigger
+0x2eb25	__TEXT,__cstring	A button press, a gesture, or something that happens, like plugging in the charger. Use Add a Trigger on the main page.
+0x2eb9d	__TEXT,__cstring	2. Pick what it does
+0x2ebb2	__TEXT,__cstring	One action, or several that run in order.
+0x2ebdc	__TEXT,__cstring	3. That's it
+0x2ebe9	__TEXT,__cstring	It works right away. No respring.
+0x2ec0b	__TEXT,__cstring	Try it without pressing it
+0x2ec26	__TEXT,__cstring	In Your Setup, swipe right on a trigger, or touch and hold it, and choose Run Now. Its actions run straight away.
+0x2ec98	__TEXT,__cstring	Remove one, or bring it back
+0x2ecb5	__TEXT,__cstring	Swipe left on a trigger in Your Setup to remove it. An Undo button shows at the top right for a few seconds and brings it back with its actions and Only If conditions.
+0x2ed5d	__TEXT,__cstring	Some triggers only appear on iPhones that have that button or sensor.
+0x2eda3	__TEXT,__cstring	Home, Lock (Side), Volume, Mute switch, Action button, Touch ID and the headset button: single, double and triple presses, holds, Volume Up then Down, and Lock + Volume together.
+0x2ee56	__TEXT,__cstring	Touch and gestures
+0x2ee69	__TEXT,__cstring	Status bar taps and swipes, slides in from the screen edges, Home Screen pinches and icon flicks, taps and swipes with two to five fingers inside apps, the Lock Screen clock and the home bar.
+0x2ef29	__TEXT,__cstring	Shaking the phone, and covering or waving over the sensor by the earpiece.
+0x2ef74	__TEXT,__cstring	Events and times
+0x2ef85	__TEXT,__cstring	Charger, headphones, CarPlay, Wi-Fi, Bluetooth, Low Power Mode, locking and unlocking, calls, music, notifications, apps opening, a time of day, and sunrise or sunset.
+0x2f02d	__TEXT,__cstring	System and power
+0x2f03e	__TEXT,__cstring	Switches
+0x2f047	__TEXT,__cstring	Turn the flashlight, Wi-Fi, Bluetooth, Do Not Disturb, Dark Mode, Low Power Mode and more on, off, or the other way round.
+0x2f0c2	__TEXT,__cstring	Media and levels
+0x2f0d3	__TEXT,__cstring	Play, pause and skip, volume, AirPlay, and steps of brightness, volume or flashlight brightness.
+0x2f134	__TEXT,__cstring	Camera and recording
+0x2f149	__TEXT,__cstring	Open Camera already recording video, or start a new voice memo. Run it again to stop and save.
+0x2f1a8	__TEXT,__cstring	Apps, Shortcuts and links
+0x2f1c2	__TEXT,__cstring	Open any app, Settings page or link, or run one of your Shortcuts without the Shortcuts app opening.
+0x2f227	__TEXT,__cstring	Text, speech and commands
+0x2f241	__TEXT,__cstring	Show a message or banner, say the time or battery level out loud, or run a shell command.
+0x2f29b	__TEXT,__cstring	Other tweaks
+0x2f2a8	__TEXT,__cstring	Actions from tweaks that support Triggr, and the old Activator actions many tweaks still include.
+0x2f30a	__TEXT,__cstring	Making It Smarter
+0x2f31c	__TEXT,__cstring	Run only when something is true: on your home Wi-Fi, charging, between certain times, while the flashlight is on, and more. Otherwise the trigger does its normal thing.
+0x2f3c5	__TEXT,__cstring	Several actions
+0x2f3d5	__TEXT,__cstring	Pick more than one action to run them in order. Order, Pauses & If adds waits between them and If / Otherwise steps.
+0x2f44a	__TEXT,__cstring	Places
+0x2f451	__TEXT,__cstring	Give the same trigger a different action on the Home Screen, inside apps, on the Lock Screen, or in one app only.
+0x2f4c3	__TEXT,__cstring	A list of actions that pops up so you can pick one, all from a single trigger.
+0x2f512	__TEXT,__cstring	Profiles and sharing
+0x2f527	__TEXT,__cstring	Ideas to Try
+0x2f534	__TEXT,__cstring	Set these up with Add a Trigger on the main page.
+0x2f566	__TEXT,__cstring	Flashlight brightness
+0x2f57c	__TEXT,__cstring	Quick video
+0x2f588	__TEXT,__cstring	Skip songs
+0x2f593	__TEXT,__cstring	Lock from the top
+0x2f5a5	__TEXT,__cstring	Arriving home
+0x2f5b3	__TEXT,__cstring	SeenNotes
+0x2f5bd	__TEXT,__cstring	version
+0x2f5c5	__TEXT,__cstring	tgNotes
+0x2f5cd	__TEXT,__cstring	tgEarlier
+0x2f5d7	__TEXT,__cstring	What's New
+0x2f5e2	__TEXT,__cstring	Triggr %@
+0x2f5ec	__TEXT,__cstring	footer
+0x2f5f3	__TEXT,__cstring	intro
+0x2f5f9	__TEXT,__cstring	items
+0x2f5ff	__TEXT,__cstring	Earlier Versions
+0x2f610	__TEXT,__cstring	WelcomeShown
+0x2f61d	__TEXT,__cstring	header
+0x2f624	__TEXT,__cstring	Welcome to Triggr
+0x2f636	__TEXT,__cstring	hand.tap.fill
+0x2f644	__TEXT,__cstring	Pick a trigger
+0x2f653	__TEXT,__cstring	A button press, a swipe, or something that happens, like plugging in your charger.
+0x2f6a6	__TEXT,__cstring	list.bullet
+0x2f6b2	__TEXT,__cstring	Choose what it does
+0x2f6c6	__TEXT,__cstring	Turn on the flashlight, open an app or run a shortcut. Pick a few and they run in order.
+0x2f71f	__TEXT,__cstring	Try it right here
+0x2f731	__TEXT,__cstring	Swipe right on a trigger, or hold it, to run it without pressing anything.
+0x2f77c	__TEXT,__cstring	checkmark.shield.fill
+0x2f792	__TEXT,__cstring	Only what you set up
+0x2f7a7	__TEXT,__cstring	Triggr reacts only to the triggers you add. Everything else works as usual.
+0x2f7f3	__TEXT,__cstring	Continue
+0x2f7fc	__TEXT,__cstring	@"NSDictionary"16@?0@"NSDictionary"8
+0x2f821	__TEXT,__cstring	Search Triggers
+0x2f831	__TEXT,__cstring	Enabled
+0x2f839	__TEXT,__cstring	Off. Your triggers are saved.
+0x2f857	__TEXT,__cstring	Nothing set up yet
+0x2f86a	__TEXT,__cstring	%lu trigger on
+0x2f879	__TEXT,__cstring	%lu triggers on
+0x2f889	__TEXT,__cstring	%@ %@ %@
+0x2f892	__TEXT,__cstring	For one place only (Home Screen, apps, Lock Screen), open that place above instead.
+0x2f8e6	__TEXT,__cstring	tgSetupRow
+0x2f8f1	__TEXT,__cstring	What's New in %@
+0x2f902	__TEXT,__cstring	book.fill
+0x2f90c	__TEXT,__cstring	Your Setup
+0x2f917	__TEXT,__cstring	Add a Trigger
+0x2f925	__TEXT,__cstring	plus
+0x2f92a	__TEXT,__cstring	Show Less
+0x2f934	__TEXT,__cstring	Show %lu More
+0x2f942	__TEXT,__cstring	Tap one to change it. Swipe right or hold it to run it now, swipe left to remove it.
+0x2f997	__TEXT,__cstring	Nothing set up yet. Add a Trigger to start, or open the Guide to see what Triggr can do.
+0x2f9f0	__TEXT,__cstring	ActionButtonGuard
+0x2fa02	__TEXT,__cstring	Action Button Paused
+0x2fa17	__TEXT,__cstring	SpringBoard crashed while Triggr was handling the Action button, so the button went back to iOS. It tries again after the next Triggr update. Your other triggers still work.
+0x2fac5	__TEXT,__cstring	Most things belong in Anywhere. Use a place when a trigger should do something different there.
+0x2fb25	__TEXT,__cstring	globe
+0x2fb2b	__TEXT,__cstring	house.fill
+0x2fb36	__TEXT,__cstring	square.grid.2x2.fill
+0x2fb4b	__TEXT,__cstring	lock.fill
+0x2fb55	__TEXT,__cstring	app.badge.fill
+0x2fb64	__TEXT,__cstring	list.bullet.rectangle.fill
+0x2fb7f	__TEXT,__cstring	gearshape.fill
+0x2fb8e	__TEXT,__cstring	Help & Support
+0x2fb9d	__TEXT,__cstring	Triggr %@ by Jond_ie
+0x2fbb2	__TEXT,__cstring	2.1.0
+0x2fbb8	__TEXT,__cstring	~
+0x2fbba	__TEXT,__cstring	footerAlignment
+0x2fbca	__TEXT,__cstring	Report a Problem
+0x2fbdb	__TEXT,__cstring	https://github.com/Jond-ie/triggr/issues
+0x2fc04	__TEXT,__cstring	ladybug.fill
+0x2fc11	__TEXT,__cstring	Contact
+0x2fc19	__TEXT,__cstring	https://x.com/Jond_ie
+0x2fc2f	__TEXT,__cstring	bubble.left.fill
+0x2fc40	__TEXT,__cstring	Support Triggr
+0x2fc4f	__TEXT,__cstring	https://jond-ie.github.io/repo/support/
+0x2fc77	__TEXT,__cstring	heart.fill
+0x2fc82	__TEXT,__cstring	tgURL
+0x2fc88	__TEXT,__cstring	arrow.up.forward
+0x2fc99	__TEXT,__cstring	New
+0x2fc9d	__TEXT,__cstring	%@/%@
+0x2fca3	__TEXT,__cstring	 + 
+0x2fca7	__TEXT,__cstring	home.single
+0x2fcb3	__TEXT,__cstring	Go Home
+0x2fcbb	__TEXT,__cstring	home.double
+0x2fcc7	__TEXT,__cstring	App Switcher
+0x2fcd4	__TEXT,__cstring	home.triple
+0x2fce0	__TEXT,__cstring	Accessibility Shortcut
+0x2fcf7	__TEXT,__cstring	home.longhold
+0x2fd05	__TEXT,__cstring	Siri
+0x2fd0a	__TEXT,__cstring	touchid.doubletap
+0x2fd1c	__TEXT,__cstring	Reachability
+0x2fd29	__TEXT,__cstring	volume.up
+0x2fd33	__TEXT,__cstring	Volume Up
+0x2fd3d	__TEXT,__cstring	volume.down
+0x2fd49	__TEXT,__cstring	Volume Down
+0x2fd55	__TEXT,__cstring	lock.single
+0x2fd61	__TEXT,__cstring	Lock
+0x2fd66	__TEXT,__cstring	lock.longhold
+0x2fd74	__TEXT,__cstring	Power Off Slider
+0x2fd85	__TEXT,__cstring	mute.silent
+0x2fd91	__TEXT,__cstring	Mute
+0x2fd96	__TEXT,__cstring	mute.ring
+0x2fda0	__TEXT,__cstring	Unmute
+0x2fda7	__TEXT,__cstring	mute.toggle
+0x2fdb3	__TEXT,__cstring	Mute / Unmute
+0x2fdc1	__TEXT,__cstring	Menu: 
+0x2fdc8	__TEXT,__cstring	Menu (deleted)
+0x2fdd7	__TEXT,__cstring	LSApplicationProxy
+0x2fdea	__TEXT,__cstring	Open 
+0x2fdf0	__TEXT,__cstring	None
+0x2fdf5	__TEXT,__cstring	ItemTitle
+0x2fdff	__TEXT,__cstring	Shortcut: 
+0x2fe0a	__TEXT,__cstring	URL: 
+0x2fe10	__TEXT,__cstring	Command: 
+0x2fe1a	__TEXT,__cstring	Pause %@ s
+0x2fe25	__TEXT,__cstring	If 
+0x2fe29	__TEXT,__cstring	Otherwise
+0x2fe33	__TEXT,__cstring	End If
+0x2fe3a	__TEXT,__cstring	Menu
+0x2fe3f	__TEXT,__cstring	Brightness %@%%
+0x2fe4f	__TEXT,__cstring	Brightness Up %@%%
+0x2fe62	__TEXT,__cstring	Brightness Down %@%%
+0x2fe77	__TEXT,__cstring	Media Volume %@%%
+0x2fe89	__TEXT,__cstring	Ringer Volume %@%%
+0x2fe9c	__TEXT,__cstring	Message: 
+0x2fea6	__TEXT,__cstring	Say: 
+0x2feac	__TEXT,__cstring	Show: 
+0x2feb3	__TEXT,__cstring	AirPlay to 
+0x2febf	__TEXT,__cstring	Settings: 
+0x2feca	__TEXT,__cstring	v24@?0@"NSString"8@?<v@?>16
+0x2fee6	__TEXT,__cstring	On Wi-Fi
+0x2feef	__TEXT,__cstring	Any network
+0x2fefb	__TEXT,__cstring	wifi:
+0x2ff01	__TEXT,__cstring	Not on Wi-Fi
+0x2ff0e	__TEXT,__cstring	No network at all
+0x2ff20	__TEXT,__cstring	!wifi:
+0x2ff27	__TEXT,__cstring	!wifi
+0x2ff2d	__TEXT,__cstring	Connected
+0x2ff37	__TEXT,__cstring	bt:
+0x2ff3b	__TEXT,__cstring	Not connected
+0x2ff49	__TEXT,__cstring	!bt:
+0x2ff4e	__TEXT,__cstring	Charging
+0x2ff57	__TEXT,__cstring	charging
+0x2ff60	__TEXT,__cstring	Not Charging
+0x2ff6d	__TEXT,__cstring	!charging
+0x2ff77	__TEXT,__cstring	Locked
+0x2ff7e	__TEXT,__cstring	locked
+0x2ff85	__TEXT,__cstring	Unlocked
+0x2ff8e	__TEXT,__cstring	!locked
+0x2ff96	__TEXT,__cstring	Music Playing
+0x2ffa4	__TEXT,__cstring	music
+0x2ffaa	__TEXT,__cstring	Music Not Playing
+0x2ffbc	__TEXT,__cstring	!music
+0x2ffc3	__TEXT,__cstring	Headphones Connected
+0x2ffd8	__TEXT,__cstring	headphones
+0x2ffe3	__TEXT,__cstring	Low Power Mode On
+0x2fff5	__TEXT,__cstring	lowpower
+0x2fffe	__TEXT,__cstring	Flashlight On
+0x3000c	__TEXT,__cstring	flashlight
+0x30017	__TEXT,__cstring	Flashlight Off
+0x30026	__TEXT,__cstring	!flashlight
+0x30032	__TEXT,__cstring	Battery Below
+0x30040	__TEXT,__cstring	20
+0x30043	__TEXT,__cstring	battery<%d
+0x3004e	__TEXT,__cstring	Battery Above
+0x3005c	__TEXT,__cstring	80
+0x3005f	__TEXT,__cstring	battery>%d
+0x3006a	__TEXT,__cstring	Between Times
+0x30078	__TEXT,__cstring	Start and end, 24-hour, e.g. 22:00-06:00 (overnight is fine)
+0x300b5	__TEXT,__cstring	22:00-06:00
+0x300c1	__TEXT,__cstring	time:%04d-%04d
+0x300d0	__TEXT,__cstring	Still True After
+0x300e1	__TEXT,__cstring	Wait this many seconds, then run only if the opposite didn't happen meanwhile (e.g. you didn't rejoin the network).
+0x30155	__TEXT,__cstring	30
+0x30158	__TEXT,__cstring	after:%d
+0x30161	__TEXT,__cstring	None saved on this iPhone.
+0x3017c	__TEXT,__cstring	Add
+0x30180	__TEXT,__cstring	Runs instead of going Home (or waking) wherever this assignment applies. To go Home as well, add Go to Home Screen.
+0x301f4	__TEXT,__cstring	Runs instead of the App Switcher. To open it as well, add App Switcher.
+0x3023c	__TEXT,__cstring	Runs instead of Reachability (the light double tap). To keep it, add Reachability.
+0x3028f	__TEXT,__cstring	Runs instead of the Accessibility Shortcut, and double presses wait a moment to see if a third follows.
+0x302f7	__TEXT,__cstring	Runs instead of Siri. To keep Siri, add Siri.
+0x30325	__TEXT,__cstring	Runs instead of turning the volume up. To change it as well, add Volume Up (Media).
+0x30379	__TEXT,__cstring	Runs instead of turning the volume down. To change it as well, add Volume Down (Media).
+0x303d1	__TEXT,__cstring	volume.both
+0x303dd	__TEXT,__cstring	Hold one volume button and press the other. The second button won't change the volume; the first may still move it one step.
+0x3045a	__TEXT,__cstring	volume.bothhold
+0x3046a	__TEXT,__cstring	Both volume buttons held for 0.5 s. The second button won't change the volume; the first may still move it one step.
+0x304df	__TEXT,__cstring	Runs instead of locking while the screen is on. To lock as well, add Sleep.
+0x3052b	__TEXT,__cstring	lock.double
+0x30537	__TEXT,__cstring	Single presses wait a moment to see if another follows.
+0x3056f	__TEXT,__cstring	lock.triple
+0x3057b	__TEXT,__cstring	Single and double presses wait a moment to see if another follows.
+0x305be	__TEXT,__cstring	Runs instead of the power-off slider. To show it as well, add Power Off Slider.
+0x3060e	__TEXT,__cstring	combo.sideup
+0x3061b	__TEXT,__cstring	The lock press won't lock and Volume Up won't change the volume if it's pressed second. Without a Home button it also runs instead of the screenshot; to take it as well, add Take Screenshot. With Up Hold assigned too, it runs when you let go.
+0x3070e	__TEXT,__cstring	combo.sidedown
+0x3071d	__TEXT,__cstring	The lock press won't lock and Volume Down won't change the volume if it's pressed second. With Down Hold assigned too, it runs when you let go.
+0x307ad	__TEXT,__cstring	combo.sideuphold
+0x307be	__TEXT,__cstring	Runs after half a second, alongside iOS: keep holding and the power-off slider and Emergency SOS appear as usual.
+0x30830	__TEXT,__cstring	combo.sidedownhold
+0x30843	__TEXT,__cstring	Runs instead of muting, so the ringer stays on. To mute as well, add Mute On (Switches).
+0x3089c	__TEXT,__cstring	Runs instead of unmuting, so the ringer stays off. To unmute as well, add Mute Off (Switches).
+0x308fb	__TEXT,__cstring	Runs instead of muting or unmuting. To change it as well, add Toggle Mute (Switches).
+0x30951	__TEXT,__cstring	Runs alongside the normal press, which still goes Home.
+0x30989	__TEXT,__cstring	Runs alongside the App Switcher.
+0x309aa	__TEXT,__cstring	Runs alongside Reachability.
+0x309c7	__TEXT,__cstring	Runs alongside the Accessibility Shortcut.
+0x309f2	__TEXT,__cstring	Runs alongside Siri.
+0x30a07	__TEXT,__cstring	Runs alongside the volume change.
+0x30a29	__TEXT,__cstring	Hold one volume button and press the other. Both still change the volume.
+0x30a73	__TEXT,__cstring	Both volume buttons held for 0.5 s. Both still change the volume.
+0x30ab5	__TEXT,__cstring	Runs alongside every press, which still locks.
+0x30ae4	__TEXT,__cstring	Runs after the presses stop; each press still locks or wakes.
+0x30b22	__TEXT,__cstring	Runs alongside the power-off slider.
+0x30b47	__TEXT,__cstring	Runs alongside the buttons, which still lock and change the volume (and take the screenshot without a Home button).
+0x30bbb	__TEXT,__cstring	Runs alongside the buttons, which still lock and change the volume.
+0x30bff	__TEXT,__cstring	Runs alongside the switch, which still mutes.
+0x30c2d	__TEXT,__cstring	Runs alongside the switch, which still unmutes.
+0x30c5d	__TEXT,__cstring	Runs alongside the switch, which still mutes and unmutes.
+0x30c97	__TEXT,__cstring	 To run instead, turn on Replace Button Actions in Options.
+0x30cd3	__TEXT,__cstring	home.shorthold
+0x30ce2	__TEXT,__cstring	A hold that's released before Siri appears.
+0x30d0e	__TEXT,__cstring	volume.uphold
+0x30d1c	__TEXT,__cstring	Runs after holding for 0.5 s; the volume still changes by one step.
+0x30d60	__TEXT,__cstring	volume.downhold
+0x30d70	__TEXT,__cstring	icon.flickleft
+0x30d7f	__TEXT,__cstring	A swipe to the next page that starts on an icon runs this instead. Swipe between icons to change pages.
+0x30de7	__TEXT,__cstring	icon.flickright
+0x30df7	__TEXT,__cstring	A swipe to the previous page that starts on an icon runs this instead. Swipe between icons to change pages.
+0x30e63	__TEXT,__cstring	icon.flickdown
+0x30e72	__TEXT,__cstring	A swipe down for Search that starts on an icon runs this instead.
+0x30eb4	__TEXT,__cstring	volume.updown
+0x30ec2	__TEXT,__cstring	Press Up, then Down, quickly. Up presses wait 0.4 s for Down. Runs alongside the two presses.
+0x30f20	__TEXT,__cstring	volume.downup
+0x30f2e	__TEXT,__cstring	Press Down, then Up, quickly. Down presses wait 0.4 s for Up. Runs alongside the two presses.
+0x30f8c	__TEXT,__cstring	mute.twice
+0x30f97	__TEXT,__cstring	Flip the switch and back within 0.8 s. Runs alongside, so the ringer ends where it started.
+0x30ff3	__TEXT,__cstring	homebar.doubletap
+0x31005	__TEXT,__cstring	On iOS 18 this is also Type to Siri when that's on; Triggr's action runs instead.
+0x31057	__TEXT,__cstring	lsclock.hold
+0x31064	__TEXT,__cstring	Comes before iOS's hold to change the wallpaper, which still works off the clock.
+0x310b6	__TEXT,__cstring	headset.single
+0x310c5	__TEXT,__cstring	Runs alongside play / pause.
+0x310e2	__TEXT,__cstring	action.hold
+0x310ee	__TEXT,__cstring	edge.left
+0x310f8	__TEXT,__cstring	Takes the place of the swipe back many apps use. The two-finger version leaves it alone.
+0x31151	__TEXT,__cstring	edge.bottomleft
+0x31161	__TEXT,__cstring	While assigned, that third of the bottom edge stops opening Control Center or going Home (portrait only).
+0x311cb	__TEXT,__cstring	edge.bottomright
+0x311dc	__TEXT,__cstring	edge.leftup
+0x311e8	__TEXT,__cstring	A fast, straight flick along the edge, mid-screen. A fast flick from the edge can set it off, so pick something harmless.
+0x31262	__TEXT,__cstring	edge.leftdown
+0x31270	__TEXT,__cstring	edge.rightup
+0x3127d	__TEXT,__cstring	edge.rightdown
+0x3128c	__TEXT,__cstring	edge.topleft
+0x31299	__TEXT,__cstring	That third of the top edge stops opening Notification Center or Control Center while assigned.
+0x312f8	__TEXT,__cstring	edge.topright
+0x31306	__TEXT,__cstring	inapp.pinchin
+0x31314	__TEXT,__cstring	Clashes with apps that zoom (Photos, Safari, Maps).
+0x31348	__TEXT,__cstring	inapp.pinchout
+0x31357	__TEXT,__cstring	inapp.threepinchin
+0x3136a	__TEXT,__cstring	Also iOS's copy gesture in text, so best in apps without typing.
+0x313ab	__TEXT,__cstring	inapp.threepinchout
+0x313bf	__TEXT,__cstring	Also iOS's paste gesture in text, so best in apps without typing.
+0x31401	__TEXT,__cstring	proximity.wave
+0x31410	__TEXT,__cstring	Cover the sensor for under half a second.
+0x3143a	__TEXT,__cstring	call.answered
+0x31448	__TEXT,__cstring	With Live Voicemail on, a call that goes to voicemail counts too.
+0x3148a	__TEXT,__cstring	music.changed
+0x31498	__TEXT,__cstring	Once per new song, including the first after a pause.
+0x314ce	__TEXT,__cstring	time.sunrise
+0x314db	__TEXT,__cstring	Runs once a day if the phone is on.
+0x314ff	__TEXT,__cstring	time.sunset
+0x3150b	__TEXT,__cstring	time
+0x31510	__TEXT,__cstring	Runs at this time while Triggr is running. iOS can delay timers while the phone sleeps; if it's more than 5 minutes late, it's skipped.
+0x31598	__TEXT,__cstring	Runs once when the level passes this percentage, not on every change.
+0x315de	__TEXT,__cstring	statusbar.tap
+0x315ec	__TEXT,__cstring	If Double Tap is also assigned, single taps wait a moment to see if a second follows.
+0x31642	__TEXT,__cstring	statusbar.left.tap
+0x31655	__TEXT,__cstring	If Left Double Tap (or Double Tap) is also assigned, single taps wait a moment to see if a second follows.
+0x316c0	__TEXT,__cstring	statusbar.right.tap
+0x316d4	__TEXT,__cstring	If Right Double Tap (or Double Tap) is also assigned, single taps wait a moment to see if a second follows.
+0x31740	__TEXT,__cstring	icon.flick
+0x3174b	__TEXT,__cstring	Lock Button
+0x31757	__TEXT,__cstring	lock button
+0x31763	__TEXT,__cstring	Lock + Volume
+0x31771	__TEXT,__cstring	 + Volume
+0x3177b	__TEXT,__cstring	lock press
+0x31786	__TEXT,__cstring	 press
+0x3178d	__TEXT,__cstring	showing the power-off slider
+0x317aa	__TEXT,__cstring	opening Siri
+0x317b7	__TEXT,__cstring	the power-off slider
+0x317cc	__TEXT,__cstring	the slider
+0x317d7	__TEXT,__cstring	inside 
+0x317df	__TEXT,__cstring	everywhere
+0x317ea	__TEXT,__cstring	at the Home Screen
+0x317fd	__TEXT,__cstring	inside apps
+0x31809	__TEXT,__cstring	on the Lock Screen
+0x3181c	__TEXT,__cstring	there
+0x31822	__TEXT,__cstring	On any Wi-Fi
+0x3182f	__TEXT,__cstring	Not charging
+0x3183c	__TEXT,__cstring	Music not playing
+0x3184e	__TEXT,__cstring	Music playing
+0x3185c	__TEXT,__cstring	No headphones
+0x3186a	__TEXT,__cstring	Headphones connected
+0x3187f	__TEXT,__cstring	Low Power Mode off
+0x31892	__TEXT,__cstring	Low Power Mode on
+0x318a4	__TEXT,__cstring	Flashlight off
+0x318b3	__TEXT,__cstring	Flashlight on
+0x318c1	__TEXT,__cstring	battery<
+0x318ca	__TEXT,__cstring	Battery below %@%%
+0x318dd	__TEXT,__cstring	battery>
+0x318e6	__TEXT,__cstring	Battery above %@%%
+0x318f9	__TEXT,__cstring	Between %02d:%02d and %02d:%02d
+0x31919	__TEXT,__cstring	Still true after %@ s
+0x3192f	__TEXT,__cstring	|
+0x31931	__TEXT,__cstring	circle.fill
+0x3193d	__TEXT,__cstring	System
+0x31944	__TEXT,__cstring	Power
+0x3194a	__TEXT,__cstring	Media
+0x31950	__TEXT,__cstring	Phone
+0x31956	__TEXT,__cstring	Compose
+0x3195e	__TEXT,__cstring	Clock
+0x31964	__TEXT,__cstring	Brightness, Volume & Flashlight
+0x31984	__TEXT,__cstring	Camera & Recording
+0x31997	__TEXT,__cstring	Speech & Clipboard
+0x319aa	__TEXT,__cstring	Open
+0x319af	__TEXT,__cstring	Text & Commands
+0x319bf	__TEXT,__cstring	Snapper 3
+0x319c9	__TEXT,__cstring	CopyLog
+0x319d1	__TEXT,__cstring	Tweak Actions
+0x319df	__TEXT,__cstring	Title
+0x319e5	__TEXT,__cstring	plist
+0x319eb	__TEXT,__cstring	/Library/Triggr/Extensions
+0x31a06	__TEXT,__cstring	switch.2
+0x31a0f	__TEXT,__cstring	slider.horizontal.3
+0x31a23	__TEXT,__cstring	arrow.up.right.square.fill
+0x31a3e	__TEXT,__cstring	text.bubble.fill
+0x31a4f	__TEXT,__cstring	camera.viewfinder
+0x31a61	__TEXT,__cstring	doc.on.clipboard.fill
+0x31a77	__TEXT,__cstring	bolt.fill
+0x31a81	__TEXT,__cstring	square.stack.3d.up.fill
+0x31a99	__TEXT,__cstring	waveform
+0x31aa2	__TEXT,__cstring	phone.fill
+0x31aad	__TEXT,__cstring	square.and.pencil
+0x31abf	__TEXT,__cstring	alarm.fill
+0x31aca	__TEXT,__cstring	iphone.radiowaves.left.and.right
+0x31aeb	__TEXT,__cstring	record.circle
+0x31af9	__TEXT,__cstring	Symbol
+0x31b00	__TEXT,__cstring	Color
+0x31b06	__TEXT,__cstring	blue
+0x31b0b	__TEXT,__cstring	green
+0x31b11	__TEXT,__cstring	indigo
+0x31b18	__TEXT,__cstring	orange
+0x31b1f	__TEXT,__cstring	pink
+0x31b24	__TEXT,__cstring	purple
+0x31b2b	__TEXT,__cstring	red
+0x31b2f	__TEXT,__cstring	teal
+0x31b34	__TEXT,__cstring	yellow
+0x31b3b	__TEXT,__cstring	gray
+0x31b40	__TEXT,__cstring	ItemsDirectory
+0x31b4f	__TEXT,__cstring	ItemsExtension
+0x31b5e	__TEXT,__cstring	ItemsExclude
+0x31b6b	__TEXT,__cstring	Program
+0x31b73	__TEXT,__cstring	Group
+0x31b79	__TEXT,__cstring	Missing: 
+0x31b83	__TEXT,__cstring	speak.time
+0x31b8e	__TEXT,__cstring	Speak Time
+0x31b99	__TEXT,__cstring	speak.battery
+0x31ba7	__TEXT,__cstring	Speak Battery Level
+0x31bbb	__TEXT,__cstring	speak.clipboard
+0x31bcb	__TEXT,__cstring	Speak Clipboard
+0x31bdb	__TEXT,__cstring	clipboard.clear
+0x31beb	__TEXT,__cstring	Clear Clipboard
+0x31bfb	__TEXT,__cstring	system.home
+0x31c07	__TEXT,__cstring	Go to Home Screen
+0x31c19	__TEXT,__cstring	system.switcher
+0x31c29	__TEXT,__cstring	system.lastapp
+0x31c38	__TEXT,__cstring	Last App
+0x31c41	__TEXT,__cstring	system.quitapp
+0x31c50	__TEXT,__cstring	Quit Current App
+0x31c61	__TEXT,__cstring	system.cc
+0x31c6b	__TEXT,__cstring	Control Center
+0x31c7a	__TEXT,__cstring	system.nc
+0x31c84	__TEXT,__cstring	Notification Center
+0x31c98	__TEXT,__cstring	system.spotlight
+0x31ca9	__TEXT,__cstring	Spotlight
+0x31cb3	__TEXT,__cstring	system.reachability
+0x31cc7	__TEXT,__cstring	system.siri
+0x31cd3	__TEXT,__cstring	system.screenshot
+0x31ce5	__TEXT,__cstring	Take Screenshot
+0x31cf5	__TEXT,__cstring	system.screenrecord
+0x31d09	__TEXT,__cstring	Screen Recording
+0x31d1a	__TEXT,__cstring	system.closeapps
+0x31d2b	__TEXT,__cstring	Close Background Apps
+0x31d41	__TEXT,__cstring	system.vibrate
+0x31d50	__TEXT,__cstring	Vibrate
+0x31d58	__TEXT,__cstring	system.nothing
+0x31d67	__TEXT,__cstring	Do Nothing
+0x31d72	__TEXT,__cstring	system.firstpage
+0x31d83	__TEXT,__cstring	First Home Screen Page
+0x31d9a	__TEXT,__cstring	system.back
+0x31da6	__TEXT,__cstring	Back (in Apps)
+0x31db5	__TEXT,__cstring	system.unlock
+0x31dc3	__TEXT,__cstring	Unlock
+0x31dca	__TEXT,__cstring	system.locktoggle
+0x31ddc	__TEXT,__cstring	Lock / Unlock
+0x31dea	__TEXT,__cstring	system.sleep
+0x31df7	__TEXT,__cstring	Sleep
+0x31dfd	__TEXT,__cstring	system.lock
+0x31e09	__TEXT,__cstring	Lock Device
+0x31e15	__TEXT,__cstring	system.respring
+0x31e25	__TEXT,__cstring	Respring
+0x31e2e	__TEXT,__cstring	system.powerdown
+0x31e3f	__TEXT,__cstring	system.safemode
+0x31e4f	__TEXT,__cstring	Safe Mode
+0x31e59	__TEXT,__cstring	system.restart
+0x31e68	__TEXT,__cstring	Restart
+0x31e70	__TEXT,__cstring	system.poweroff
+0x31e80	__TEXT,__cstring	Power Off
+0x31e8a	__TEXT,__cstring	media.playpause
+0x31e9a	__TEXT,__cstring	Play / Pause
+0x31ea7	__TEXT,__cstring	media.next
+0x31eb2	__TEXT,__cstring	Next Track
+0x31ebd	__TEXT,__cstring	media.previous
+0x31ecc	__TEXT,__cstring	Previous Track
+0x31edb	__TEXT,__cstring	media.volup
+0x31ee7	__TEXT,__cstring	media.voldown
+0x31ef5	__TEXT,__cstring	media.pressvolup
+0x31f06	__TEXT,__cstring	Press Volume Up
+0x31f16	__TEXT,__cstring	media.pressvoldown
+0x31f29	__TEXT,__cstring	Press Volume Down
+0x31f3b	__TEXT,__cstring	media.airplay
+0x31f49	__TEXT,__cstring	AirPlay Picker
+0x31f58	__TEXT,__cstring	media.airplayiphone
+0x31f6c	__TEXT,__cstring	Play on iPhone
+0x31f7b	__TEXT,__cstring	media.nowplayingapp
+0x31f8f	__TEXT,__cstring	Open Now Playing App
+0x31fa4	__TEXT,__cstring	phone.answer
+0x31fb1	__TEXT,__cstring	Answer Call
+0x31fbd	__TEXT,__cstring	phone.end
+0x31fc7	__TEXT,__cstring	End or Decline Call
+0x31fdb	__TEXT,__cstring	phone.favorites
+0x31feb	__TEXT,__cstring	Favorites
+0x31ff5	__TEXT,__cstring	phone.recents
+0x32003	__TEXT,__cstring	Recents
+0x3200b	__TEXT,__cstring	phone.contacts
+0x3201a	__TEXT,__cstring	Contacts
+0x32023	__TEXT,__cstring	phone.keypad
+0x32030	__TEXT,__cstring	Keypad
+0x32037	__TEXT,__cstring	phone.voicemail
+0x32047	__TEXT,__cstring	Voicemail
+0x32051	__TEXT,__cstring	compose.message
+0x32061	__TEXT,__cstring	New Message
+0x3206d	__TEXT,__cstring	compose.mail
+0x3207a	__TEXT,__cstring	New Email
+0x32084	__TEXT,__cstring	clock.alarm
+0x32090	__TEXT,__cstring	Alarms
+0x32097	__TEXT,__cstring	clock.worldclock
+0x320a8	__TEXT,__cstring	World Clock
+0x320b4	__TEXT,__cstring	clock.stopwatch
+0x320c4	__TEXT,__cstring	Stopwatch
+0x320ce	__TEXT,__cstring	clock.timer
+0x320da	__TEXT,__cstring	Timer
+0x320e0	__TEXT,__cstring	clock.bedtime
+0x320ee	__TEXT,__cstring	Sleep / Wake Up
+0x320fe	__TEXT,__cstring	haptic.peek
+0x3210a	__TEXT,__cstring	Light Tap
+0x32114	__TEXT,__cstring	haptic.pop
+0x3211f	__TEXT,__cstring	Strong Tap
+0x3212a	__TEXT,__cstring	haptic.nope
+0x32136	__TEXT,__cstring	Three Taps
+0x32141	__TEXT,__cstring	record.video
+0x3214e	__TEXT,__cstring	Record Video
+0x3215b	__TEXT,__cstring	record.memo
+0x32167	__TEXT,__cstring	Record Voice Memo
+0x32179	__TEXT,__cstring	snapper
+0x32181	__TEXT,__cstring	snapper2
+0x3218a	__TEXT,__cstring	/Library/MobileSubstrate/DynamicLibraries
+0x321b4	__TEXT,__cstring	dylib
+0x321ba	__TEXT,__cstring	snapper3.force.open
+0x321ce	__TEXT,__cstring	New Snap
+0x321d7	__TEXT,__cstring	snapper3.forceinstant.open
+0x321f2	__TEXT,__cstring	Instant Snap
+0x321ff	__TEXT,__cstring	snapper3.forcefreeze.open
+0x32219	__TEXT,__cstring	Freeze Screen & Snap
+0x3222e	__TEXT,__cstring	snapper3.openlast
+0x32240	__TEXT,__cstring	Reopen Last Snap
+0x32251	__TEXT,__cstring	snapper3.history
+0x32262	__TEXT,__cstring	Snap History
+0x3226f	__TEXT,__cstring	snapper3.closecrop
+0x32282	__TEXT,__cstring	Cancel Cropping
+0x32292	__TEXT,__cstring	snapper3.close.all
+0x322a5	__TEXT,__cstring	Close All Snaps
+0x322b5	__TEXT,__cstring	copylog.showView
+0x322c6	__TEXT,__cstring	Show CopyLog
+0x322d3	__TEXT,__cstring	copylog.showFavoritesView
+0x322ed	__TEXT,__cstring	Show CopyLog Favorites
+0x32304	__TEXT,__cstring	Flashlight
+0x3230f	__TEXT,__cstring	Wi-Fi
+0x32315	__TEXT,__cstring	bluetooth
+0x3231f	__TEXT,__cstring	Bluetooth
+0x32329	__TEXT,__cstring	airplane
+0x32332	__TEXT,__cstring	Airplane Mode
+0x32340	__TEXT,__cstring	cellular
+0x32349	__TEXT,__cstring	Cellular Data
+0x32357	__TEXT,__cstring	dnd
+0x3235b	__TEXT,__cstring	Do Not Disturb
+0x3236a	__TEXT,__cstring	Low Power Mode
+0x32379	__TEXT,__cstring	rotation
+0x32382	__TEXT,__cstring	Rotation Lock
+0x32390	__TEXT,__cstring	mute
+0x32395	__TEXT,__cstring	darkmode
+0x3239e	__TEXT,__cstring	Dark Mode
+0x323a8	__TEXT,__cstring	nightshift
+0x323b3	__TEXT,__cstring	Night Shift
+0x323bf	__TEXT,__cstring	autobrightness
+0x323ce	__TEXT,__cstring	Auto-Brightness
+0x323de	__TEXT,__cstring	keepawake
+0x323e8	__TEXT,__cstring	Keep Screen Awake
+0x323fa	__TEXT,__cstring	location
+0x32403	__TEXT,__cstring	Location Services
+0x32415	__TEXT,__cstring	grayscale
+0x3241f	__TEXT,__cstring	Grayscale
+0x32429	__TEXT,__cstring	smartinvert
+0x32435	__TEXT,__cstring	Smart Invert
+0x32442	__TEXT,__cstring	classicinvert
+0x32450	__TEXT,__cstring	Classic Invert
+0x3245f	__TEXT,__cstring	zoom
+0x32464	__TEXT,__cstring	Zoom
+0x32469	__TEXT,__cstring	flashlight.brighter
+0x3247d	__TEXT,__cstring	Flashlight Brighter
+0x32491	__TEXT,__cstring	flashlight.dimmer
+0x324a3	__TEXT,__cstring	Flashlight Dimmer
+0x324b5	__TEXT,__cstring	VCVoiceShortcutClient
+0x324cb	__TEXT,__cstring	/System/Library/PrivateFrameworks/VoiceShortcutClient.framework/VoiceShortcutClient
+0x3251f	__TEXT,__cstring	/Library/Activator/Listeners
+0x3253c	__TEXT,__cstring	com.jontelang.snapper3.
+0x32554	__TEXT,__cstring	Info.plist
+0x3255f	__TEXT,__cstring	title
+0x32565	__TEXT,__cstring	group
+0x3256b	__TEXT,__cstring	q24@?0@"NSArray"8@"NSArray"16
+0x32589	__TEXT,__cstring	Record
+0x32590	__TEXT,__cstring	toggle.flashlight
+0x325a2	__TEXT,__cstring	Toggle Flashlight
+0x325b4	__TEXT,__cstring	toggle.wifi
+0x325c0	__TEXT,__cstring	Toggle Wi-Fi
+0x325cd	__TEXT,__cstring	toggle.bluetooth
+0x325de	__TEXT,__cstring	Toggle Bluetooth
+0x325ef	__TEXT,__cstring	toggle.airplane
+0x325ff	__TEXT,__cstring	Toggle Airplane Mode
+0x32614	__TEXT,__cstring	toggle.cellular
+0x32624	__TEXT,__cstring	Toggle Cellular Data
+0x32639	__TEXT,__cstring	toggle.dnd
+0x32644	__TEXT,__cstring	Toggle Do Not Disturb
+0x3265a	__TEXT,__cstring	toggle.lowpower
+0x3266a	__TEXT,__cstring	Toggle Low Power Mode
+0x32680	__TEXT,__cstring	toggle.rotation
+0x32690	__TEXT,__cstring	Toggle Rotation Lock
+0x326a5	__TEXT,__cstring	toggle.mute
+0x326b1	__TEXT,__cstring	Toggle Mute
+0x326bd	__TEXT,__cstring	toggle.darkmode
+0x326cd	__TEXT,__cstring	Toggle Dark Mode
+0x326de	__TEXT,__cstring	toggle.nightshift
+0x326f0	__TEXT,__cstring	Toggle Night Shift
+0x32703	__TEXT,__cstring	toggle.autobrightness
+0x32719	__TEXT,__cstring	Toggle Auto-Brightness
+0x32730	__TEXT,__cstring	toggle.keepawake
+0x32741	__TEXT,__cstring	Toggle Keep Screen Awake
+0x3275a	__TEXT,__cstring	toggle.location
+0x3276a	__TEXT,__cstring	Toggle Location Services
+0x32783	__TEXT,__cstring	toggle.grayscale
+0x32794	__TEXT,__cstring	Toggle Grayscale
+0x327a5	__TEXT,__cstring	toggle.smartinvert
+0x327b8	__TEXT,__cstring	Toggle Smart Invert
+0x327cc	__TEXT,__cstring	toggle.classicinvert
+0x327e1	__TEXT,__cstring	Toggle Classic Invert
+0x327f7	__TEXT,__cstring	toggle.zoom
+0x32803	__TEXT,__cstring	Toggle Zoom
+0x3280f	__TEXT,__cstring	on.flashlight
+0x3281d	__TEXT,__cstring	on.wifi
+0x32825	__TEXT,__cstring	Wi-Fi On
+0x3282e	__TEXT,__cstring	on.bluetooth
+0x3283b	__TEXT,__cstring	Bluetooth On
+0x32848	__TEXT,__cstring	on.airplane
+0x32854	__TEXT,__cstring	Airplane Mode On
+0x32865	__TEXT,__cstring	on.cellular
+0x32871	__TEXT,__cstring	Cellular Data On
+0x32882	__TEXT,__cstring	on.dnd
+0x32889	__TEXT,__cstring	Do Not Disturb On
+0x3289b	__TEXT,__cstring	on.lowpower
+0x328a7	__TEXT,__cstring	on.rotation
+0x328b3	__TEXT,__cstring	Rotation Lock On
+0x328c4	__TEXT,__cstring	on.mute
+0x328cc	__TEXT,__cstring	Mute On
+0x328d4	__TEXT,__cstring	on.darkmode
+0x328e0	__TEXT,__cstring	Dark Mode On
+0x328ed	__TEXT,__cstring	on.nightshift
+0x328fb	__TEXT,__cstring	Night Shift On
+0x3290a	__TEXT,__cstring	on.autobrightness
+0x3291c	__TEXT,__cstring	Auto-Brightness On
+0x3292f	__TEXT,__cstring	on.keepawake
+0x3293c	__TEXT,__cstring	Keep Screen Awake On
+0x32951	__TEXT,__cstring	on.location
+0x3295d	__TEXT,__cstring	Location Services On
+0x32972	__TEXT,__cstring	on.grayscale
+0x3297f	__TEXT,__cstring	Grayscale On
+0x3298c	__TEXT,__cstring	on.smartinvert
+0x3299b	__TEXT,__cstring	Smart Invert On
+0x329ab	__TEXT,__cstring	on.classicinvert
+0x329bc	__TEXT,__cstring	Classic Invert On
+0x329ce	__TEXT,__cstring	on.zoom
+0x329d6	__TEXT,__cstring	Zoom On
+0x329de	__TEXT,__cstring	off.flashlight
+0x329ed	__TEXT,__cstring	off.wifi
+0x329f6	__TEXT,__cstring	Wi-Fi Off
+0x32a00	__TEXT,__cstring	off.bluetooth
+0x32a0e	__TEXT,__cstring	Bluetooth Off
+0x32a1c	__TEXT,__cstring	off.airplane
+0x32a29	__TEXT,__cstring	Airplane Mode Off
+0x32a3b	__TEXT,__cstring	off.cellular
+0x32a48	__TEXT,__cstring	Cellular Data Off
+0x32a5a	__TEXT,__cstring	off.dnd
+0x32a62	__TEXT,__cstring	Do Not Disturb Off
+0x32a75	__TEXT,__cstring	off.lowpower
+0x32a82	__TEXT,__cstring	Low Power Mode Off
+0x32a95	__TEXT,__cstring	off.rotation
+0x32aa2	__TEXT,__cstring	Rotation Lock Off
+0x32ab4	__TEXT,__cstring	off.mute
+0x32abd	__TEXT,__cstring	Mute Off
+0x32ac6	__TEXT,__cstring	off.darkmode
+0x32ad3	__TEXT,__cstring	Dark Mode Off
+0x32ae1	__TEXT,__cstring	off.nightshift
+0x32af0	__TEXT,__cstring	Night Shift Off
+0x32b00	__TEXT,__cstring	off.autobrightness
+0x32b13	__TEXT,__cstring	Auto-Brightness Off
+0x32b27	__TEXT,__cstring	off.keepawake
+0x32b35	__TEXT,__cstring	Keep Screen Awake Off
+0x32b4b	__TEXT,__cstring	off.location
+0x32b58	__TEXT,__cstring	Location Services Off
+0x32b6e	__TEXT,__cstring	off.grayscale
+0x32b7c	__TEXT,__cstring	Grayscale Off
+0x32b8a	__TEXT,__cstring	off.smartinvert
+0x32b9a	__TEXT,__cstring	Smart Invert Off
+0x32bab	__TEXT,__cstring	off.classicinvert
+0x32bbd	__TEXT,__cstring	Classic Invert Off
+0x32bd0	__TEXT,__cstring	off.zoom
+0x32bd9	__TEXT,__cstring	Zoom Off
+0x32be2	__TEXT,__cstring	Respring and Safe Mode restart SpringBoard, so actions after them won't run. Keep them last.
+0x32c3f	__TEXT,__cstring	Safe Mode restarts SpringBoard with no tweaks, Triggr included, until you tap Dismiss on the Safe Mode screen.
+0x32cae	__TEXT,__cstring	Nothing runs after a restart or power off. Keep it last.
+0x32ce7	__TEXT,__cstring	This restarts or powers off the phone as soon as the trigger fires, without asking. The jailbreak stays off until you run Dopamine again.
+0x32d71	__TEXT,__cstring	%@ and %@ change the same switch, so only the last one sticks.
+0x32db0	__TEXT,__cstring	B16@?0@"NSString"8
+0x32dc3	__TEXT,__cstring	%@ and %@ can't open at the same time. Add a pause between them in Order, Pauses & If.
+0x32e1a	__TEXT,__cstring	wifi.
+0x32e20	__TEXT,__cstring	bluetooth.
+0x32e2b	__TEXT,__cstring	bt.
+0x32e2f	__TEXT,__cstring	power.
+0x32e36	__TEXT,__cstring	headphones.
+0x32e42	__TEXT,__cstring	lowpower.
+0x32e4c	__TEXT,__cstring	device.
+0x32e54	__TEXT,__cstring	display.
+0x32e5d	__TEXT,__cstring	music.started
+0x32e6b	__TEXT,__cstring	music.stopped
+0x32e79	__TEXT,__cstring	media.
+0x32e80	__TEXT,__cstring	phone.
+0x32e87	__TEXT,__cstring	compose.
+0x32e90	__TEXT,__cstring	clock.
+0x32e97	__TEXT,__cstring	haptic.
+0x32e9f	__TEXT,__cstring	flashlight.
+0x32eab	__TEXT,__cstring	record.
+0x32eb3	__TEXT,__cstring	system.
+0x32ebb	__TEXT,__cstring	/var/jb
+0x32ec3	__TEXT,__cstring	WIFI
+0x32ec8	__TEXT,__cstring	MOBILE_DATA_SETTINGS_ID
+0x32ee0	__TEXT,__cstring	Cellular
+0x32ee9	__TEXT,__cstring	NOTIFICATIONS_ID
+0x32efa	__TEXT,__cstring	Notifications
+0x32f08	__TEXT,__cstring	Sounds
+0x32f0f	__TEXT,__cstring	Sounds & Haptics
+0x32f20	__TEXT,__cstring	General
+0x32f28	__TEXT,__cstring	ControlCenter
+0x32f36	__TEXT,__cstring	DISPLAY
+0x32f3e	__TEXT,__cstring	Display & Brightness
+0x32f53	__TEXT,__cstring	Wallpaper
+0x32f5d	__TEXT,__cstring	BATTERY_USAGE
+0x32f6b	__TEXT,__cstring	Battery
+0x32f73	__TEXT,__cstring	Privacy
+0x32f7b	__TEXT,__cstring	Privacy & Security
+0x32f8e	__TEXT,__cstring	/var/mobile/Library/Triggr/registry.plist
+0x32fb8	__TEXT,__cstring	Home Button
+0x32fc4	__TEXT,__cstring	Touch ID
+0x32fcd	__TEXT,__cstring	Light Double Tap: touch the sensor twice without clicking. Finger Match works on the Lock Screen only.
+0x33034	__TEXT,__cstring	Volume Buttons
+0x33043	__TEXT,__cstring	Up, then Down is two quick presses; it runs as the second button goes down. While one is assigned, a single press waits a moment for the other button.
+0x330da	__TEXT,__cstring	Press the lock button and a volume button together. Holds run after half a second; keep holding and iOS's power-off slider still appears.
+0x33164	__TEXT,__cstring	Action Button
+0x33172	__TEXT,__cstring	Hold is what iOS uses for the button's own action. Assign Hold to replace it; Press and Double Press are extra.
+0x331e2	__TEXT,__cstring	Mute Switch
+0x331ee	__TEXT,__cstring	Toggled Twice: flip it and back quickly; it runs on the flip back. While it's assigned, a single flip waits a moment.
+0x33264	__TEXT,__cstring	Home Bar
+0x3326d	__TEXT,__cstring	Double tap the line at the bottom, inside apps. Single taps still work.
+0x332b5	__TEXT,__cstring	Lock Screen Clock
+0x332c7	__TEXT,__cstring	Gestures that start on the big Lock Screen clock. The rest of the Lock Screen is unchanged.
+0x33323	__TEXT,__cstring	Headset Button
+0x33332	__TEXT,__cstring	The button on wired headphones. Hold replaces Siri while it's assigned.
+0x3337a	__TEXT,__cstring	Left and Right are each half of the bar. A single tap still scrolls to the top.
+0x333ca	__TEXT,__cstring	Home Screen Icons
+0x333dc	__TEXT,__cstring	A quick flick that starts on an app or folder icon.
+0x33410	__TEXT,__cstring	Screen Edges
+0x3341d	__TEXT,__cstring	Slide from the very edge of the screen. An assigned part of an edge stops doing its iOS gesture there, so open a trigger to see what it takes over.
+0x334b1	__TEXT,__cstring	Home Screen Gestures
+0x334c6	__TEXT,__cstring	On an empty part of a Home Screen page, not on an icon.
+0x334fe	__TEXT,__cstring	Multi-Finger Gestures
+0x33514	__TEXT,__cstring	Inside apps. The app still sees the gesture too, so pick ones it doesn't use; two- and three-finger taps and swipes are safest.
+0x33594	__TEXT,__cstring	Motion
+0x3359b	__TEXT,__cstring	Uses iOS's own shake detection, so no extra battery.
+0x335d0	__TEXT,__cstring	Charger & Headphones
+0x335e5	__TEXT,__cstring	Taking out an AirPod can count as Headphones Disconnected.
+0x33620	__TEXT,__cstring	CarPlay
+0x33628	__TEXT,__cstring	Wired and wireless CarPlay.
+0x33644	__TEXT,__cstring	Sunrise & Sunset
+0x33655	__TEXT,__cstring	Worked out from the location iOS already has. No tracking.
+0x33690	__TEXT,__cstring	Phone Calls
+0x3369c	__TEXT,__cstring	Phone, FaceTime and other calling apps.
+0x336c4	__TEXT,__cstring	Any notification. Triggr only sees which app sent it. For one app, use Custom Events.
+0x3371a	__TEXT,__cstring	Music
+0x33720	__TEXT,__cstring	Any app in Now Playing: Music, Spotify, YouTube, podcasts…
+0x3375d	__TEXT,__cstring	Proximity Sensor
+0x3376e	__TEXT,__cstring	The sensor by the earpiece. It stays on while the screen is on (a little battery). Wave is a quick cover; with Wave assigned, Cover waits half a second.
+0x33807	__TEXT,__cstring	State Changes
+0x33815	__TEXT,__cstring	Runs after the change. Control Center's Wi-Fi button only leaves the network; Wi-Fi stays on.
+0x33873	__TEXT,__cstring	action.press
+0x33880	__TEXT,__cstring	Press
+0x33886	__TEXT,__cstring	action.double
+0x33894	__TEXT,__cstring	Double Press
+0x338a1	__TEXT,__cstring	Hold
+0x338a6	__TEXT,__cstring	Single Press
+0x338b3	__TEXT,__cstring	headset.hold
+0x338c0	__TEXT,__cstring	Slide In from Left
+0x338d3	__TEXT,__cstring	edge.right
+0x338de	__TEXT,__cstring	Slide In from Right
+0x338f2	__TEXT,__cstring	edge.left2
+0x338fd	__TEXT,__cstring	Two-Finger Slide In from Left
+0x3391b	__TEXT,__cstring	edge.right2
+0x33927	__TEXT,__cstring	Two-Finger Slide In from Right
+0x33946	__TEXT,__cstring	Swipe Up from Bottom Left
+0x33960	__TEXT,__cstring	Swipe Up from Bottom Right
+0x3397b	__TEXT,__cstring	Slide Up Along Left Edge
+0x33994	__TEXT,__cstring	Slide Down Along Left Edge
+0x339af	__TEXT,__cstring	Slide Up Along Right Edge
+0x339c9	__TEXT,__cstring	Slide Down Along Right Edge
+0x339e5	__TEXT,__cstring	Slide Down from Top Left
+0x339fe	__TEXT,__cstring	Slide Down from Top Right
+0x33a18	__TEXT,__cstring	edge.top2
+0x33a22	__TEXT,__cstring	Two-Finger Slide Down from Top
+0x33a41	__TEXT,__cstring	edge.bottom2
+0x33a4e	__TEXT,__cstring	Two-Finger Slide Up from Bottom
+0x33a6e	__TEXT,__cstring	motion.shake
+0x33a7b	__TEXT,__cstring	Shake Device
+0x33a88	__TEXT,__cstring	call.incoming
+0x33a96	__TEXT,__cstring	Incoming Call
+0x33aa4	__TEXT,__cstring	Call Answered
+0x33ab2	__TEXT,__cstring	call.outgoing
+0x33ac0	__TEXT,__cstring	Outgoing Call
+0x33ace	__TEXT,__cstring	call.ended
+0x33ad9	__TEXT,__cstring	Call Ended
+0x33ae4	__TEXT,__cstring	notification.any
+0x33af5	__TEXT,__cstring	Any Notification
+0x33b06	__TEXT,__cstring	Playback Started
+0x33b17	__TEXT,__cstring	Playback Paused or Stopped
+0x33b32	__TEXT,__cstring	Song Changed
+0x33b3f	__TEXT,__cstring	proximity.cover
+0x33b4f	__TEXT,__cstring	Cover
+0x33b55	__TEXT,__cstring	Wave (Cover Briefly)
+0x33b6a	__TEXT,__cstring	Triple Press
+0x33b77	__TEXT,__cstring	Short Hold
+0x33b82	__TEXT,__cstring	Long Hold
+0x33b8c	__TEXT,__cstring	Up Press
+0x33b95	__TEXT,__cstring	Down Press
+0x33ba0	__TEXT,__cstring	Up Hold
+0x33ba8	__TEXT,__cstring	Down Hold
+0x33bb2	__TEXT,__cstring	Up, then Down
+0x33bc0	__TEXT,__cstring	Down, then Up
+0x33bce	__TEXT,__cstring	Press Both
+0x33bd9	__TEXT,__cstring	Hold Both
+0x33be3	__TEXT,__cstring	Light Double Tap
+0x33bf4	__TEXT,__cstring	touchid.match
+0x33c02	__TEXT,__cstring	Finger Match (Lock Screen)
+0x33c1d	__TEXT,__cstring	Switched to Silent
+0x33c30	__TEXT,__cstring	Switched to Ring
+0x33c41	__TEXT,__cstring	Toggled
+0x33c49	__TEXT,__cstring	Toggled Twice
+0x33c57	__TEXT,__cstring	/usr/lib/libMobileGestalt.dylib
+0x33c77	__TEXT,__cstring	MGCopyAnswer
+0x33c84	__TEXT,__cstring	HomeButtonType
+0x33c93	__TEXT,__cstring	Tap
+0x33c97	__TEXT,__cstring	statusbar.doubletap
+0x33cab	__TEXT,__cstring	Double Tap
+0x33cb6	__TEXT,__cstring	statusbar.hold
+0x33cc5	__TEXT,__cstring	Left Tap
+0x33cce	__TEXT,__cstring	statusbar.left.doubletap
+0x33ce7	__TEXT,__cstring	Left Double Tap
+0x33cf7	__TEXT,__cstring	statusbar.left.hold
+0x33d0b	__TEXT,__cstring	Left Hold
+0x33d15	__TEXT,__cstring	Right Tap
+0x33d1f	__TEXT,__cstring	statusbar.right.doubletap
+0x33d39	__TEXT,__cstring	Right Double Tap
+0x33d4a	__TEXT,__cstring	statusbar.right.hold
+0x33d5f	__TEXT,__cstring	Right Hold
+0x33d6a	__TEXT,__cstring	statusbar.swipeleft
+0x33d7e	__TEXT,__cstring	Swipe Left
+0x33d89	__TEXT,__cstring	statusbar.swiperight
+0x33d9e	__TEXT,__cstring	Swipe Right
+0x33daa	__TEXT,__cstring	Opened 
+0x33db2	__TEXT,__cstring	Notification from 
+0x33dc5	__TEXT,__cstring	%@ on %@
+0x33dce	__TEXT,__cstring	Volume Buttons Up
+0x33de0	__TEXT,__cstring	Volume Buttons Down
+0x33df4	__TEXT,__cstring	Icon %s
+0x33dfc	__TEXT,__cstring	Home Screen %s
+0x33e0b	__TEXT,__cstring	%s %s
+0x33e11	__TEXT,__cstring	Battery Rises Above %@%%
+0x33e2a	__TEXT,__cstring	Battery Drops Below %@%%
+0x33e43	__TEXT,__cstring	%02d:%02d %@
+0x33e50	__TEXT,__cstring	/System/Library/PrivateFrameworks/MobileWiFi.framework/MobileWiFi
+0x33e92	__TEXT,__cstring	WiFiManagerClientCreate
+0x33eaa	__TEXT,__cstring	WiFiManagerClientCopyNetworks
+0x33ec8	__TEXT,__cstring	WiFiNetworkGetSSID
+0x33edb	__TEXT,__cstring	/System/Library/PrivateFrameworks/BluetoothManager.framework/BluetoothManager
+0x33f29	__TEXT,__cstring	BluetoothManager
+0x33f3a	__TEXT,__cstring	hw.machine
+0x33f45	__TEXT,__cstring	iPhone
+0x33f4c	__TEXT,__cstring	icon.flickup
+0x33f59	__TEXT,__cstring	Flick Up
+0x33f62	__TEXT,__cstring	Flick Down
+0x33f6d	__TEXT,__cstring	Flick Left
+0x33f78	__TEXT,__cstring	Flick Right
+0x33f84	__TEXT,__cstring	homescreen.pinchin
+0x33f97	__TEXT,__cstring	Pinch In
+0x33fa0	__TEXT,__cstring	homescreen.pinchout
+0x33fb4	__TEXT,__cstring	Pinch Out
+0x33fbe	__TEXT,__cstring	homescreen.twoup
+0x33fcf	__TEXT,__cstring	Two-Finger Swipe Up
+0x33fe3	__TEXT,__cstring	homescreen.twodown
+0x33ff6	__TEXT,__cstring	Two-Finger Swipe Down
+0x3400c	__TEXT,__cstring	homescreen.doubletap
+0x34021	__TEXT,__cstring	Double Tap Empty Space
+0x34038	__TEXT,__cstring	power.connected
+0x34048	__TEXT,__cstring	Charger Connected
+0x3405a	__TEXT,__cstring	power.disconnected
+0x3406d	__TEXT,__cstring	Charger Disconnected
+0x34082	__TEXT,__cstring	headphones.in
+0x34090	__TEXT,__cstring	headphones.out
+0x3409f	__TEXT,__cstring	Headphones Disconnected
+0x340b7	__TEXT,__cstring	wifi.on
+0x340bf	__TEXT,__cstring	Wi-Fi Turned On
+0x340cf	__TEXT,__cstring	wifi.off
+0x340d8	__TEXT,__cstring	Wi-Fi Turned Off
+0x340e9	__TEXT,__cstring	wifi.joined
+0x340f5	__TEXT,__cstring	wifi.left
+0x340ff	__TEXT,__cstring	bluetooth.on
+0x3410c	__TEXT,__cstring	Bluetooth Turned On
+0x34120	__TEXT,__cstring	bluetooth.off
+0x3412e	__TEXT,__cstring	Bluetooth Turned Off
+0x34143	__TEXT,__cstring	lowpower.on
+0x3414f	__TEXT,__cstring	lowpower.off
+0x3415c	__TEXT,__cstring	device.locked
+0x3416a	__TEXT,__cstring	Device Locked
+0x34178	__TEXT,__cstring	device.unlocked
+0x34188	__TEXT,__cstring	Device Unlocked
+0x34198	__TEXT,__cstring	display.on
+0x341a3	__TEXT,__cstring	Screen Turned On
+0x341b4	__TEXT,__cstring	display.off
+0x341c0	__TEXT,__cstring	Screen Turned Off
+0x341d2	__TEXT,__cstring	carplay.connected
+0x341e4	__TEXT,__cstring	CarPlay Connected
+0x341f6	__TEXT,__cstring	carplay.disconnected
+0x3420b	__TEXT,__cstring	CarPlay Disconnected
+0x34220	__TEXT,__cstring	Sunrise
+0x34228	__TEXT,__cstring	Sunset
+0x3422f	__TEXT,__cstring	Tap and Hold
+0x3423c	__TEXT,__cstring	lsclock.doubletap
+0x3424e	__TEXT,__cstring	lsclock.swipeleft
+0x34260	__TEXT,__cstring	lsclock.swiperight
+0x34273	__TEXT,__cstring	lsclock.swipedown
+0x34285	__TEXT,__cstring	Swipe Down
+0x34290	__TEXT,__cstring	inapp.twotap
+0x3429d	__TEXT,__cstring	Two-Finger Tap
+0x342ac	__TEXT,__cstring	inapp.threetap
+0x342bb	__TEXT,__cstring	Three-Finger Tap
+0x342cc	__TEXT,__cstring	inapp.twoup
+0x342d8	__TEXT,__cstring	inapp.twodown
+0x342e6	__TEXT,__cstring	inapp.twoleft
+0x342f4	__TEXT,__cstring	Two-Finger Swipe Left
+0x3430a	__TEXT,__cstring	inapp.tworight
+0x34319	__TEXT,__cstring	Two-Finger Swipe Right
+0x34330	__TEXT,__cstring	inapp.threeup
+0x3433e	__TEXT,__cstring	Three-Finger Swipe Up
+0x34354	__TEXT,__cstring	inapp.threedown
+0x34364	__TEXT,__cstring	Three-Finger Swipe Down
+0x3437c	__TEXT,__cstring	inapp.threeleft
+0x3438c	__TEXT,__cstring	Three-Finger Swipe Left
+0x343a4	__TEXT,__cstring	inapp.threeright
+0x343b5	__TEXT,__cstring	Three-Finger Swipe Right
+0x343ce	__TEXT,__cstring	inapp.fourtap
+0x343dc	__TEXT,__cstring	Four-Finger Tap
+0x343ec	__TEXT,__cstring	inapp.fivetap
+0x343fa	__TEXT,__cstring	Five-Finger Tap
+0x3440a	__TEXT,__cstring	Three-Finger Pinch
+0x3441d	__TEXT,__cstring	Three-Finger Spread
+0x34431	__TEXT,__cstring	inapp.fourpinchin
+0x34443	__TEXT,__cstring	Four-Finger Pinch
+0x34455	__TEXT,__cstring	inapp.fourpinchout
+0x34468	__TEXT,__cstring	Four-Finger Spread
+0x3447b	__TEXT,__cstring	inapp.fivepinchin
+0x3448d	__TEXT,__cstring	Five-Finger Pinch
+0x3449f	__TEXT,__cstring	inapp.fivepinchout
+0x344b2	__TEXT,__cstring	Five-Finger Spread
+0x344c5	__TEXT,__cstring	Top Button
+0x344d0	__TEXT,__cstring	Side Button
+0x344dc	__TEXT,__cstring	circle.circle
+0x344ea	__TEXT,__cstring	touchid
+0x344f2	__TEXT,__cstring	speaker.wave.2.fill
+0x34506	__TEXT,__cstring	plus.rectangle.on.rectangle
+0x34522	__TEXT,__cstring	bell.slash.fill
+0x34532	__TEXT,__cstring	button.programmable
+0x34546	__TEXT,__cstring	rectangle.topthird.inset.filled
+0x34566	__TEXT,__cstring	square.grid.3x3.fill
+0x3457b	__TEXT,__cstring	hand.draw.fill
+0x3458a	__TEXT,__cstring	music.note
+0x34595	__TEXT,__cstring	bell.badge.fill
+0x345a5	__TEXT,__cstring	arrow.left.and.right.square.fill
+0x345c6	__TEXT,__cstring	hand.raised.fill
+0x345d7	__TEXT,__cstring	arrow.triangle.2.circlepath
+0x345f3	__TEXT,__cstring	platter.filled.bottom.iphone|capsule.fill
+0x3461d	__TEXT,__cstring	clock.fill
+0x34628	__TEXT,__cstring	car.fill
+0x34631	__TEXT,__cstring	sunrise.fill
+0x3463e	__TEXT,__cstring	height
+0x34645	__TEXT,__cstring	v32@?0@8@16^B24
+0x34655	__TEXT,__cstring	%lu assignments, %lu menus, %lu shell commands, %lu URLs or Shortcuts.
+0x3469c	__TEXT,__cstring	setValues:titles:
+0x346ae	__TEXT,__cstring	validValues
+0x346ba	__TEXT,__cstring	validTitles
+0x346c6	__TEXT,__cstring	PatchNotes
+0x346d1	__TEXT,__cstring	%@. %@
+0x346d8	__TEXT,__cstring	home.
+0x346de	__TEXT,__cstring	touchid.
+0x346e7	__TEXT,__cstring	homebar.
+0x346f0	__TEXT,__cstring	At Home Screen
+0x346ff	__TEXT,__cstring	In Apps
+0x34707	__TEXT,__cstring	At Lock Screen
+0x34716	__TEXT,__objc_methname	_onSave
+0x3471e	__TEXT,__objc_methname	JSONObjectWithData:options:error:
+0x34740	__TEXT,__objc_methname	_picker
+0x34748	__TEXT,__objc_methname	T@"NSMutableArray",&,N,V_items
+0x34767	__TEXT,__objc_methname	appPlacesCount:
+0x34777	__TEXT,__objc_methname	T@"NSString",R,C
+0x34788	__TEXT,__objc_methname	button:command:
+0x34798	__TEXT,__objc_methname	T@?,C,N,V_onSave
+0x347a9	__TEXT,__objc_methname	changed
+0x347b1	__TEXT,__objc_methname	URLWithString:
+0x347c0	__TEXT,__objc_methname	containsString:
+0x347d0	__TEXT,__objc_methname	UUIDString
+0x347db	__TEXT,__objc_methname	customEventRows
+0x347eb	__TEXT,__objc_methname	_assignments
+0x347f8	__TEXT,__objc_methname	endUndo
+0x34800	__TEXT,__objc_methname	_dayButtons
+0x3480c	__TEXT,__objc_methname	itemWithPrefix:
+0x3481c	__TEXT,__objc_methname	_expanded
+0x34826	__TEXT,__objc_methname	numberWithBool:
+0x34836	__TEXT,__objc_methname	_items
+0x3483d	__TEXT,__objc_methname	positionOfItem:
+0x3484d	__TEXT,__objc_methname	_mode
+0x34853	__TEXT,__objc_methname	release
+0x3485b	__TEXT,__objc_methname	_pendingApp
+0x34867	__TEXT,__objc_methname	row
+0x3486b	__TEXT,__objc_methname	_query
+0x34872	__TEXT,__objc_methname	set
+0x34876	__TEXT,__objc_methname	_setupExpanded
+0x34885	__TEXT,__objc_methname	setContentMode:
+0x34895	__TEXT,__objc_methname	_trigger
+0x3489e	__TEXT,__objc_methname	setCornerStyle:
+0x348ae	__TEXT,__objc_methname	_undoToken
+0x348b9	__TEXT,__objc_methname	setHidesSearchBarWhenScrolling:
+0x348d9	__TEXT,__objc_methname	accessibilityWorkflowsWithError:
+0x348fa	__TEXT,__objc_methname	setRightBarButtonItem:animated:
+0x3491a	__TEXT,__objc_methname	actionWithTitle:image:identifier:handler:
+0x34944	__TEXT,__objc_methname	setWithObjects:
+0x34954	__TEXT,__objc_methname	activateConstraints:
+0x34969	__TEXT,__objc_methname	stringByAppendingPathComponent:
+0x34989	__TEXT,__objc_methname	activeProfileName:
+0x3499c	__TEXT,__objc_methname	systemBlueColor
+0x349ac	__TEXT,__objc_methname	addCondition:
+0x349ba	__TEXT,__objc_methname	systemGrayColor
+0x349ca	__TEXT,__objc_methname	addObject:
+0x349d5	__TEXT,__objc_methname	systemPinkColor
+0x349e5	__TEXT,__objc_methname	addPause
+0x349ee	__TEXT,__objc_methname	tableHeaderView
+0x349fe	__TEXT,__objc_methname	addTarget:action:forControlEvents:
+0x34a21	__TEXT,__objc_methname	toggle:
+0x34a29	__TEXT,__objc_methname	addedApp:
+0x34a33	__TEXT,__objc_methname	viewWillAppear:
+0x34a43	__TEXT,__objc_methname	.cxx_destruct
+0x34a51	__TEXT,__objc_methname	_pendingTrigger
+0x34a61	__TEXT,__objc_methname	T#,R
+0x34a66	__TEXT,__objc_methname	allKeys
+0x34a6e	__TEXT,__objc_methname	T@"NSString",?,R,C
+0x34a81	__TEXT,__objc_methname	bundleForClass:
+0x34a91	__TEXT,__objc_methname	T@?,C,N,V_onChange
+0x34aa4	__TEXT,__objc_methname	buttonWithType:
+0x34ab4	__TEXT,__objc_methname	TQ,R
+0x34ab9	__TEXT,__objc_methname	containsObject:
+0x34ac9	__TEXT,__objc_methname	UUID
+0x34ace	__TEXT,__objc_methname	currentCalendar
+0x34ade	__TEXT,__objc_methname	_assigned
+0x34ae8	__TEXT,__objc_methname	detailTextLabel
+0x34af8	__TEXT,__objc_methname	_beforeUndo
+0x34b04	__TEXT,__objc_methname	isProxy
+0x34b0c	__TEXT,__objc_methname	_days
+0x34b12	__TEXT,__objc_methname	lowercaseString
+0x34b22	__TEXT,__objc_methname	_group
+0x34b29	__TEXT,__objc_methname	partsOfIfAtIndex:otherwise:end:
+0x34b49	__TEXT,__objc_methname	_menuEditor
+0x34b55	__TEXT,__objc_methname	propertyForKey:
+0x34b65	__TEXT,__objc_methname	_onChange
+0x34b6f	__TEXT,__objc_methname	replacesButtons
+0x34b7f	__TEXT,__objc_methname	_pendingFlickApp
+0x34b90	__TEXT,__objc_methname	section
+0x34b98	__TEXT,__objc_methname	_selection
+0x34ba3	__TEXT,__objc_methname	setCellEnabled:
+0x34bb3	__TEXT,__objc_methname	_shown
+0x34bba	__TEXT,__objc_methname	setCornerCurve:
+0x34bca	__TEXT,__objc_methname	_undo
+0x34bd0	__TEXT,__objc_methname	setFill
+0x34bd8	__TEXT,__objc_methname	accessibilityTraits
+0x34bec	__TEXT,__objc_methname	setPlaceholder:
+0x34bfc	__TEXT,__objc_methname	actionWithHandler:
+0x34c0f	__TEXT,__objc_methname	setTag:
+0x34c17	__TEXT,__objc_methname	actionWithTitle:style:handler:
+0x34c36	__TEXT,__objc_methname	statusBarTapsOn
+0x34c46	__TEXT,__objc_methname	activeProfile
+0x34c54	__TEXT,__objc_methname	stringByAppendingPathExtension:
+0x34c74	__TEXT,__objc_methname	addAction:
+0x34c7f	__TEXT,__objc_methname	systemCyanColor
+0x34c8f	__TEXT,__objc_methname	addIndex:
+0x34c99	__TEXT,__objc_methname	systemMintColor
+0x34ca9	__TEXT,__objc_methname	addObjectsFromArray:
+0x34cbe	__TEXT,__objc_methname	systemTealColor
+0x34cce	__TEXT,__objc_methname	addSubview:
+0x34cda	__TEXT,__objc_methname	tag
+0x34cde	__TEXT,__objc_methname	addTextFieldWithConfigurationHandler:
+0x34d04	__TEXT,__objc_methname	verbsForSwitch:
+0x34d14	__TEXT,__objc_methname	alertControllerWithTitle:message:preferredStyle:
+0x34d45	__TEXT,__objc_methname	allObjects
+0x34d50	__TEXT,__objc_methname	allValues
+0x34d5a	__TEXT,__objc_methname	appendFormat:
+0x34d68	__TEXT,__objc_methname	appendString:
+0x34d76	__TEXT,__objc_methname	applicationProxyForIdentifier:
+0x34d95	__TEXT,__objc_methname	applySetup:
+0x34da1	__TEXT,__objc_methname	array
+0x34da7	__TEXT,__objc_methname	arrayByAddingObject:
+0x34dbc	__TEXT,__objc_methname	arrayWithContentsOfFile:
+0x34dd5	__TEXT,__objc_methname	arrayWithObjects:count:
+0x34ded	__TEXT,__objc_methname	assignedActionTitle:
+0x34e02	__TEXT,__objc_methname	assignedCount:
+0x34e11	__TEXT,__objc_methname	assignmentCount:
+0x34e22	__TEXT,__objc_methname	autorelease
+0x34e2e	__TEXT,__objc_methname	available
+0x34e38	__TEXT,__objc_methname	bezierPathWithRoundedRect:cornerRadius:
+0x34e60	__TEXT,__objc_methname	biometryType
+0x34e6d	__TEXT,__objc_methname	blockListStorage
+0x34e7e	__TEXT,__objc_methname	blockedApps:
+0x34e8b	__TEXT,__objc_methname	boolValue
+0x34e95	__TEXT,__objc_methname	bottomAnchor
+0x34ea2	__TEXT,__objc_methname	bounds
+0x34ea9	__TEXT,__objc_methname	buttonWithConfiguration:primaryAction:
+0x34ed0	__TEXT,__objc_methname	canEvaluatePolicy:error:
+0x34ee9	__TEXT,__objc_methname	categorySpecifiers
+0x34efc	__TEXT,__objc_methname	cellForRowAtIndexPath:
+0x34f13	__TEXT,__objc_methname	cellType
+0x34f1c	__TEXT,__objc_methname	characterSetWithCharactersInString:
+0x34f40	__TEXT,__objc_methname	class
+0x34f46	__TEXT,__objc_methname	components:fromDate:
+0x34f5b	__TEXT,__objc_methname	componentsJoinedByString:
+0x34f75	__TEXT,__objc_methname	componentsSeparatedByCharactersInSet:
+0x34f9b	__TEXT,__objc_methname	componentsSeparatedByString:
+0x34fb8	__TEXT,__objc_methname	conditionStorage
+0x34fc9	__TEXT,__objc_methname	conditions
+0x34fd4	__TEXT,__objc_methname	configurationWithActions:
+0x34fee	__TEXT,__objc_methname	configurationWithIdentifier:previewProvider:actionProvider:
+0x3502a	__TEXT,__objc_methname	configurationWithPointSize:weight:
+0x3504d	__TEXT,__objc_methname	configurationWithTextStyle:scale:
+0x3506f	__TEXT,__objc_methname	confirm:message:button:destructive:then:
+0x35098	__TEXT,__objc_methname	confirmAdding:then:
+0x350ac	__TEXT,__objc_methname	confirmRemoveAll:
+0x350be	__TEXT,__objc_methname	conformsToProtocol:
+0x350d2	__TEXT,__objc_methname	constraintEqualToAnchor:
+0x350eb	__TEXT,__objc_methname	constraintEqualToAnchor:constant:
+0x3510d	__TEXT,__objc_methname	constraintEqualToConstant:
+0x35128	__TEXT,__objc_methname	contentLayoutGuide
+0x3513b	__TEXT,__objc_methname	contentsOfDirectoryAtPath:error:
+0x3515c	__TEXT,__objc_methname	contextualActionWithStyle:title:handler:
+0x35185	__TEXT,__objc_methname	copy
+0x3518a	__TEXT,__objc_methname	count
+0x35190	__TEXT,__objc_methname	countByEnumeratingWithState:objects:count:
+0x351bb	__TEXT,__objc_methname	currentDevice
+0x351c9	__TEXT,__objc_methname	currentRunLoop
+0x351d8	__TEXT,__objc_methname	dataWithContentsOfURL:
+0x351ef	__TEXT,__objc_methname	dataWithJSONObject:options:error:
+0x35211	__TEXT,__objc_methname	date
+0x35216	__TEXT,__objc_methname	dateWithTimeIntervalSinceNow:
+0x35234	__TEXT,__objc_methname	dayTapped:
+0x3523f	__TEXT,__objc_methname	debugDescription
+0x35250	__TEXT,__objc_methname	defaultManager
+0x3525f	__TEXT,__objc_methname	deleteProfile:
+0x3526e	__TEXT,__objc_methname	deleteRowsAtIndexPaths:withRowAnimation:
+0x35297	__TEXT,__objc_methname	depthAtIndex:
+0x352a5	__TEXT,__objc_methname	dequeueReusableCellWithIdentifier:
+0x352c8	__TEXT,__objc_methname	description
+0x352d4	__TEXT,__objc_methname	deselectRowAtIndexPath:animated:
+0x352f5	__TEXT,__objc_methname	dictionary
+0x35300	__TEXT,__objc_methname	dictionaryWithContentsOfFile:
+0x3531e	__TEXT,__objc_methname	dictionaryWithObjects:forKeys:count:
+0x35343	__TEXT,__objc_methname	dismissViewControllerAnimated:completion:
+0x3536d	__TEXT,__objc_methname	documentPicker:didPickDocumentAtURL:
+0x35392	__TEXT,__objc_methname	documentPicker:didPickDocumentsAtURLs:
+0x353b9	__TEXT,__objc_methname	documentPickerWasCancelled:
+0x353d5	__TEXT,__objc_methname	doubleValue
+0x353e1	__TEXT,__objc_methname	drawInRect:
+0x353ed	__TEXT,__objc_methname	editorSpecifierForMenu:
+0x35405	__TEXT,__objc_methname	emptyGroupSpecifier
+0x35419	__TEXT,__objc_methname	enumerateKeysAndObjectsUsingBlock:
+0x3543c	__TEXT,__objc_methname	exportSetup:name:fromCell:
+0x35457	__TEXT,__objc_methname	fileExistsAtPath:
+0x35469	__TEXT,__objc_methname	fileURLWithPath:
+0x3547a	__TEXT,__objc_methname	fill
+0x3547f	__TEXT,__objc_methname	filledButtonConfiguration
+0x35499	__TEXT,__objc_methname	filterUsingPredicate:
+0x354af	__TEXT,__objc_methname	firstObject
+0x354bb	__TEXT,__objc_methname	firstObjectCommonWithArray:
+0x354d7	__TEXT,__objc_methname	firstWeekday
+0x354e4	__TEXT,__objc_methname	font
+0x354e9	__TEXT,__objc_methname	groupCount:
+0x354f5	__TEXT,__objc_methname	groupSpecifierWithName:
+0x3550d	__TEXT,__objc_methname	hasPrefix:
+0x35518	__TEXT,__objc_methname	hash
+0x3551d	__TEXT,__objc_methname	heightAnchor
+0x3552a	__TEXT,__objc_methname	hour
+0x3552f	__TEXT,__objc_methname	imageNamed:inBundle:compatibleWithTraitCollection:
+0x35562	__TEXT,__objc_methname	imageView
+0x3556c	__TEXT,__objc_methname	imageWithActions:
+0x3557e	__TEXT,__objc_methname	imageWithTintColor:renderingMode:
+0x355a0	__TEXT,__objc_methname	impactOccurred
+0x355af	__TEXT,__objc_methname	indexForIndexPath:
+0x355c2	__TEXT,__objc_methname	indexOfObject:
+0x355d1	__TEXT,__objc_methname	indexOfObjectPassingTest:
+0x355eb	__TEXT,__objc_methname	indexPathForRow:inSection:
+0x35606	__TEXT,__objc_methname	indexPathForSpecifier:
+0x3561d	__TEXT,__objc_methname	indexSetWithIndex:
+0x35630	__TEXT,__objc_methname	init
+0x35635	__TEXT,__objc_methname	initForOpeningContentTypes:asCopy:
+0x35658	__TEXT,__objc_methname	initWithActivityItems:applicationActivities:
+0x35685	__TEXT,__objc_methname	initWithArrangedSubviews:
+0x3569f	__TEXT,__objc_methname	initWithBarButtonSystemItem:target:action:
+0x356ca	__TEXT,__objc_methname	initWithFrame:
+0x356d9	__TEXT,__objc_methname	initWithImage:
+0x356e8	__TEXT,__objc_methname	initWithItems:
+0x356f7	__TEXT,__objc_methname	initWithSearchResultsController:
+0x35718	__TEXT,__objc_methname	initWithSize:
+0x35726	__TEXT,__objc_methname	initWithStyle:
+0x35735	__TEXT,__objc_methname	initWithStyle:reuseIdentifier:
+0x35754	__TEXT,__objc_methname	initWithStyle:reuseIdentifier:specifier:
+0x3577d	__TEXT,__objc_methname	initWithTitle:style:target:action:
+0x357a0	__TEXT,__objc_methname	insertObject:atIndex:
+0x357b6	__TEXT,__objc_methname	intValue
+0x357bf	__TEXT,__objc_methname	integerValue
+0x357cc	__TEXT,__objc_methname	invertedSet
+0x357d8	__TEXT,__objc_methname	isEqual:
+0x357e1	__TEXT,__objc_methname	isEqualToString:
+0x357f2	__TEXT,__objc_methname	isKindOfClass:
+0x35801	__TEXT,__objc_methname	isMemberOfClass:
+0x35812	__TEXT,__objc_methname	isSelected
+0x3581d	__TEXT,__objc_methname	items
+0x35823	__TEXT,__objc_methname	labelColor
+0x3582e	__TEXT,__objc_methname	labelFontSize
+0x3583c	__TEXT,__objc_methname	lastObject
+0x35847	__TEXT,__objc_methname	layer
+0x3584d	__TEXT,__objc_methname	leadingAnchor
+0x3585b	__TEXT,__objc_methname	length
+0x35862	__TEXT,__objc_methname	localizedCaseInsensitiveCompare:
+0x35883	__TEXT,__objc_methname	localizedName
+0x35891	__TEXT,__objc_methname	localizedStandardCompare:
+0x358ab	__TEXT,__objc_methname	menuCount:
+0x358b6	__TEXT,__objc_methname	menuSummary:
+0x358c3	__TEXT,__objc_methname	menuWithTitle:children:
+0x358db	__TEXT,__objc_methname	menusStorage
+0x358e8	__TEXT,__objc_methname	metricsForTextStyle:
+0x358fd	__TEXT,__objc_methname	minute
+0x35904	__TEXT,__objc_methname	modeCount:
+0x3590f	__TEXT,__objc_methname	mutableCopy
+0x3591b	__TEXT,__objc_methname	name
+0x35920	__TEXT,__objc_methname	navigationController
+0x35935	__TEXT,__objc_methname	navigationItem
+0x35944	__TEXT,__objc_methname	noteRecent:
+0x35950	__TEXT,__objc_methname	notificationOccurred:
+0x35966	__TEXT,__objc_methname	numberWithInteger:
+0x35979	__TEXT,__objc_methname	objectAtIndexedSubscript:
+0x35993	__TEXT,__objc_methname	objectForKeyedSubscript:
+0x359ac	__TEXT,__objc_methname	offerUndo:
+0x359b7	__TEXT,__objc_methname	onChange
+0x359c0	__TEXT,__objc_methname	onSave
+0x359c7	__TEXT,__objc_methname	openSupportLink:
+0x359d8	__TEXT,__objc_methname	openURL:options:completionHandler:
+0x359fb	__TEXT,__objc_methname	openedApp:
+0x35a06	__TEXT,__objc_methname	orderedSet
+0x35a11	__TEXT,__objc_methname	pairedDevices
+0x35a1f	__TEXT,__objc_methname	pathExtension
+0x35a2d	__TEXT,__objc_methname	pathForResource:ofType:
+0x35a45	__TEXT,__objc_methname	performGetter
+0x35a53	__TEXT,__objc_methname	performSelector:
+0x35a64	__TEXT,__objc_methname	performSelector:withObject:
+0x35a80	__TEXT,__objc_methname	performSelector:withObject:withObject:
+0x35aa7	__TEXT,__objc_methname	pickAirPlayDeviceAtIndexPath:specifier:existing:
+0x35ad8	__TEXT,__objc_methname	pickImport
+0x35ae3	__TEXT,__objc_methname	pickSettingsPageAtIndexPath:existing:
+0x35b09	__TEXT,__objc_methname	pickSwitchAction:name:
+0x35b20	__TEXT,__objc_methname	pickVerbsForSwitch:title:atIndexPath:
+0x35b46	__TEXT,__objc_methname	pickedApp:
+0x35b51	__TEXT,__objc_methname	pickedDays
+0x35b5c	__TEXT,__objc_methname	placeCount:
+0x35b68	__TEXT,__objc_methname	pointSize
+0x35b72	__TEXT,__objc_methname	popViewControllerAnimated:
+0x35b8d	__TEXT,__objc_methname	popoverPresentationController
+0x35bab	__TEXT,__objc_methname	predicateWithBlock:
+0x35bbf	__TEXT,__objc_methname	preferenceSpecifierNamed:target:set:get:detail:cell:edit:
+0x35bf9	__TEXT,__objc_methname	preferredFontForTextStyle:
+0x35c14	__TEXT,__objc_methname	presentSheet:fromRowAtIndexPath:
+0x35c35	__TEXT,__objc_methname	presentViewController:animated:completion:
+0x35c60	__TEXT,__objc_methname	presentedViewController
+0x35c78	__TEXT,__objc_methname	presetChanged
+0x35c86	__TEXT,__objc_methname	profileStatus:
+0x35c95	__TEXT,__objc_methname	profiles
+0x35c9e	__TEXT,__objc_methname	promptForCommand:prefix:existing:
+0x35cc0	__TEXT,__objc_methname	promptPauseAtIndex:insert:
+0x35cdb	__TEXT,__objc_methname	promptSave
+0x35ce6	__TEXT,__objc_methname	promptTitle:message:percent:then:
+0x35d08	__TEXT,__objc_methname	pushPickerForTrigger:
+0x35d1e	__TEXT,__objc_methname	pushViewController:animated:
+0x35d3b	__TEXT,__objc_methname	rangeOfCharacterFromSet:
+0x35d54	__TEXT,__objc_methname	rangeOfString:
+0x35d63	__TEXT,__objc_methname	rangeOfString:options:
+0x35d7a	__TEXT,__objc_methname	readPreferenceValue:
+0x35d8f	__TEXT,__objc_methname	readableContentGuide
+0x35da4	__TEXT,__objc_methname	recentActions
+0x35db2	__TEXT,__objc_methname	refreshCellContentsWithSpecifier:
+0x35dd4	__TEXT,__objc_methname	reloadData
+0x35ddf	__TEXT,__objc_methname	reloadSpecifiers
+0x35df0	__TEXT,__objc_methname	removeAllObjects
+0x35e01	__TEXT,__objc_methname	removeIfAtIndex:
+0x35e12	__TEXT,__objc_methname	removeItemAtPath:error:
+0x35e2a	__TEXT,__objc_methname	removeLastObject
+0x35e3b	__TEXT,__objc_methname	removeObject:
+0x35e49	__TEXT,__objc_methname	removeObjectAtIndex:
+0x35e5e	__TEXT,__objc_methname	removeObjectForKey:
+0x35e72	__TEXT,__objc_methname	removeObjectsAtIndexes:
+0x35e8a	__TEXT,__objc_methname	removeSpecifier:animated:
+0x35ea4	__TEXT,__objc_methname	respondsToSelector:
+0x35eb8	__TEXT,__objc_methname	retain
+0x35ebf	__TEXT,__objc_methname	retainCount
+0x35ecb	__TEXT,__objc_methname	revealItem:
+0x35ed7	__TEXT,__objc_methname	reverseObjectEnumerator
+0x35eef	__TEXT,__objc_methname	rightBarButtonItem
+0x35f02	__TEXT,__objc_methname	rowForAction:title:
+0x35f16	__TEXT,__objc_methname	rowForCommand:title:prompt:
+0x35f32	__TEXT,__objc_methname	rowForGroup:title:
+0x35f45	__TEXT,__objc_methname	rowsForCategory:
+0x35f56	__TEXT,__objc_methname	runAssignment:
+0x35f65	__TEXT,__objc_methname	runUntilDate:
+0x35f73	__TEXT,__objc_methname	runnableKeyForSpecifier:
+0x35f8c	__TEXT,__objc_methname	safeAreaLayoutGuide
+0x35fa0	__TEXT,__objc_methname	save
+0x35fa5	__TEXT,__objc_methname	saveCurrentAs:
+0x35fb4	__TEXT,__objc_methname	saveMenus:
+0x35fbf	__TEXT,__objc_methname	scaledFontForFont:
+0x35fd2	__TEXT,__objc_methname	scrollToRowAtIndexPath:atScrollPosition:animated:
+0x36004	__TEXT,__objc_methname	searchBar
+0x3600e	__TEXT,__objc_methname	searchSpecifiers
+0x3601f	__TEXT,__objc_methname	secondaryLabelColor
+0x36033	__TEXT,__objc_methname	selectRowAtIndexPath:animated:scrollPosition:
+0x36061	__TEXT,__objc_methname	selectedSegmentIndex
+0x36076	__TEXT,__objc_methname	selectionChanged
+0x36087	__TEXT,__objc_methname	self
+0x3608c	__TEXT,__objc_methname	setAccessibilityLabel:
+0x360a3	__TEXT,__objc_methname	setAccessibilityTraits:
+0x360bb	__TEXT,__objc_methname	setAccessoryType:
+0x360cd	__TEXT,__objc_methname	setAccessoryView:
+0x360df	__TEXT,__objc_methname	setActive:
+0x360ea	__TEXT,__objc_methname	setAddedApp:specifier:
+0x36101	__TEXT,__objc_methname	setAdjustsFontForContentSizeCategory:
+0x36127	__TEXT,__objc_methname	setAlignment:
+0x36135	__TEXT,__objc_methname	setAllowsSelectionDuringEditing:
+0x36156	__TEXT,__objc_methname	setAlwaysBounceVertical:
+0x3616f	__TEXT,__objc_methname	setAttributes:
+0x3617e	__TEXT,__objc_methname	setAutocapitalizationType:
+0x36199	__TEXT,__objc_methname	setAutocorrectionType:
+0x361b0	__TEXT,__objc_methname	setAutoresizingMask:
+0x361c5	__TEXT,__objc_methname	setAxis:
+0x361ce	__TEXT,__objc_methname	setBackgroundColor:
+0x361e2	__TEXT,__objc_methname	setBlockedApps:specifier:
+0x361fc	__TEXT,__objc_methname	setButtonAction:
+0x3620d	__TEXT,__objc_methname	setButtonSize:
+0x3621c	__TEXT,__objc_methname	setClearButtonMode:
+0x36230	__TEXT,__objc_methname	setClipsToBounds:
+0x36242	__TEXT,__objc_methname	setConditions:
+0x36251	__TEXT,__objc_methname	setContentHuggingPriority:forAxis:
+0x36274	__TEXT,__objc_methname	setCornerRadius:
+0x36285	__TEXT,__objc_methname	setCustomSpacing:afterView:
+0x362a1	__TEXT,__objc_methname	setDatePickerMode:
+0x362b4	__TEXT,__objc_methname	setDay:on:
+0x362bf	__TEXT,__objc_methname	setDefinesPresentationContext:
+0x362de	__TEXT,__objc_methname	setDelegate:
+0x362eb	__TEXT,__objc_methname	setDistribution:
+0x362fc	__TEXT,__objc_methname	setEditing:
+0x36308	__TEXT,__objc_methname	setEnabled:
+0x36314	__TEXT,__objc_methname	setEstimatedRowHeight:
+0x3632b	__TEXT,__objc_methname	setFlickedApp:specifier:
+0x36344	__TEXT,__objc_methname	setFont:
+0x3634d	__TEXT,__objc_methname	setFrame:
+0x36357	__TEXT,__objc_methname	setImage:
+0x36361	__TEXT,__objc_methname	setIsAccessibilityElement:
+0x3637c	__TEXT,__objc_methname	setItem:forPrefix:
+0x3638f	__TEXT,__objc_methname	setItems:
+0x36399	__TEXT,__objc_methname	setKeyboardType:
+0x363aa	__TEXT,__objc_methname	setNotifyingApp:specifier:
+0x363c5	__TEXT,__objc_methname	setNumberOfLines:
+0x363d7	__TEXT,__objc_methname	setObject:atIndexedSubscript:
+0x363f5	__TEXT,__objc_methname	setObject:forKeyedSubscript:
+0x36412	__TEXT,__objc_methname	setObscuresBackgroundDuringPresentation:
+0x3643b	__TEXT,__objc_methname	setOnChange:
+0x36448	__TEXT,__objc_methname	setOnSave:
+0x36453	__TEXT,__objc_methname	setOpenedApp:specifier:
+0x3646b	__TEXT,__objc_methname	setPickedApp:specifier:
+0x36483	__TEXT,__objc_methname	setPreferenceValue:specifier:
+0x364a1	__TEXT,__objc_methname	setPreferredDatePickerStyle:
+0x364be	__TEXT,__objc_methname	setProperty:forKey:
+0x364d2	__TEXT,__objc_methname	setRightBarButtonItem:
+0x364e9	__TEXT,__objc_methname	setSearchController:
+0x364fe	__TEXT,__objc_methname	setSearchResultsUpdater:
+0x36517	__TEXT,__objc_methname	setSelected:
+0x36524	__TEXT,__objc_methname	setSelectedSegmentIndex:
+0x3653d	__TEXT,__objc_methname	setSelectionStyle:
+0x36550	__TEXT,__objc_methname	setSeparatorInset:
+0x36563	__TEXT,__objc_methname	setSourceRect:
+0x36572	__TEXT,__objc_methname	setSourceView:
+0x36581	__TEXT,__objc_methname	setSpacing:
+0x3658d	__TEXT,__objc_methname	setSpecifier:
+0x3659b	__TEXT,__objc_methname	setTableHeaderView:
+0x365af	__TEXT,__objc_methname	setText:
+0x365b8	__TEXT,__objc_methname	setTextAlignment:
+0x365ca	__TEXT,__objc_methname	setTextColor:
+0x365d8	__TEXT,__objc_methname	setTintColor:
+0x365e6	__TEXT,__objc_methname	setTitle:
+0x365f0	__TEXT,__objc_methname	setTitle:forState:
+0x36603	__TEXT,__objc_methname	setTitleColor:forState:
+0x3661b	__TEXT,__objc_methname	setTitleTextAttributesTransformer:
+0x3663e	__TEXT,__objc_methname	setTranslatesAutoresizingMaskIntoConstraints:
+0x3666c	__TEXT,__objc_methname	setValue:forKey:
+0x3667d	__TEXT,__objc_methname	setWithArray:
+0x3668b	__TEXT,__objc_methname	setupSummary:
+0x36699	__TEXT,__objc_methname	sharedApplication
+0x366ab	__TEXT,__objc_methname	sharedInstance
+0x366ba	__TEXT,__objc_methname	shortWeekdaySymbols
+0x366ce	__TEXT,__objc_methname	showAddCondition:
+0x366e0	__TEXT,__objc_methname	showProfile:fromCell:
+0x366f6	__TEXT,__objc_methname	size
+0x366fb	__TEXT,__objc_methname	sortUsingComparator:
+0x36710	__TEXT,__objc_methname	sortedArrayUsingComparator:
+0x3672c	__TEXT,__objc_methname	sortedArrayUsingSelector:
+0x36746	__TEXT,__objc_methname	specifier
+0x36750	__TEXT,__objc_methname	specifierAtIndex:
+0x36762	__TEXT,__objc_methname	specifiers
+0x3676d	__TEXT,__objc_methname	standaloneWeekdaySymbols
+0x36786	__TEXT,__objc_methname	standardClient
+0x36795	__TEXT,__objc_methname	storageForKey:
+0x367a4	__TEXT,__objc_methname	storeValue:forKey:
+0x367b7	__TEXT,__objc_methname	string
+0x367be	__TEXT,__objc_methname	stringByAppendingFormat:
+0x367d7	__TEXT,__objc_methname	stringByAppendingString:
+0x367f0	__TEXT,__objc_methname	stringByDeletingPathExtension
+0x3680e	__TEXT,__objc_methname	stringByPaddingToLength:withString:startingAtIndex:
+0x36842	__TEXT,__objc_methname	stringByReplacingOccurrencesOfString:withString:
+0x36873	__TEXT,__objc_methname	stringByTrimmingCharactersInSet:
+0x36894	__TEXT,__objc_methname	stringValue
+0x368a0	__TEXT,__objc_methname	stringWithFormat:
+0x368b2	__TEXT,__objc_methname	stringWithUTF8String:
+0x368c8	__TEXT,__objc_methname	subarrayWithRange:
+0x368db	__TEXT,__objc_methname	substringFromIndex:
+0x368ef	__TEXT,__objc_methname	substringToIndex:
+0x36901	__TEXT,__objc_methname	summaryForCategory:
+0x36915	__TEXT,__objc_methname	superclass
+0x36920	__TEXT,__objc_methname	swipeTitleForSpecifier:
+0x36938	__TEXT,__objc_methname	swipedSpecifier:
+0x36949	__TEXT,__objc_methname	systemBackgroundColor
+0x3695f	__TEXT,__objc_methname	systemBrownColor
+0x36970	__TEXT,__objc_methname	systemFontOfSize:weight:
+0x36989	__TEXT,__objc_methname	systemGreenColor
+0x3699a	__TEXT,__objc_methname	systemGroupedBackgroundColor
+0x369b7	__TEXT,__objc_methname	systemImageNamed:
+0x369c9	__TEXT,__objc_methname	systemImageNamed:withConfiguration:
+0x369ed	__TEXT,__objc_methname	systemIndigoColor
+0x369ff	__TEXT,__objc_methname	systemOrangeColor
+0x36a11	__TEXT,__objc_methname	systemPurpleColor
+0x36a23	__TEXT,__objc_methname	systemRedColor
+0x36a32	__TEXT,__objc_methname	systemYellowColor
+0x36a44	__TEXT,__objc_methname	table
+0x36a4a	__TEXT,__objc_methname	tableView
+0x36a54	__TEXT,__objc_methname	tableView:canEditRowAtIndexPath:
+0x36a75	__TEXT,__objc_methname	tableView:canMoveRowAtIndexPath:
+0x36a96	__TEXT,__objc_methname	tableView:cellForRowAtIndexPath:
+0x36ab7	__TEXT,__objc_methname	tableView:commitEditingStyle:forRowAtIndexPath:
+0x36ae7	__TEXT,__objc_methname	tableView:contextMenuConfigurationForRowAtIndexPath:point:
+0x36b22	__TEXT,__objc_methname	tableView:didSelectRowAtIndexPath:
+0x36b45	__TEXT,__objc_methname	tableView:editingStyleForRowAtIndexPath:
+0x36b6e	__TEXT,__objc_methname	tableView:heightForRowAtIndexPath:
+0x36b91	__TEXT,__objc_methname	tableView:leadingSwipeActionsConfigurationForRowAtIndexPath:
+0x36bce	__TEXT,__objc_methname	tableView:moveRowAtIndexPath:toIndexPath:
+0x36bf8	__TEXT,__objc_methname	tableView:numberOfRowsInSection:
+0x36c19	__TEXT,__objc_methname	tableView:shouldIndentWhileEditingRowAtIndexPath:
+0x36c4b	__TEXT,__objc_methname	tableView:titleForFooterInSection:
+0x36c6e	__TEXT,__objc_methname	tableView:trailingSwipeActionsConfigurationForRowAtIndexPath:
+0x36cac	__TEXT,__objc_methname	tertiaryLabelColor
+0x36cbf	__TEXT,__objc_methname	tertiarySystemFillColor
+0x36cd7	__TEXT,__objc_methname	test
+0x36cdc	__TEXT,__objc_methname	text
+0x36ce1	__TEXT,__objc_methname	textFields
+0x36cec	__TEXT,__objc_methname	textLabel
+0x36cf6	__TEXT,__objc_methname	tgPickerForTrigger:
+0x36d0a	__TEXT,__objc_methname	tintColor
+0x36d14	__TEXT,__objc_methname	titleForCategory:
+0x36d26	__TEXT,__objc_methname	titleLabel
+0x36d31	__TEXT,__objc_methname	toggleSetup:
+0x36d3e	__TEXT,__objc_methname	topAnchor
+0x36d48	__TEXT,__objc_methname	trailingAnchor
+0x36d57	__TEXT,__objc_methname	undoForSpecifier:
+0x36d69	__TEXT,__objc_methname	undoRemove
+0x36d74	__TEXT,__objc_methname	unsignedIntegerValue
+0x36d89	__TEXT,__objc_methname	updateHeader
+0x36d96	__TEXT,__objc_methname	updateSearchResultsForSearchController:
+0x36dbe	__TEXT,__objc_methname	updateSearchResultsForSearchController:selectingSearchSuggestion:
+0x36e00	__TEXT,__objc_methname	updateTestButton
+0x36e11	__TEXT,__objc_methname	userInterfaceIdiom
+0x36e24	__TEXT,__objc_methname	veryShortStandaloneWeekdaySymbols
+0x36e46	__TEXT,__objc_methname	view
+0x36e4b	__TEXT,__objc_methname	viewDidAppear:
+0x36e5a	__TEXT,__objc_methname	viewDidLoad
+0x36e66	__TEXT,__objc_methname	viewWillDisappear:
+0x36e79	__TEXT,__objc_methname	viewWithTag:
+0x36e86	__TEXT,__objc_methname	whatsNewBadge:
+0x36e95	__TEXT,__objc_methname	whiteColor
+0x36ea0	__TEXT,__objc_methname	whitespaceAndNewlineCharacterSet
+0x36ec1	__TEXT,__objc_methname	whitespaceCharacterSet
+0x36ed8	__TEXT,__objc_methname	widthAnchor
+0x36ee4	__TEXT,__objc_methname	writeToURL:atomically:
+0x36efb	__TEXT,__objc_methname	writeValue:forKey:
+0x36f0e	__TEXT,__objc_methname	zone
+0x36f13	__TEXT,__objc_classname	TGListController
+0x36f24	__TEXT,__objc_classname	TGTimePickerController
+0x36f3b	__TEXT,__objc_classname	TGSequenceController
+0x36f50	__TEXT,__objc_classname	TGActionPickerController
+0x36f69	__TEXT,__objc_classname	UISearchResultsUpdating
+0x36f81	__TEXT,__objc_classname	NSObject
+0x36f8a	__TEXT,__objc_classname	TGGroupController
+0x36f9c	__TEXT,__objc_classname	TGAssignedController
+0x36fb1	__TEXT,__objc_classname	TGModeController
+0x36fc2	__TEXT,__objc_classname	TGAppsController
+0x36fd3	__TEXT,__objc_classname	TGSubtitleCell
+0x36fe2	__TEXT,__objc_classname	TGMenusController
+0x36ff4	__TEXT,__objc_classname	TGProfilesController
+0x37009	__TEXT,__objc_classname	UIDocumentPickerDelegate
+0x37022	__TEXT,__objc_classname	TGOptionsController
+0x37036	__TEXT,__objc_classname	TGTextCell
+0x37041	__TEXT,__objc_classname	TGGuideController
+0x37053	__TEXT,__objc_classname	TGWhatsNewController
+0x37068	__TEXT,__objc_classname	TGWelcomeController
+0x3707c	__TEXT,__objc_classname	TGRootListController
+0x37091	__TEXT,__objc_classname	TGLibPicker
+0x3745a	__TEXT,__ustring	 
+0x3745e	__TEXT,__ustring	Change Condition…
+0x37482	__TEXT,__ustring	If…
+0x3748a	__TEXT,__ustring	Run Only If…
+0x374a4	__TEXT,__ustring	Run only if…
+0x374be	__TEXT,__ustring	Seconds to wait before the next action (0.1–%g).
+0x37520	__TEXT,__ustring	Add Condition…
+0x3753e	__TEXT,__ustring	AirPlay To…
+0x37556	__TEXT,__ustring	Set Brightness…
+0x37576	__TEXT,__ustring	Brightness, 0–100 %
+0x3759e	__TEXT,__ustring	Brightness Up…
+0x375bc	__TEXT,__ustring	Raise brightness by this much each time, 1–50 % (10 is a good step)
+0x37644	__TEXT,__ustring	Brightness Down…
+0x37666	__TEXT,__ustring	Lower brightness by this much each time, 1–50 % (10 is a good step)
+0x376ee	__TEXT,__ustring	Set Media Volume…
+0x37712	__TEXT,__ustring	Media volume, 0–100 %
+0x3773e	__TEXT,__ustring	Set Ringer Volume…
+0x37764	__TEXT,__ustring	Ringer volume, 0–100 %
+0x37792	__TEXT,__ustring	Open App…
+0x377a6	__TEXT,__ustring	Open Settings Page…
+0x377ce	__TEXT,__ustring	Open URL…
+0x377e2	__TEXT,__ustring	Any URL or URL scheme, e.g. https://…, tel:… or music://
+0x37854	__TEXT,__ustring	Show Message…
+0x37870	__TEXT,__ustring	Speak Text…
+0x37888	__TEXT,__ustring	Show Text…
+0x3789e	__TEXT,__ustring	Run Command…
+0x378b8	__TEXT,__ustring	Run Shortcut by Name…
+0x378e4	__TEXT,__ustring	No action matches “%@”.
+0x37914	__TEXT,__ustring	Only run if…
+0x3792e	__TEXT,__ustring	Type a Name…
+0x37948	__TEXT,__ustring	Choose Another App…
+0x37970	__TEXT,__ustring	…
+0x37974	__TEXT,__ustring	Battery level, 1–100 %. Runs once when the level climbs past it; 100 means fully charged.
+0x37a28	__TEXT,__ustring	Battery level, 1–100 %. Runs once when the level falls past it.
+0x37aa8	__TEXT,__ustring	Network name (SSID), as shown in Settings → Wi-Fi
+0x37b0c	__TEXT,__ustring	Device name, as shown in Settings → Bluetooth
+0x37b68	__TEXT,__ustring	Other…
+0x37b76	__TEXT,__ustring	Add App…
+0x37b88	__TEXT,__ustring	New Menu…
+0x37b9c	__TEXT,__ustring	Save Current as Profile…
+0x37bce	__TEXT,__ustring	Export Current Setup…
+0x37bfa	__TEXT,__ustring	Import Setup…
+0x37c16	__TEXT,__ustring	Reset to Defaults…
+0x37c3c	__TEXT,__ustring	Home, App Switcher, Control Center, Spotlight, Siri, screenshots, lock, respring, restart and more. Triggr asks before it resprings, restarts or turns off your iPhone. Turn that off in Options → Ask Before Restarting.
+0x37df0	__TEXT,__ustring	Save your whole setup, switch between setups, or share it as a file. In Options → Profiles, Sharing & Reset.
+0x37eca	__TEXT,__ustring	Volume Up → Flashlight Brighter and Volume Down → Flashlight Dimmer, each Only If the flashlight is on. When it's off, the buttons change the volume as usual.
+0x38008	__TEXT,__ustring	Hold both volume buttons → Record Video.
+0x3805a	__TEXT,__ustring	Hold Volume Up → Next Track, hold Volume Down → Previous Track. Short presses still change the volume.
+0x38128	__TEXT,__ustring	Double-tap the status bar → Lock Device.
+0x3817a	__TEXT,__ustring	Joined your home Wi-Fi → turn Low Power Mode off and open your music app.
+0x3820e	__TEXT,__ustring	No trigger matches “%@”.
+0x38240	__TEXT,__ustring	On Wi-Fi…
+0x38254	__TEXT,__ustring	Not on Wi-Fi…
+0x38270	__TEXT,__ustring	Bluetooth Device Connected…
+0x382a8	__TEXT,__ustring	Bluetooth Device Not Connected…
+0x382e8	__TEXT,__ustring	Battery Below…
+0x38306	__TEXT,__ustring	Percent, 1–100
+0x38324	__TEXT,__ustring	Battery Above…
+0x38342	__TEXT,__ustring	Percent, 0–99
+0x3835e	__TEXT,__ustring	Between Times…
+0x3837c	__TEXT,__ustring	Still True After…
+0x383a0	__TEXT,__ustring	Runs instead of the button's own action (Settings → Action Button).
+0x38428	__TEXT,__ustring	Not on “%@”
+0x38440	__TEXT,__ustring	On “%@”
+0x38450	__TEXT,__ustring	“%@” not connected
+0x38476	__TEXT,__ustring	“%@” connected
+0x38494	__TEXT,__ustring	Joined “%@”
+0x384ac	__TEXT,__ustring	Left “%@”
+0x384c0	__TEXT,__ustring	Connected to “%@”
+0x384e4	__TEXT,__ustring	Disconnected from “%@”
+0x38512	__TEXT,__ustring	 · only if %@

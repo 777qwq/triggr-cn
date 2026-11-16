@@ -1,0 +1,22 @@
+text	addrs
+/Library/PreferenceBundles/Triggr.bundle	0x4d0c
+/var/jb	0x4d04,0x515c
+/var/mobile/Library/Triggr/registry.plist	0x5164
+Actions	0x5100
+Footer	0x4690
+Group	0x466c
+Other Tweaks	0x465c
+Places	0x46e8
+Symbol	0x46b0
+TGActionPickerController	0x4d50
+Title	0x463c
+Triggers	0x50e0
+Untitled	0x462c
+[libtriggr] action %@ threw %@	0x502c
+[libtriggr] bad action %@	0x4880
+[libtriggr] bad trigger identifier %@	0x43e0
+com.apple.springboard	0x4298
+com.johndie.triggr/t/	0x4be0
+com.johndie.triggr/ta/	0x4acc
+lib.	0x4a90,0x4b88,0x4d80,0x4f24,0x4f38
+tgPickerForTrigger:	0x4d60

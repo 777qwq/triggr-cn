@@ -1,0 +1,16 @@
+text	addrs
+AllowAPI	0x100004128
+Menus	0x1000042c0
+com.johndie.triggr	0x100004608
+com.johndie.triggr/api/	0x100004638
+id	0x10000447c
+lib.	0x10000479c
+list	0x100004090
+menu	0x1000042a8
+menu/	0x1000044a8
+mobile	0x100004610
+name	0x10000437c
+run	0x100004154
+run/	0x1000041dc
+trigger	0x100004230
+trigger/	0x100004250

@@ -1,0 +1,19 @@
+start	end	size	strings
+0x4000	0x4220	544	
+0x4220	0x43ec	460	com.apple.springboard | [libtriggr] bad trigger identifier %@
+0x43ec	0x440c	32	
+0x440c	0x44a8	156	
+0x44a8	0x45ac	260	
+0x45ac	0x472c	384	Untitled | Title | Other Tweaks | Group | Footer | Symbol | Places
+0x472c	0x4888	348	[libtriggr] bad action %@
+0x4888	0x4b20	664	lib. | com.johndie.triggr/ta/
+0x4b20	0x4b28	8	
+0x4b28	0x4c90	360	lib. | com.johndie.triggr/t/
+0x4c90	0x4c98	8	
+0x4c98	0x4dcc	308	/var/jb | /Library/PreferenceBundles/Triggr.bundle | TGActionPickerController | tgPickerForTrigger: | lib.
+0x4dcc	0x4dd4	8	
+0x4dd4	0x4f90	444	lib.
+0x4f90	0x4fbc	44	
+0x4fbc	0x4fc4	8	
+0x4fc4	0x5278	692	[libtriggr] action %@ threw %@ | Triggers | Actions | /var/jb | /var/mobile/Library/Triggr/registry.plist
+0x5278	0x528c	20	
