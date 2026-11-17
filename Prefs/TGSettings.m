@@ -1317,7 +1317,11 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
 - (NSMutableArray *)searchSpecifiers {
     NSMutableArray *rows = [NSMutableArray array];
     for (int g = 0; g < TG_COUNT(TGActionGroups); g++) {
-        if ([@(TGActionGroups[g].title) isEqualToString:@"条件"]) continue; // 条件组已移除，裸指令不进搜索
+        NSString *groupTitle = @(TGActionGroups[g].title);
+        if ([groupTitle isEqualToString:@"条件"]) continue; // 条件组已移除，裸指令不进搜索
+        // cn4.59: 没装的插件不进搜索，否则搜「截图」会冒出点了没反应的行。
+        if ([groupTitle isEqualToString:@"Snapper 3"] && !TGPluginInstalled(@"snapper3")) continue;
+        if ([groupTitle isEqualToString:@"CopyLog"] && !TGPluginInstalled(@"copylog")) continue;
         for (int i = 0; i < TGActionGroups[g].count; i++)
             [rows addObject:[self rowForAction:@(TGActionGroups[g].items[i].identifier) title:@(TGActionGroups[g].items[i].title)]];
     }
