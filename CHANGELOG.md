@@ -3,6 +3,29 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.46
+
+代码整理，**不改行为**——装上去应该和 cn4.45 一模一样，改动都在结构上。
+
+### 1. 阈值只有一份
+
+新增 `Shared/TGBottomGeometry.h`：底边带 50、上滑 45、抬手 35、横滑 60、分区 0.33、横滑比例 1.8 / 最小 12pt、上滑比例 1.5 / 最小 15pt，连同「第几段」的判定。
+
+之前这些数字在 `Tweak.x` 和 `Relay.x` 里各写了一遍（Relay 里还是裸数字），改一个忘一个就会变成「App 里和桌面上手感不一样」这种极难查的问题。现在两边都从这一份取。
+
+坐标换算**没有**合并：SpringBoard 的窗口不跟界面旋转，要用设备固定坐标再按方向换算；App 的窗口跟着界面转，底边永远是 y 最大那条边。把两种坐标系揉进一个函数只会埋 bug，头文件里写明了这条界线。
+
+### 2. 三份重复的识别器钩子
+
+`UIScreenEdgePanGestureRecognizer`、`_UIScreenEdgePanGestureRecognizer`、`SBScreenEdgePanGestureRecognizer` 三块原来各写一遍判定（每块 21 行，共 63 行），只有类型转换写法不同。
+
+现在逻辑收在 `TGBottomTakeTouch(recognizer, touch, moved)` 一处，三个 `%hook` 只剩转手。以后改判据不用改三遍、也不会漏改某一类。
+
+### 3. 注释纠错
+
+- `Tweak.x` 头部还写着 Relay「只上报状态栏点击和摇动」，实际上它现在还管底边手势。
+- 「横条左右滑不接管系统手势（RC 也不接管）」是 cn4.44 之前的说法，cn4.45 已经反过来，两处注释同步改掉。
+
 ## 1.5.0+cn4.45
 
 两件事：底部上滑时画面不该跟着走；横条左右滑配了动作就不该切应用。

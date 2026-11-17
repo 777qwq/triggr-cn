@@ -8,6 +8,7 @@
 #import <objc/runtime.h>
 #import "../Shared/TGRelay.h"
 #import "../Shared/TGBottomFreeze.h"
+#import "../Shared/TGBottomGeometry.h"
 
 
 static void TGRelay(const char *name, uint64_t wantedBit) {
@@ -516,18 +517,19 @@ static UIWindow *TGBottomWindow(void) {
 #pragma clang diagnostic pop
 }
 
-static uint64_t TGBottomZoneBit(CGFloat x, CGFloat width) {
-    CGFloat p = width > 0 ? x / width : 0.5;
-    if (p < 0.33) return TGRelayWantsBottomUpLeft;
-    if (p > 0.67) return TGRelayWantsBottomUpRight;
-    return TGRelayWantsBottomUpCenter;
+// 分区规则与 Triggr 共用（Shared/TGBottomGeometry.h），这里只把「第几段」翻成位和通知名。
+static int TGBottomZoneAt(CGFloat x, CGFloat width) {
+    return TGBottomZoneIndex(width > 0 ? x / width : 0.5);
 }
 
-static const char *TGBottomZoneName(CGFloat x, CGFloat width) {
-    CGFloat p = width > 0 ? x / width : 0.5;
-    if (p < 0.33) return TGRelayBottomUpLeft;
-    if (p > 0.67) return TGRelayBottomUpRight;
-    return TGRelayBottomUpCenter;
+static uint64_t TGBottomZoneBit(int zone) {
+    static const uint64_t bits[3] = { TGRelayWantsBottomUpLeft, TGRelayWantsBottomUpCenter, TGRelayWantsBottomUpRight };
+    return bits[zone];
+}
+
+static const char *TGBottomZoneName(int zone) {
+    static const char *names[3] = { TGRelayBottomUpLeft, TGRelayBottomUpCenter, TGRelayBottomUpRight };
+    return names[zone];
 }
 
 static void TGBottomReset(void) {
@@ -547,7 +549,7 @@ static void TGBottomBegan(UITouch *touch, NSUInteger count) {
     if (!window) return;
     CGSize size = window.bounds.size;
     CGPoint p = [touch locationInView:window];
-    if (!(p.y > size.height - 50)) return;
+    if (!(p.y > size.height - TGBottomZoneHeight)) return;
     if (p.x < 0 || p.x > size.width) return;
     tgBottomActive = YES;
     tgBottomTouch = touch;
@@ -563,7 +565,8 @@ static void TGBottomMoved(UITouch *touch, BOOL ended) {
     CGFloat dy = p.y - tgBottomStart.y;
     CGFloat ax = fabs(dx), ay = fabs(dy);
     uint64_t wanted = CNRelayWanted();
-    BOOL zoneWanted = (wanted & TGBottomZoneBit(tgBottomStart.x, tgBottomWidth)) != 0;
+    int zone = TGBottomZoneAt(tgBottomStart.x, tgBottomWidth);
+    BOOL zoneWanted = (wanted & TGBottomZoneBit(zone)) != 0;
 
     // 往上滑的意图一明确就钉住：再晚列表已经跟着走了（RC 的提前冻结，阈值取 10pt 以内）。
     if (!tgBottomFrozen && zoneWanted && dy <= -6 && ay > ax) {
@@ -571,12 +574,13 @@ static void TGBottomMoved(UITouch *touch, BOOL ended) {
         TGFreezeBegin();
     }
     // 45pt 执行，抬手时 35pt 兜底（RC 的阈值）。
-    if (!tgBottomDone && zoneWanted && dy < -15 && ay > ax * 1.5 && (ay > 45 || (ended && ay > 35))) {
+    if (!tgBottomDone && zoneWanted && dy < -TGBottomUpMin && ay > ax * TGBottomUpRatio &&
+        (ay > TGBottomUpFire || (ended && ay > TGBottomUpLift))) {
         tgBottomDone = YES;
-        notify_post(TGBottomZoneName(tgBottomStart.x, tgBottomWidth));
+        notify_post(TGBottomZoneName(zone));
     }
     if (ended) {
-        if (!tgBottomDone && ax > ay * 1.8 && ax > 60) {
+        if (!tgBottomDone && ax > ay * TGBottomSideRatio && ax > TGBottomBarFire) {
             if (dx > 0 && (wanted & TGRelayWantsBottomBarRight)) {
                 tgBottomDone = YES;
                 notify_post(TGRelayBottomBarRight);
