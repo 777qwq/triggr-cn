@@ -16,12 +16,13 @@
 若单击要等半秒以上才动，说明 `requireGestureRecognizerToFail` 之外还有别的等待，看
 `bottom.log` 里 `fire homebar.single` 的时间戳与抬指时刻的差。
 
-## cn4.60：CopyLog 通道修正
+## cn4.61：点击带纵向放宽
 
-- 只装 CopyLog → 动作选择器有「CopyLog」分类，两项点了都能唤出对应界面
-- 装了 Snapper 3 → 七项照旧（那条一直是对的分支）
-- 若仍唤不出，看 `bottom.log`：`post darwin ... status=0` 说明通知发出去了，
-  问题在 CopyLog 何时注册监听（键盘可见时才挂）；`plugin copylog missing` 才是探测问题
+- 14 Pro Max 上 `bottom.log` 应出现 `tap region=42`
+- 点在横条上、略微偏上 20–40pt 也能触发单击
+- 底角上滑仍是 24pt：底角起手不会误判成点击
+- 双击时 Reachability 不拉下半屏（判据同步放宽后仍成立）
+- 横向边界不变：横条最左/最右一小截仍属底角区域，点它不触发单击
 
 ## cn4.40 遗留（未验）
 

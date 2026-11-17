@@ -3281,6 +3281,43 @@ static BOOL TGBottomPointInBar(CGPoint p, BOOL *left, BOOL *right) {
     return YES;
 }
 
+// 点击的纵向比底角宽：手指点在横条上时，触点重心普遍比横条本身高 10–15pt，
+// 而横条画在离底边 8–14pt 处。24pt 只够压住条的下半截，指腹稍偏就落空。
+// 规则：安全区 + 8（Face ID 机型 34+8=42，iPad 28，无安全区回落 24）。
+// 横向不动，仍是中间 1/3；底角上滑也不受影响（它们继续用上面那个 24pt 判据）。
+static CGFloat TGBottomSafeInset(void) {
+    CGFloat inset = 0;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    for (UIWindow *window in UIApplication.sharedApplication.windows)
+        inset = MAX(inset, window.safeAreaInsets.bottom);
+#pragma clang diagnostic pop
+    if (inset <= 0) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+        CGSize size = [UIScreen mainScreen].bounds.size;
+#pragma clang diagnostic pop
+        if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) inset = 20;
+        else if (MAX(size.width, size.height) >= 812) inset = 34;   // 刘海 / 灵动岛机型
+    }
+    return inset;
+}
+
+static CGFloat TGBottomTapRegion(void) {
+    return MAX(TGBottomRegion, TGBottomSafeInset() + 8);
+}
+
+static BOOL TGBottomPointInTapBar(CGPoint p) {
+    if (!TGBottomPortrait()) return NO;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    CGSize size = [UIScreen mainScreen].bounds.size;
+#pragma clang diagnostic pop
+    if (p.y < size.height - TGBottomTapRegion()) return NO;
+    CGFloat w = size.width;
+    return p.x >= w / 3.0 && p.x <= w * 2.0 / 3.0;
+}
+
 // 小白条的三下，只有一个来源：我们自己注册的识别器。去重只防同一识别器在抬指/抖动时重复
 // 回调同一下，窗口压到 120ms——不能更宽，否则没配双击时连点两下会被吞掉第二下。
 static void TGFireHomeBar(NSString *key) {
@@ -3310,14 +3347,13 @@ static void TGHomeBarDouble(void) {
     TGFireHomeBar(@"homebar.doubletap");
 }
 
-// 点击与长按都只在中间 1/3 认：小白条就在那儿，左右 1/3 归上滑。
+// 点击与长按只在中间 1/3、底边「安全区 + 8」的带子里认：小白条就在那儿，左右 1/3 归上滑。
 @interface TGBottomTapRecognizer : UITapGestureRecognizer
 @end
 @implementation TGBottomTapRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
-    BOOL left = NO, right = NO;
-    if (!TGBottomPointInBar([[touches anyObject] locationInView:nil], &left, &right) || left || right)
+    if (!TGBottomPointInTapBar([[touches anyObject] locationInView:nil]))
         self.state = UIGestureRecognizerStateFailed;
 }
 @end
@@ -3327,8 +3363,7 @@ static void TGHomeBarDouble(void) {
 @implementation TGBottomPressRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
-    BOOL left = NO, right = NO;
-    if (!TGBottomPointInBar([[touches anyObject] locationInView:nil], &left, &right) || left || right)
+    if (!TGBottomPointInTapBar([[touches anyObject] locationInView:nil]))
         self.state = UIGestureRecognizerStateFailed;
 }
 @end
@@ -3461,7 +3496,7 @@ static void TGRegisterBottomGestures(SBSystemGestureManager *manager) {
                 [manager addGestureRecognizer:press withType:TGEdgeGestureTypeBase + 8];
                 [tgHomeBarRecognizers addObject:press];
             }
-            TGBottomLog(@"home bar mask=%lu", (unsigned long)mask);
+            TGBottomLog(@"home bar mask=%lu tap region=%.0f", (unsigned long)mask, TGBottomTapRegion());
         }
     } @catch (NSException *exception) {
         TGBottomLog(@"registration failed: %@", exception);
@@ -3546,8 +3581,7 @@ static void TGWritePluginManifest(void) {
 // 拿它当触发源等于赌；三项触发统一走注册的识别器。
 %hook SBHomeAffordanceInteractionManager
 - (void)_bounceDoubleTapRecognized:(UIGestureRecognizer *)recognizer {
-    BOOL left = NO, right = NO;
-    BOOL onBar = TGBottomPointInBar([recognizer locationInView:nil], &left, &right) && !left && !right;
+    BOOL onBar = TGBottomPointInTapBar([recognizer locationInView:nil]);
     // 当前模式里没动作就整条放行：Reachability 还得照旧能用。
     if (onBar && !TGConditionLocked() && TGActionFor(@"homebar.doubletap")) {
         return;   // 这一下不再拉下半屏，动作由识别器发
