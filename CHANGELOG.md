@@ -3,6 +3,22 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.47
+
+横条左右滑改成**按方向**决定要不要接管系统手势。
+
+### 问题
+
+cn4.46 之前，只要落点那一区配了上滑动作，底边整片就归我们管——横向滑动也被一起按住，于是「底部横条左滑/右滑」没配动作时切不了应用。原因是我们对边缘手势识别器在 `touchesBegan` 就判 Failed，而那会儿还看不出方向。
+
+### 现在
+
+- **横滑方向没配动作** → 系统切换应用照常，Triggr 不插手。
+- **横滑方向配了动作** → 按住系统那条切换应用的识别器，只执行动作，不切应用。
+- **上滑**不变：落点那一区配了动作就接管，没配就回主屏。
+
+实现上把「切换应用」那两条识别器（`SBFluidSwitcherScreenEdgePanGestureRecognizer`、`SBCoverSheetScreenEdgePanGestureRecognizer`）从「落地即判」里摘出来：落地放行，等位移出来按方向判（横滑看横滑动作、上滑看该区动作），再补 `setState:` 的 `Began` 兜底。判据收在 `TGBottomShouldSuppressMotion` 一处，落地、移动、`shouldBegin`、`setState` 四个时机读同一套规则。
+
 ## 1.5.0+cn4.46
 
 代码整理，**不改行为**——装上去应该和 cn4.45 一模一样，改动都在结构上。

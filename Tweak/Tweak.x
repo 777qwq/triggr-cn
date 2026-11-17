@@ -3286,8 +3286,9 @@ static void TGBottomTouchMoved(UITouch *touch, BOOL ended) {
         TGFire(tgBottomZone);
     }
     if (ended) {
-        // 横条左右滑在抬手时判。配了动作的话，系统那条切换应用的识别器已经被按掉
-        // （TGBottomShouldSuppressSideways），所以这里是「动作执行、不切应用」。
+        // 横条左右滑在抬手时判。这个方向配了动作，系统那条切换应用的识别器已经按方向被按掉
+        //（TGBottomShouldSuppressMotion），所以是「动作执行、不切应用」；
+        // 没配就一路放行，系统切换应用照常，这里也不会执行任何动作。
         if (!tgBottomDone && sideways && ax > TGBottomBarFire) {
             NSString *trigger = d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left";
             if ([tgAssignedTriggers containsObject:trigger]) {
@@ -3329,20 +3330,46 @@ static BOOL TGBottomShouldSuppressTouch(UITouch *touch) {
     return TGBottomInZone(p, o) && TGBottomZoneTrigger(p, o) != nil;
 }
 
-// 横条左右滑：方向要等手指动了才知道，所以不能在落地时就判。
-// 起点在底边带里、横向明显压过纵向、且这个方向配了动作，就把系统那条切换应用的识别器按死。
-// 不配动作时原样放行，切换应用照常（这是 RC 的 RC_ShouldKeepBottomBarSideSwipe）。
+// 切换应用那两条底边横滑识别器（锁屏上是 CoverSheet 那条）。它们跟回主屏那条不一样：
+// 手指刚落下时还看不出方向，不能像上滑那样当场按住——一旦按住，配没配横滑动作都切不了应用。
+// 所以它们落地时一律放行，等位移出来再按方向判（RC 的 RC_ShouldKeepBottomBarSideSwipe 也是这个时机）。
+static BOOL TGBottomIsSidewaysSwitcher(UIGestureRecognizer *recognizer) {
+    NSString *name = NSStringFromClass([recognizer class]);
+    return [name containsString:@"FluidSwitcher"] || [name containsString:@"CoverSheet"];
+}
+
+// 按位移判这一次归不归我们：
+// 横滑看这个方向配没配横滑动作，上滑看落点那一区配没配动作。
+// 两边都没配就是 NO——系统手势照常，切换应用/回主屏都不受影响。
+static BOOL TGBottomShouldSuppressMotion(CGPoint start, CGPoint delta, UIInterfaceOrientation o) {
+    if (!tgAssignedTriggers.count) return NO;
+    if (TGConditionLocked() || TGCoverSheetShowing()) return NO;
+    if (!TGBottomInZone(start, o)) return NO;
+    CGPoint d = TGBottomUserDelta(delta, o);
+    CGFloat ax = fabs(d.x), ay = fabs(d.y);
+    if (ax > ay * TGBottomSideRatio && ax >= TGBottomSideMin)
+        return [tgAssignedTriggers containsObject:(d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left")];
+    if (d.y < -TGBottomUpMin && ay > ax * TGBottomUpRatio)
+        return TGBottomZoneTrigger(start, o) != nil;
+    return NO;
+}
+
+// 用识别器自己的位移判（setState / shouldBegin 时用它，那会儿位移已经确定了）。
 static BOOL TGBottomShouldSuppressSideways(UIGestureRecognizer *recognizer) {
     if (![recognizer isKindOfClass:[UIPanGestureRecognizer class]]) return NO;
     UIPanGestureRecognizer *pan = (UIPanGestureRecognizer *)recognizer;
     CGPoint translation = [pan translationInView:nil];
     CGPoint location = [pan locationInView:nil];
     CGPoint start = CGPointMake(location.x - translation.x, location.y - translation.y);
-    UIInterfaceOrientation o = TGBottomOrientation(nil);
-    if (!TGBottomInZone(start, o)) return NO;
-    CGPoint d = TGBottomUserDelta(translation, o);
-    if (!(fabs(d.x) > fabs(d.y) * TGBottomSideRatio) || fabs(d.x) < TGBottomSideMin) return NO;
-    return [tgAssignedTriggers containsObject:(d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left")];
+    return TGBottomShouldSuppressMotion(start, translation, TGBottomOrientation(nil));
+}
+
+// 用 sendEvent 记下的起手点判（识别器自己的 translation 在 touchesMoved 里可能还差一帧）。
+static BOOL TGBottomShouldSuppressLive(void) {
+    if (!tgBottomActive || !tgBottomTouch) return NO;
+    CGPoint p = [tgBottomTouch locationInView:nil];
+    UIInterfaceOrientation o = tgBottomLatchedValid ? tgBottomLatched : TGBottomOrientation(nil);
+    return TGBottomShouldSuppressMotion(tgBottomStart, CGPointMake(p.x - tgBottomStart.x, p.y - tgBottomStart.y), o);
 }
 
 // shouldBegin 没有触点参数，只能看这一下是不是我们记过账的底边触摸。
@@ -3382,9 +3409,12 @@ static BOOL TGBottomIsBottomEdge(UIGestureRecognizer *recognizer) {
 
 // 三个类（UIKit 公开类、UIKit 私有类、SpringBoard 自己那份）判定完全一样，只是类型写法不同。
 // 逻辑收在 TGBottomTakeTouch 一处，改判据不用改三遍；三个 %hook 只剩转手。
-// moved 为 YES 时才看横滑方向——刚落下那一下还没有位移，判不出来。
+// moved 为 YES 时才看方向——刚落下那一下还没有位移，判不出来。
+// 切换应用那两条识别器例外：落地时不按，等方向出来再决定（见 TGBottomIsSidewaysSwitcher）。
 static BOOL TGBottomTakeTouch(UIGestureRecognizer *recognizer, UITouch *touch, BOOL moved) {
     if (!TGBottomIsBottomEdge(recognizer)) return NO;
+    if (TGBottomIsSidewaysSwitcher(recognizer))
+        return moved && TGBottomShouldSuppressLive();
     if (TGBottomShouldSuppressTouch(touch)) return YES;
     return moved && TGBottomShouldSuppressSideways(recognizer);
 }
@@ -3571,6 +3601,8 @@ static void TGUpdateEdgeGestures(void) {
 // edges 就是 0，RC 用同一个条件抓它。
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
     if ([recognizer isKindOfClass:[TGEdgeRecognizer class]]) return %orig;
+    // 切换应用那条：落地时方向未定，交给它自己去收触摸，动了以后再在 touchesMoved 里按方向拦。
+    if (TGBottomIsSidewaysSwitcher(recognizer)) return %orig;
     if (TGBottomShouldSuppressTouch(touch)) {
         UIRectEdge edges = UIRectEdgeNone;
         if ([recognizer respondsToSelector:@selector(edges)])
@@ -3583,11 +3615,18 @@ static void TGUpdateEdgeGestures(void) {
 // 有的识别器不走 shouldReceiveTouch，直接问能不能开始；这里用手势落地时记的标志兜底。
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer {
     if ([recognizer isKindOfClass:[TGEdgeRecognizer class]]) return %orig;
-    if (TGBottomOwnsTouchNow()) {
-        UIRectEdge edges = UIRectEdgeNone;
-        if ([recognizer respondsToSelector:@selector(edges)])
-            edges = [(UIScreenEdgePanGestureRecognizer *)recognizer edges];
-        if ((edges & UIRectEdgeBottom) || edges == UIRectEdgeNone) return NO;
+    BOOL askable = YES;
+    UIRectEdge edges = UIRectEdgeNone;
+    if ([recognizer respondsToSelector:@selector(edges)])
+        edges = [(UIScreenEdgePanGestureRecognizer *)recognizer edges];
+    if (!((edges & UIRectEdgeBottom) || edges == UIRectEdgeNone)) askable = NO;
+    if (askable) {
+        // 切换应用那条要等位移出来才判方向：配了横滑动作才拦，没配就放行。
+        if (TGBottomIsSidewaysSwitcher(recognizer)) {
+            if (TGBottomShouldSuppressLive()) return NO;
+        } else if (TGBottomOwnsTouchNow()) {
+            return NO;
+        }
     }
     return %orig;
 }
