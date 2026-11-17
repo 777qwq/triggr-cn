@@ -3143,7 +3143,7 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
 static BOOL tgGestureManagerReady;
 
-#pragma mark - 底部手势（搬运 RemoteCompanion 4.4）
+#pragma mark - 底部手势（参数参照 RemoteCompanion 4.4，实现自写）
 
 static const CGFloat TGBottomZone = 50;         // 起步必须在这条带子里
 static const CGFloat TGBottomUpDistance = 45;   // 上滑要走的距离
@@ -3185,7 +3185,10 @@ static CGPoint TGBottomUserDelta(CGPoint d, UIInterfaceOrientation o) {
 }
 
 // 和边缘那套一样是普通 pan：起点在底部带子里才算，方向决定是上滑还是横条左右滑。
-// 它不设失败要求，所以 iOS 自己的 Home 手势、切换应用手势照常发生，两者并存（RC 的做法）。
+// 参数（带高 50、上滑 45、横滑 60、分区 0.33/0.67、四方向换算）取自 RemoteCompanion 4.4，
+// 但实现不同：RC 在 SpringBoard 的 sendEvent 里记快照、靠占住底边生效，会挡掉回主屏/解锁；
+// 这里是注册进 SBSystemGestureManager 的独立 gestureType，不占系统手势，两者并存。
+// 注意别把这里的「不设失败要求」当成 RC 行为——RC 恰恰是抢的。
 @interface TGBottomRecognizer : UIPanGestureRecognizer
 @property (nonatomic) NSUInteger fingers;
 @property (nonatomic) BOOL fired;
