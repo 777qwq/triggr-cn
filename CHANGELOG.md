@@ -3,6 +3,17 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.43
+
+补上「动作执行了、系统手势照样发生」这一半：`SBSystemGestureManager` 的 delegate 回调在真机上没有被问到，改在识别器将要 `Began` 时按住它。
+
+### 现象与判断
+
+- cn4.42 之后动作能执行，说明 `sendEvent` 记账这条路是通的；但系统底部手势照常起来，说明 `gestureRecognizer:shouldReceiveTouch:` / `gestureRecognizerShouldBegin:` 根本没有被调用（系统识别器的 delegate 并不都经过这个 manager 实例）。
+- 不再赌 delegate。改成 hook `UIGestureRecognizer` 的 `setState:`：状态要进 `Began` 时，如果这一下是记过账的底边触摸、且识别器是 SpringBoard 自己的底部手势（`HomeGesture` / `ScreenEdgePan` / `FluidSwitcher` 三类），直接改成 `Failed`。
+- 这是 RemoteCompanion 对横条左右滑用的同一招（它的 `SBFluidSwitcherScreenEdgePanGestureRecognizer.setState:`）；只是把范围扩到所有底部系统手势。
+- 只在底边这一下确实配了动作时动手（`tgBottomActive && tgBottomZone`），其它手势、其它区域一律 `%orig`。原来的 manager delegate 判断保留，能拦就不用走到这一步。
+
 ## 1.5.0+cn4.42
 
 底部手势的执行改走 RemoteCompanion 4.4 的 `sendEvent` 记账：不再依赖手势识别器，动作和「接管系统手势」读同一份状态。

@@ -3342,6 +3342,28 @@ static BOOL TGBottomOwnsTouchNow(void) {
 }
 %end
 
+// 只靠 SBSystemGestureManager 的 delegate 回调不够：真机上动作执行了、系统手势照样起来，
+// 说明那两个回调没有被问到（系统识别器的 delegate 并不都经过这个 manager）。
+// 这里退一步，在识别器真要 Began 的那一刻按住它——RC 对横条左右滑用的就是这一招（setState 改 Failed）。
+// 只碰 SpringBoard 自己的底部手势（Home 手势、FluidSwitcher / 锁屏的底边 pan），
+// 而且只在「这一下确实落在配了动作的底边区」时动手，别的手势原样放行。
+static BOOL TGIsSystemBottomGesture(UIGestureRecognizer *recognizer) {
+    NSString *name = NSStringFromClass([recognizer class]);
+    return [name containsString:@"HomeGesture"]
+        || [name containsString:@"ScreenEdgePan"]
+        || [name containsString:@"FluidSwitcher"];
+}
+
+%hook UIGestureRecognizer
+- (void)setState:(UIGestureRecognizerState)state {
+    if (state == UIGestureRecognizerStateBegan && TGBottomOwnsTouchNow() && TGIsSystemBottomGesture(self)) {
+        %orig(UIGestureRecognizerStateFailed);
+        return;
+    }
+    %orig;
+}
+%end
+
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
 // init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
 
