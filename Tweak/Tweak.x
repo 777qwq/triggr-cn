@@ -3226,6 +3226,7 @@ static NSString *tgBottomZone;         // 落在哪个区；nil = 这个区没�
 static UIInterfaceOrientation tgBottomLatched;
 static BOOL tgBottomLatchedValid;
 static UITouch *tgBottomTouch;          // 起手那根手指；多指时不让别的触点把位移算歪
+static CFTimeInterval tgBottomFiredTime; // 刚执行完的一瞬间，系统手势还不许接手
 
 // 通知中心 / 控制中心拉下来的那块面板、锁屏，上滑是系统自己的（解锁、收起面板）。
 // 这两处放行，否则上滑解不开锁。
@@ -3278,6 +3279,7 @@ static void TGBottomTouchMoved(UITouch *touch, BOOL ended) {
 
     if (!tgBottomDone && up && tgBottomZone && (ay > TGBottomUpDistance || (ended && ay > 35))) {
         tgBottomDone = YES;
+        tgBottomFiredTime = CACurrentMediaTime();
         TGFire(tgBottomZone);
     }
     if (ended) {
@@ -3311,6 +3313,8 @@ static BOOL TGBottomShouldSuppressTouch(UITouch *touch) {
     if (!tgAssignedTriggers.count) return NO;
     if (TGConditionLocked() || TGCoverSheetShowing()) return NO;
     if (tgBottomActive && tgBottomZone) return YES;
+    // 抬手后 0.8 秒内仍按住：系统手势如果在这几帧里接手，动作就白做了（RC 的余温窗口）。
+    if (CACurrentMediaTime() - tgBottomFiredTime < 0.8) return YES;
     // sendEvent 没覆盖到的场景（例如识别器直接问），用触点自己算一次。
     if (!touch) return NO;
     CGPoint p = [touch locationInView:nil];
