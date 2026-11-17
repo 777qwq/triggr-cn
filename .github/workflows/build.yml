@@ -1,7 +1,8 @@
 name: build
 
 # 出包固定在 macOS runner 上跑：arm64e 的 Objective-C 指针认证只有 Xcode 的
-# clang + ld64 能写对。Linux 上的 lld / cctools-port 产出的 arm64e 切片
+# clang + ld64 能写对。runner 用 Intel 版：arm64 机器长期排队，而这里是交叉编译，
+# 产物与宿主架构无关（Verify slices 会再核一遍 arm64e）。Linux 上的 lld / cctools-port 产出的 arm64e 切片
 # 会在 SpringBoard 注入时崩在 readClass（EXC_BAD_ACCESS）。
 on:
   workflow_dispatch:
@@ -23,7 +24,7 @@ jobs:
         run: python3 scripts/check_conditions.py
 
   build:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     needs: conditions
     steps:
       - uses: actions/checkout@v4
