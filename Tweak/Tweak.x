@@ -3342,26 +3342,123 @@ static BOOL TGBottomOwnsTouchNow(void) {
 }
 %end
 
-// 只靠 SBSystemGestureManager 的 delegate 回调不够：真机上动作执行了、系统手势照样起来，
-// 说明那两个回调没有被问到（系统识别器的 delegate 并不都经过这个 manager）。
-// 这里退一步，在识别器真要 Began 的那一刻按住它——RC 对横条左右滑用的就是这一招（setState 改 Failed）。
-// 只碰 SpringBoard 自己的底部手势（Home 手势、FluidSwitcher / 锁屏的底边 pan），
-// 而且只在「这一下确实落在配了动作的底边区」时动手，别的手势原样放行。
-static BOOL TGIsSystemBottomGesture(UIGestureRecognizer *recognizer) {
-    NSString *name = NSStringFromClass([recognizer class]);
-    return [name containsString:@"HomeGesture"]
-        || [name containsString:@"ScreenEdgePan"]
-        || [name containsString:@"FluidSwitcher"];
+// 底边系统手势的实际执行者不是 manager，而是这几个识别器/控制器本身。
+// 只 hook SBSystemGestureManager 的 delegate 不够——真机上那两个回调没被问到，
+// 动作会执行、系统手势照旧起来。RC 的做法是逐个按住它们：
+// _shouldReceiveTouch 返回 NO，touchesBegan / touchesMoved 直接 self.state = Failed。
+// 判据用「触点 + 分区」（锁屏、通知中心/控制中心面板放行），不依赖识别器有没有开始。
+static BOOL TGBottomIsBottomEdge(UIGestureRecognizer *recognizer) {
+    if (![recognizer respondsToSelector:@selector(edges)]) return YES;
+    UIRectEdge edges = [(UIScreenEdgePanGestureRecognizer *)recognizer edges];
+    return (edges & UIRectEdgeBottom) || edges == UIRectEdgeNone;
 }
 
-%hook UIGestureRecognizer
-- (void)setState:(UIGestureRecognizerState)state {
-    if (state == UIGestureRecognizerStateBegan && TGBottomOwnsTouchNow() && TGIsSystemBottomGesture(self)) {
-        %orig(UIGestureRecognizerStateFailed);
+%hook UIScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge(self) && TGBottomShouldSuppressTouch(touch)) return NO;
+    return %orig;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge(self) && TGBottomShouldSuppressTouch([touches anyObject])) {
+        self.state = UIGestureRecognizerStateFailed;
         return;
     }
     %orig;
 }
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge(self) && TGBottomShouldSuppressTouch([touches anyObject])) {
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+    }
+    %orig;
+}
+%end
+
+%hook _UIScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge((UIGestureRecognizer *)self) && TGBottomShouldSuppressTouch(touch)) return NO;
+    return %orig;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge((UIGestureRecognizer *)self) && TGBottomShouldSuppressTouch([touches anyObject])) {
+        [(UIGestureRecognizer *)self setState:UIGestureRecognizerStateFailed];
+        return;
+    }
+    %orig;
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge((UIGestureRecognizer *)self) && TGBottomShouldSuppressTouch([touches anyObject])) {
+        [(UIGestureRecognizer *)self setState:UIGestureRecognizerStateFailed];
+        return;
+    }
+    %orig;
+}
+%end
+
+%hook SBScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge((UIGestureRecognizer *)self) && TGBottomShouldSuppressTouch(touch)) return NO;
+    return %orig;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge((UIGestureRecognizer *)self) && TGBottomShouldSuppressTouch([touches anyObject])) {
+        [(UIGestureRecognizer *)self setState:UIGestureRecognizerStateFailed];
+        return;
+    }
+    %orig;
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomIsBottomEdge((UIGestureRecognizer *)self) && TGBottomShouldSuppressTouch([touches anyObject])) {
+        [(UIGestureRecognizer *)self setState:UIGestureRecognizerStateFailed];
+        return;
+    }
+    %orig;
+}
+%end
+
+// 控制中心 / 通知中心从底边往上拉的那条「舌头」。有 Home 键的机型是控制中心，
+// 无 Home 键的机型这两个面版走右上角，但底部这条路径仍要按同一判据放行锁屏。
+%hook SBGrabberTongue
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch {
+    if (TGBottomShouldSuppressTouch(touch)) return NO;
+    return %orig;
+}
+- (BOOL)_shouldAllowPulling {
+    if (TGBottomOwnsTouchNow()) return NO;
+    return %orig;
+}
+%end
+
+%hook SBControlCenterController
+- (BOOL)grabberTongue:(id)tongue shouldReceiveTouch:(UITouch *)touch {
+    if (TGBottomShouldSuppressTouch(touch)) return NO;
+    return %orig;
+}
+%end
+
+// 回主屏那一下用的是 SBHomeGesturePanGestureRecognizer。它不一定是 ScreenEdgePan 的子类，
+// 所以单独按一份。类不存在（老系统）就不注册，避免对空类做 hook。
+%group TGHomeGesture
+%hook SBHomeGesturePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (TGBottomShouldSuppressTouch(touch)) return NO;
+    return %orig;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomShouldSuppressTouch([touches anyObject])) {
+        [(UIGestureRecognizer *)self setState:UIGestureRecognizerStateFailed];
+        return;
+    }
+    %orig;
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGBottomShouldSuppressTouch([touches anyObject])) {
+        [(UIGestureRecognizer *)self setState:UIGestureRecognizerStateFailed];
+        return;
+    }
+    %orig;
+}
+%end
 %end
 
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
@@ -4208,6 +4305,7 @@ static void TGResyncAfterLaunch(void) {
         TGResyncAfterLaunch();
     });
     %init(_ungrouped);
+    if (objc_getClass("SBHomeGesturePanGestureRecognizer")) %init(TGHomeGesture);
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");
     Class uiBarWindow = objc_getClass("UIStatusBarWindow");
     if (sbBarWindow && !(uiBarWindow && [sbBarWindow isSubclassOfClass:uiBarWindow])) %init(StatusBarWindow17);

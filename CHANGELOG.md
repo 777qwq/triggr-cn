@@ -3,6 +3,35 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.44
+
+重新对着 RemoteCompanion 的源码抄了一遍，找到之前漏掉的部分：它拦底部手势并不靠 `SBSystemGestureManager` 的 delegate，而是**直接按住执行手势的那个识别器**。
+
+### 之前为什么不行
+
+- cn4.42 只抄了 RC 的 `sendEvent` 记账，抑制仍走 manager 的 `gestureRecognizer:shouldReceiveTouch:` / `shouldBegin:`。真机上这两个回调没被问到（系统识别器的 delegate 不都经过这个 manager），于是动作照常执行、系统手势照常起来。
+- cn4.43 改成 hook `UIGestureRecognizer` 的 `setState:`，抓得太晚也太宽：识别器已经 `Began` 才动手，系统的位移已经跟出去了。
+
+### RC 真正的做法（已照搬）
+
+RC 在源码里同时 hook 了这些执行者，每一个都做三件事：`_shouldReceiveTouch:withEvent:` 返回 NO、`touchesBegan:` 和 `touchesMoved:` 直接把 `state` 设成 `Failed`。
+
+| 被 hook 的类 | 负责的手势 |
+|---|---|
+| `UIScreenEdgePanGestureRecognizer` | 底边/侧边的系统边缘手势基类 |
+| `_UIScreenEdgePanGestureRecognizer` | UIKit 内部同名私有类 |
+| `SBScreenEdgePanGestureRecognizer` | SpringBoard 的上滑进多任务、切换应用 |
+| `SBGrabberTongue` | 控制中心/通知中心从底边往上拉的「舌头」 |
+| `SBControlCenterController` | 同上，控制中心的 delegate 回调 |
+| `SBHomeGesturePanGestureRecognizer` | 回主屏（按类是否存在条件注册，老系统不 hook） |
+
+判据仍是「触点落在底边带 + 该分区配了动作 + 不是锁屏/面板」，`tgBottomActive` 记账优先、触点坐标兜底。锁屏、通知中心/控制中心面板一律放行，横条左右滑不参与。
+
+### 说明
+
+- cn4.43 的 `%hook UIGestureRecognizer setState:` 已删除，它影响 SpringBoard 里所有识别器，且时机太晚。
+- manager 的两个 delegate 判断保留：能拦就拦，拦不住还有识别器这一层，两者不冲突。
+
 ## 1.5.0+cn4.43
 
 补上「动作执行了、系统手势照样发生」这一半：`SBSystemGestureManager` 的 delegate 回调在真机上没有被问到，改在识别器将要 `Began` 时按住它。
