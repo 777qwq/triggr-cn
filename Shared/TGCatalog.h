@@ -848,7 +848,11 @@ static inline NSString *TGActionTitle(NSString *action) {
 
 // cn4.59: 插件在不在。2.1 的做法是去 dylib 目录里按文件名找，这里照做——
 // 覆盖 rootless（/var/jb）与 rootful 两套路径，也覆盖 TweakInject 的新布局。
-static BOOL TGPluginInstalled(NSString *name) {
+// 只有 SpringBoard 读得到这些目录；设置页在沙盒里，所以由 SpringBoard 把结果写进
+// TGPluginListPath，设置页读那份清单（跟快捷指令列表同一个套路）。
+#define TGPluginListPath @"/var/mobile/Library/Preferences/com.johndie.triggr.plugins.plist"
+
+static BOOL __attribute__((unused)) TGScanPluginDylibs(NSString *name) {
     NSArray<NSString *> *dirs = @[
         @"/var/jb/Library/MobileSubstrate/DynamicLibraries",
         @"/Library/MobileSubstrate/DynamicLibraries",
@@ -860,4 +864,15 @@ static BOOL TGPluginInstalled(NSString *name) {
         for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil])
             if ([file.lowercaseString containsString:name]) return YES;
     return NO;
+}
+
+static BOOL __attribute__((unused)) TGPluginInstalled(NSString *name) {
+    static NSDictionary *manifest;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        id payload = [NSDictionary dictionaryWithContentsOfFile:TGPluginListPath];
+        if ([payload isKindOfClass:NSDictionary.class]) manifest = payload;
+    });
+    if (manifest[name]) return [manifest[name] boolValue];
+    return TGScanPluginDylibs(name);   // 清单还没写出来时退回直接扫（仅 SpringBoard 有效）
 }

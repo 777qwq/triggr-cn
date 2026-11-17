@@ -1217,7 +1217,8 @@ static void TGTransientHaptic(double intensity, double sharpness) {
 // 不是 Darwin 通知中心；2.1 反汇编里 dlsym 的正是前者）。插件不在就返回 NO，
 // 让动作在选择器里显示成不可用，而不是点了没反应。
 static BOOL TGPostToPlugin(NSString *name, NSString *plugin, BOOL dry) {
-    if (!TGPluginInstalled(plugin)) return NO;
+    // SpringBoard 读得到 dylib 目录，直接扫，别用设置页那份清单（可能过期）。
+    if (!TGScanPluginDylibs(plugin)) return NO;
     if (dry) return YES;
     static CFNotificationCenterRef (*getCenter)(void);
     static BOOL resolved;
@@ -3486,12 +3487,22 @@ static void TGUpdateEdgeGestures(void) {
     TGRegisterBottomGestures(manager);
 }
 
+// 设置页在沙盒里看不到 dylib 目录，所以在这边探一次、写进共享清单。
+static void TGWritePluginManifest(void) {
+    NSDictionary *manifest = @{
+        @"snapper3": @(TGScanPluginDylibs(@"snapper3")),
+        @"copylog": @(TGScanPluginDylibs(@"copylog")),
+    };
+    [manifest writeToFile:TGPluginListPath atomically:YES];
+}
+
 %hook SBMainDisplaySystemGestureManager
 - (id)_init {
     id manager = %orig;
     tgGestureManagerReady = YES;
     dispatch_async(dispatch_get_main_queue(), ^{
         TGUpdateEdgeGestures();
+        TGWritePluginManifest();
     });
     return manager;
 }
