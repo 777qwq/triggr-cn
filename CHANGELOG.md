@@ -3,6 +3,13 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.65
+
+- **手势库页 UI 按反馈调整**：
+  - 已保存手势行与「录制标记大小」行恢复右侧摘要 + 箭头：cell 改回 `PSLinkListCell` 并显示 `gestureSummary:`（次数·时长）/ `readTabSize:`（大小）；`readTabSize:` 去掉手拼的 `›`，避免与 cell 箭头重复。cn4.64 的崩溃根因（popover source 用 `self.tableView`）已修，`didSelect` 仍拦截这两类行弹菜单，箭头与点击可正常共存。
+  - 分组标题「回放选项」改为「设置」。
+- **主页导航调整**：「菜单」从「指派」分组末尾移到「动作库」分组首行（手势库之前）。
+
 ## 1.5.0+cn4.64
 
 - **恢复动作「播放最近录制的手势」**：`gesture.latest`（含 `@倍速`）。这一版起把执行链路补完整——动作表、显示标题、`TGGestureCommandForAction`、`TGGestureActionAvailable` 及 `TGCanPerform`/`TGPerform` 两个入口都接上，底层 `play-latest` 命令一直在。

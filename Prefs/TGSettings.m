@@ -3007,16 +3007,15 @@ static NSURL *tgGestureExportURL;
         [record setProperty:@"record" forKey:@"tgGestureCommand"];
         [specs addObject:record];
 
-        PSSpecifier *options = [PSSpecifier groupSpecifierWithName:@"回放选项"];
+        PSSpecifier *options = [PSSpecifier groupSpecifierWithName:@"设置"];
         [options setProperty:@"停止于触摸：手指碰到屏幕就停下回放。显示触点：回放时标出每根手指的位置。" forKey:@"footerText"];
         [specs addObject:options];
         [specs addObject:[self toggleSpec:@"停止于触摸" key:@"stopOnTouch"]];
         [specs addObject:[self toggleSpec:@"显示触点" key:@"showTouches"]];
 
-        // 一律用 PSListItemCell：它点击能正常进 didSelect、右侧能显示摘要、且不带箭头。
-        // 之前手势行误用 PSLinkListCell + detail:nil，既留下"下一页"箭头，点击又因为
-        // PreferenceLoader 尝试 push 一个 nil 的 detail 而没反应。
-        PSSpecifier *tab = [PSSpecifier preferenceSpecifierNamed:@"录制标记大小" target:self set:nil get:@selector(readTabSize:) detail:nil cell:PSListItemCell edit:nil];
+        // PSLinkListCell：显示右侧摘要 + 箭头。detail 为 nil 不会 push 新页面；
+        // didSelectRowAtIndexPath 里已拦截这两类行，弹出的菜单由 self.view 定位（不再用 self.tableView）。
+        PSSpecifier *tab = [PSSpecifier preferenceSpecifierNamed:@"录制标记大小" target:self set:nil get:@selector(readTabSize:) detail:nil cell:PSLinkListCell edit:nil];
         [tab setProperty:@YES forKey:@"tgGestureTabSize"];
         [specs addObject:tab];
 
@@ -3027,7 +3026,7 @@ static NSURL *tgGestureExportURL;
             NSString *name = g[@"name"];
             if (![name isKindOfClass:NSString.class]) continue;
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name target:self set:nil get:@selector(gestureSummary:)
-                detail:nil cell:PSListItemCell edit:nil];
+                detail:nil cell:PSLinkListCell edit:nil];
             [row setProperty:name forKey:@"tgGestureName"];
             [specs addObject:row];
         }
@@ -3046,8 +3045,7 @@ static NSURL *tgGestureExportURL;
 
 - (NSString *)readTabSize:(PSSpecifier *)spec {
     NSString *size = TGGestureSetting(@"tabSize", @"medium");
-    NSString *label = @{ @"small": @"小", @"medium": @"中", @"large": @"大" }[size] ?: @"中";
-    return [label stringByAppendingString:@" ›"];
+    return @{ @"small": @"小", @"medium": @"中", @"large": @"大" }[size] ?: @"中";
 }
 
 - (NSString *)gestureSummary:(PSSpecifier *)spec {
@@ -3658,11 +3656,11 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
             detail:TGByActionController.class cell:PSLinkListCell edit:nil];
         TGSetIcon(all, @"list.bullet", UIColor.systemGreenColor);
         [specs addObject:all];
+
+        [specs addObject:[PSSpecifier groupSpecifierWithName:@"动作库"]];
         PSSpecifier *menus = [PSSpecifier preferenceSpecifierNamed:@"菜单" target:self set:nil get:@selector(menuCount:) detail:TGMenusController.class cell:PSLinkListCell edit:nil];
         TGSetIcon(menus, @"list.bullet.rectangle.fill", UIColor.systemPinkColor);
         [specs addObject:menus];
-
-        [specs addObject:[PSSpecifier groupSpecifierWithName:@"动作库"]];
         PSSpecifier *gestures = [PSSpecifier preferenceSpecifierNamed:@"手势库" target:self set:nil get:@selector(gestureCount:)
             detail:NSClassFromString(@"TGGesturesController") cell:PSLinkListCell edit:nil];
         TGSetIcon(gestures, @"hand.draw", UIColor.systemBrownColor);
