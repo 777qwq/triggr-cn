@@ -3339,6 +3339,93 @@ static BOOL tgGestureManagerReady;
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
 // init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
 
+// 注册这件事一旦抛异常，SpringBoard 是起不来的（设置页也就进不去）。
+// 所以整段包在 @try 里：真出问题，底部横条失效，别的触发器照旧。
+static void TGRegisterBottomGestures(SBSystemGestureManager *manager) {
+    @try {
+        static TGBottomTarget *bottomTarget;
+        if (!bottomTarget) bottomTarget = [TGBottomTarget new];
+        if (!tgBottomEdgeRecognizers) tgBottomEdgeRecognizers = [NSMutableArray array];
+        struct { const char *trigger; BOOL left; } corners[] = {
+            {"edge.bottomleft", YES}, {"edge.bottomright", NO},
+        };
+        for (int i = 0; i < 2; i++) {
+            NSString *trigger = @(corners[i].trigger);
+            TGBottomEdgeRecognizer *existing = nil;
+            for (TGBottomEdgeRecognizer *r in tgBottomEdgeRecognizers)
+                if ([r.trigger isEqualToString:trigger]) existing = r;
+            BOOL want = [tgAssignedTriggers containsObject:trigger];
+            if (want && !existing) {
+                TGBottomEdgeRecognizer *r = [[TGBottomEdgeRecognizer alloc] initWithTarget:bottomTarget action:@selector(slid:) type:2 options:0];
+                r.edges = UIRectEdgeBottom;
+                r.left = corners[i].left;
+                r.trigger = trigger;
+                r.minimumNumberOfTouches = 1;
+                r.maximumNumberOfTouches = 1;
+                if ([r respondsToSelector:@selector(_setEdgeRegionSize:)]) [r _setEdgeRegionSize:TGBottomRegion];
+                r.cancelsTouchesInView = NO;
+                r.delaysTouchesBegan = NO;
+                r.delaysTouchesEnded = NO;
+                [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + 4 + i];
+                [tgBottomEdgeRecognizers addObject:r];
+                TGBottomLog(@"registered %@", trigger);
+            } else if (!want && existing) {
+                [manager removeGestureRecognizer:existing];
+                [tgBottomEdgeRecognizers removeObject:existing];
+                TGBottomLog(@"removed %@", trigger);
+            }
+        }
+
+        // 小白条的三下：全都注册成系统手势，这样 App 之上也收得到。
+        static TGBottomHomeBarTarget *homeBarTarget;
+        if (!homeBarTarget) homeBarTarget = [TGBottomHomeBarTarget new];
+        if (!tgHomeBarRecognizers) tgHomeBarRecognizers = [NSMutableArray array];
+        BOOL wantSingle = [tgAssignedTriggers containsObject:@"homebar.single"];
+        BOOL wantDouble = [tgAssignedTriggers containsObject:@"homebar.doubletap"];
+        BOOL wantLong = [tgAssignedTriggers containsObject:@"homebar.longpress"];
+        NSUInteger mask = (wantSingle ? 1u : 0u) | (wantDouble ? 2u : 0u) | (wantLong ? 4u : 0u);
+        static NSUInteger built;
+        if (mask != built) {
+            for (UIGestureRecognizer *r in tgHomeBarRecognizers) [manager removeGestureRecognizer:r];
+            [tgHomeBarRecognizers removeAllObjects];
+            built = mask;
+            TGBottomTapRecognizer *single = nil;
+            TGBottomTapRecognizer *doubleTap = nil;
+            if (mask & 1) {
+                single = [[TGBottomTapRecognizer alloc] initWithTarget:homeBarTarget action:@selector(tapped:)];
+                single.numberOfTapsRequired = 1;
+                single.cancelsTouchesInView = NO;
+                single.delaysTouchesBegan = NO;
+                single.delaysTouchesEnded = NO;
+                [manager addGestureRecognizer:single withType:TGEdgeGestureTypeBase + 6];
+                [tgHomeBarRecognizers addObject:single];
+            }
+            if (mask & 2) {
+                doubleTap = [[TGBottomTapRecognizer alloc] initWithTarget:homeBarTarget action:@selector(tapped:)];
+                doubleTap.numberOfTapsRequired = 2;
+                doubleTap.cancelsTouchesInView = NO;
+                doubleTap.delaysTouchesBegan = NO;
+                doubleTap.delaysTouchesEnded = NO;
+                [manager addGestureRecognizer:doubleTap withType:TGEdgeGestureTypeBase + 7];
+                [tgHomeBarRecognizers addObject:doubleTap];
+            }
+            if (single && doubleTap) [single requireGestureRecognizerToFail:doubleTap];
+            if (mask & 4) {
+                TGBottomPressRecognizer *press = [[TGBottomPressRecognizer alloc] initWithTarget:homeBarTarget action:@selector(pressed:)];
+                press.minimumPressDuration = 0.5;
+                press.allowableMovement = 12;
+                press.cancelsTouchesInView = NO;
+                press.delaysTouchesBegan = NO;
+                [manager addGestureRecognizer:press withType:TGEdgeGestureTypeBase + 8];
+                [tgHomeBarRecognizers addObject:press];
+            }
+            TGBottomLog(@"home bar mask=%lu", (unsigned long)mask);
+        }
+    } @catch (NSException *exception) {
+        TGBottomLog(@"registration failed: %@", exception);
+    }
+}
+
 static void TGUpdateEdgeGestures(void) {
     if (!tgGestureManagerReady) return; // -[SBMainDisplaySystemGestureManager _init] calls this again
     SBSystemGestureManager *manager = [objc_getClass("SBSystemGestureManager") mainDisplayManager];
@@ -3377,84 +3464,7 @@ static void TGUpdateEdgeGestures(void) {
         }
     }
 
-    static TGBottomTarget *bottomTarget;
-    if (!bottomTarget) bottomTarget = [TGBottomTarget new];
-    if (!tgBottomEdgeRecognizers) tgBottomEdgeRecognizers = [NSMutableArray array];
-    struct { const char *trigger; BOOL left; } corners[] = {
-        {"edge.bottomleft", YES}, {"edge.bottomright", NO},
-    };
-    for (int i = 0; i < 2; i++) {
-        NSString *trigger = @(corners[i].trigger);
-        TGBottomEdgeRecognizer *existing = nil;
-        for (TGBottomEdgeRecognizer *r in tgBottomEdgeRecognizers)
-            if ([r.trigger isEqualToString:trigger]) existing = r;
-        BOOL want = [tgAssignedTriggers containsObject:trigger];
-        if (want && !existing) {
-            TGBottomEdgeRecognizer *r = [[TGBottomEdgeRecognizer alloc] initWithTarget:bottomTarget action:@selector(slid:) type:2 options:0];
-            r.edges = UIRectEdgeBottom;
-            r.left = corners[i].left;
-            r.trigger = trigger;
-            r.minimumNumberOfTouches = 1;
-            r.maximumNumberOfTouches = 1;
-            if ([r respondsToSelector:@selector(_setEdgeRegionSize:)]) [r _setEdgeRegionSize:TGBottomRegion];
-            r.cancelsTouchesInView = NO;
-            r.delaysTouchesBegan = NO;
-            r.delaysTouchesEnded = NO;
-            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + 4 + i];
-            [tgBottomEdgeRecognizers addObject:r];
-            TGBottomLog(@"registered %@", trigger);
-        } else if (!want && existing) {
-            [manager removeGestureRecognizer:existing];
-            [tgBottomEdgeRecognizers removeObject:existing];
-            TGBottomLog(@"removed %@", trigger);
-        }
-    }
-
-    // 小白条的三下：全都注册成系统手势，这样 App 之上也收得到。
-    static TGBottomHomeBarTarget *homeBarTarget;
-    if (!homeBarTarget) homeBarTarget = [TGBottomHomeBarTarget new];
-    if (!tgHomeBarRecognizers) tgHomeBarRecognizers = [NSMutableArray array];
-    BOOL wantSingle = [tgAssignedTriggers containsObject:@"homebar.single"];
-    BOOL wantDouble = [tgAssignedTriggers containsObject:@"homebar.doubletap"];
-    BOOL wantLong = [tgAssignedTriggers containsObject:@"homebar.longpress"];
-    NSUInteger mask = (wantSingle ? 1u : 0u) | (wantDouble ? 2u : 0u) | (wantLong ? 4u : 0u);
-    static NSUInteger built;
-    if (mask != built) {
-        for (UIGestureRecognizer *r in tgHomeBarRecognizers) [manager removeGestureRecognizer:r];
-        [tgHomeBarRecognizers removeAllObjects];
-        built = mask;
-        TGBottomTapRecognizer *single = nil;
-        TGBottomTapRecognizer *doubleTap = nil;
-        if (mask & 1) {
-            single = [[TGBottomTapRecognizer alloc] initWithTarget:homeBarTarget action:@selector(tapped:)];
-            single.numberOfTapsRequired = 1;
-            single.cancelsTouchesInView = NO;
-            single.delaysTouchesBegan = NO;
-            single.delaysTouchesEnded = NO;
-            [manager addGestureRecognizer:single withType:TGEdgeGestureTypeBase + 6];
-            [tgHomeBarRecognizers addObject:single];
-        }
-        if (mask & 2) {
-            doubleTap = [[TGBottomTapRecognizer alloc] initWithTarget:homeBarTarget action:@selector(tapped:)];
-            doubleTap.numberOfTapsRequired = 2;
-            doubleTap.cancelsTouchesInView = NO;
-            doubleTap.delaysTouchesBegan = NO;
-            doubleTap.delaysTouchesEnded = NO;
-            [manager addGestureRecognizer:doubleTap withType:TGEdgeGestureTypeBase + 7];
-            [tgHomeBarRecognizers addObject:doubleTap];
-        }
-        if (single && doubleTap) [single requireGestureRecognizerToFail:doubleTap];
-        if (mask & 4) {
-            TGBottomPressRecognizer *press = [[TGBottomPressRecognizer alloc] initWithTarget:homeBarTarget action:@selector(pressed:)];
-            press.minimumPressDuration = 0.5;
-            press.allowableMovement = 12;
-            press.cancelsTouchesInView = NO;
-            press.delaysTouchesBegan = NO;
-            [manager addGestureRecognizer:press withType:TGEdgeGestureTypeBase + 8];
-            [tgHomeBarRecognizers addObject:press];
-        }
-        TGBottomLog(@"home bar mask=%lu", (unsigned long)mask);
-    }
+    TGRegisterBottomGestures(manager);
 }
 
 %hook SBMainDisplaySystemGestureManager
