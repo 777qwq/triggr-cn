@@ -3139,10 +3139,10 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 }
 @end
 
-// 底部横条。按 2.1 的做法：真的是 screen-edge 识别器，注册进 SpringBoard 的系统手势表。
+// 底部手势。按 2.1 的做法：全部注册进 SpringBoard 的系统手势表，才有办法在 App 之上收到触摸。
 //
 // 两条 edges=Bottom、edgeRegionSize=24 的识别器管左下 / 右下两个角的上滑；小白条的三下
-// （单击 / 双击 / 长按）不在这里——它们是点击与长按识别器，只认底边中间那一段。
+// （单击 / 双击 / 长按）是点击与长按识别器，只认底边中间那一段。
 // 中间 1/3 之所以不挂 pan，是因为那块地方的上滑要完整留给系统回主屏幕。
 //
 // 代价是已知且用户接受的：UIKit 把 screen-edge 识别器按族互斥，底边上只要有一条在，
@@ -3227,8 +3227,8 @@ static BOOL TGBottomPointInBar(CGPoint p, BOOL *left, BOOL *right) {
     return YES;
 }
 
-// 小白条的三下。两条来源（我们注册的点击识别器、SpringBoard 自己的横条回调）可能都看到同一下，
-// 所以同一条键 250ms 内只算一次——这比判断「哪条路径更权威」可靠。
+// 小白条的三下，只有一个来源：我们自己注册的识别器。去重只防同一识别器在抬指/抖动时重复
+// 回调同一下，窗口压到 120ms——不能更宽，否则没配双击时连点两下会被吞掉第二下。
 static void TGFireHomeBar(NSString *key) {
     if (TGConditionLocked()) return;
     if (!TGActionFor(key)) return;
@@ -3236,32 +3236,23 @@ static void TGFireHomeBar(NSString *key) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{ last = [NSMutableDictionary dictionary]; });
     CFTimeInterval now = CACurrentMediaTime();
-    if (now - last[key].doubleValue < 0.25) return;
+    if (now - last[key].doubleValue < 0.12) return;
     last[key] = @(now);
     TGBottomLog(@"fire %@", key);
     TGFire(key);
 }
 
-// 单击要等双击失败才成立；双击没配就立刻走。
-static NSInteger tgHomeBarSingleSerial;
+// 单击只有一个来源（我们自己的识别器）。配了双击时，UIKit 的 requireToFail 已经等过一个双击
+// 间隔才让单击成立，这里再等一遍就是白等——上一版那 0.35s 是给系统回调那条路准备的，删掉。
 static CFTimeInterval tgHomeBarLongAt;
 static void TGHomeBarSingle(void) {
     if ([tgAssignedTriggers containsObject:@"homebar.single"] == NO) return;
     // 刚认过一下长按：手指抬起时点击识别器还会再认一次，这一下不是单击。
     if (CACurrentMediaTime() - tgHomeBarLongAt < 1.0) return;
-    if (![tgAssignedTriggers containsObject:@"homebar.doubletap"]) {
-        TGFireHomeBar(@"homebar.single");
-        return;
-    }
-    NSInteger serial = ++tgHomeBarSingleSerial;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (serial != tgHomeBarSingleSerial) return;   // 中间来了第二下，改成双击了
-        TGFireHomeBar(@"homebar.single");
-    });
+    TGFireHomeBar(@"homebar.single");
 }
 
 static void TGHomeBarDouble(void) {
-    tgHomeBarSingleSerial++;   // 撤掉还没落地的单击
     TGFireHomeBar(@"homebar.doubletap");
 }
 
@@ -3337,7 +3328,7 @@ static BOOL tgGestureManagerReady;
 // init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
 
 // 注册这件事一旦抛异常，SpringBoard 是起不来的（设置页也就进不去）。
-// 所以整段包在 @try 里：真出问题，底部横条失效，别的触发器照旧。
+// 所以整段包在 @try 里：真出问题，底部手势失效，别的触发器照旧。
 static void TGRegisterBottomGestures(SBSystemGestureManager *manager) {
     @try {
         static TGBottomTarget *bottomTarget;
@@ -3486,23 +3477,16 @@ static void TGUpdateEdgeGestures(void) {
 }
 %end
 
-// 第二条来源：2.1 走的就是这两条回调（横条被点一下 / 两下）。我们主要靠注册的识别器，
-// 这里只是备一条——系统手势表若不把点击喂给 UITapGestureRecognizer，这一条还能接住。
-// 判据同样要求位置在横条上，避免把任何地方的点击都当成横条。
+// 这里只管一件事：双击已经被我们自己识别器接下时，别让系统顺手把 Reachability 拉下来。
+// 单击那边不再挂这条回调——系统对单击横条没有任何可见行为，这个回调是否真会调没有保证，
+// 拿它当触发源等于赌；三项触发统一走注册的识别器。
 %hook SBHomeAffordanceInteractionManager
-- (void)_bounceTapRecognized:(UIGestureRecognizer *)recognizer {
-    BOOL left = NO, right = NO;
-    if (TGBottomPointInBar([recognizer locationInView:nil], &left, &right) && !left && !right)
-        TGHomeBarSingle();
-    %orig;
-}
 - (void)_bounceDoubleTapRecognized:(UIGestureRecognizer *)recognizer {
     BOOL left = NO, right = NO;
     BOOL onBar = TGBottomPointInBar([recognizer locationInView:nil], &left, &right) && !left && !right;
     // 当前模式里没动作就整条放行：Reachability 还得照旧能用。
     if (onBar && !TGConditionLocked() && TGActionFor(@"homebar.doubletap")) {
-        TGHomeBarDouble();
-        return;   // 这一下不再拉下半屏
+        return;   // 这一下不再拉下半屏，动作由识别器发
     }
     %orig;
 }
