@@ -3,6 +3,38 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.60
+
+修 CopyLog 唤不出来。分组和动作都出现了（说明插件探测是好的），点了没反应——原因不在名字，
+在**投递通道**。
+
+### 2.1 里两个插件走的不是同一条路
+
+反汇编两个调用点，一个是 `CFNotificationCenterPostNotification`（分布式中心），一个是
+`notify_post`（Darwin 通知）。这两个中心互不相通：往分布式中心喊，监听 Darwin 的进程听不见。
+
+| 插件 | 2.1 的投递方式 | 地址 |
+|---|---|---|
+| Snapper 3 | `CFNotificationCenterPostNotification` | `0xd23c` |
+| CopyLog | `notify_post` | `0xd36c` |
+
+cn4.59 一律按分布式发，名字对、通道错，所以 Snapper 那种写法没问题，CopyLog 一声不响。
+
+### 改法
+
+`TGPostToPlugin` 按名字分流：`me.tomt000.copylog.*` 走 `notify_post`，其余走分布式中心。
+名字仍然是 2.1 拼出来的 `me.tomt000.copylog.showView` / `...showFavoritesView`。
+
+### 日志
+
+`bottom.log` 现在会记一行 `post darwin <名字> status=<n>` 或 `post distributed <名字>`：
+
+- 有 `status=0` → 通知确实喊出去了，问题在 CopyLog 那一侧（比如它只在键盘可见时监听）
+- 有 `plugin copylog missing` → 探测没找到 dylib，检查安装路径
+- 一行都没有 → 动作没执行到发通知这一步
+
+---
+
 ## 1.5.0+cn4.59
 
 接上 2.1 的 Tweak Actions：不再自己实现功能，而是喊一声，让装着的插件去做。

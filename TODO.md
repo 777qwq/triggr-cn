@@ -16,12 +16,12 @@
 若单击要等半秒以上才动，说明 `requireGestureRecognizerToFail` 之外还有别的等待，看
 `bottom.log` 里 `fire homebar.single` 的时间戳与抬指时刻的差。
 
-## cn4.59：2.1 的 Tweak Actions
+## cn4.60：CopyLog 通道修正
 
-- 装了 Snapper 3 → 动作选择器出现「Snapper 3」分类，七项都在；任选一项能真的唤出截图
-- 装了 CopyLog → 出现「CopyLog」分类，两项都能打开对应界面
-- 没装的插件 → 分类不出现（不是出现后点了没反应）
-- 序列里放一项插件动作 + 一个停顿，能按顺序走
+- 只装 CopyLog → 动作选择器有「CopyLog」分类，两项点了都能唤出对应界面
+- 装了 Snapper 3 → 七项照旧（那条一直是对的分支）
+- 若仍唤不出，看 `bottom.log`：`post darwin ... status=0` 说明通知发出去了，
+  问题在 CopyLog 何时注册监听（键盘可见时才挂）；`plugin copylog missing` 才是探测问题
 
 ## cn4.40 遗留（未验）
 

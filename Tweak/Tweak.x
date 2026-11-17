@@ -1213,24 +1213,46 @@ static void TGTransientHaptic(double intensity, double sharpness) {
     });
 }
 
-// cn4.59: 2.1 的插件动作都是发一条分布式通知（CFNotificationCenterGetDistributedCenter，
-// 不是 Darwin 通知中心；2.1 反汇编里 dlsym 的正是前者）。插件不在就返回 NO，
-// 让动作在选择器里显示成不可用，而不是点了没反应。
-static BOOL TGPostToPlugin(NSString *name, NSString *plugin, BOOL dry) {
-    // SpringBoard 读得到 dylib 目录，直接扫，别用设置页那份清单（可能过期）。
-    if (!TGScanPluginDylibs(plugin)) return NO;
-    if (dry) return YES;
+static void TGBottomLog(NSString *format, ...);
+
+// cn4.59: 2.1 的插件动作名字一样、通道不一样，发错通道插件就收不到：
+//   Snapper 3 —— 分布式通知中心，CFNotificationCenterPostNotification（2.1 在 0xd23c）
+//   CopyLog   —— Darwin 通知，notify_post（2.1 在 0xd36c）
+// 插件不在就返回 NO，让动作在选择器里显示成不可用，而不是点了没反应。
+static BOOL TGPostDarwin(NSString *name) {
+    static int (*post)(const char *);
+    static BOOL resolved;
+    if (!resolved) {
+        resolved = YES;
+        post = (int (*)(const char *))dlsym(RTLD_DEFAULT, "notify_post");
+    }
+    if (!post) { TGBottomLog(@"no notify_post"); return NO; }
+    uint32_t status = (uint32_t)post(name.UTF8String);
+    TGBottomLog(@"post darwin %@ status=%u", name, status);
+    return status == 0;
+}
+
+static BOOL TGPostDistributed(NSString *name) {
     static CFNotificationCenterRef (*getCenter)(void);
     static BOOL resolved;
     if (!resolved) {
         resolved = YES;
         getCenter = (CFNotificationCenterRef (*)(void))dlsym(RTLD_DEFAULT, "CFNotificationCenterGetDistributedCenter");
     }
-    if (!getCenter) return NO;
+    if (!getCenter) { TGBottomLog(@"no distributed center"); return NO; }
     CFNotificationCenterRef center = getCenter();
     if (!center) return NO;
     CFNotificationCenterPostNotification(center, (__bridge CFStringRef)name, NULL, NULL, YES);
+    TGBottomLog(@"post distributed %@", name);
     return YES;
+}
+
+static BOOL TGPostToPlugin(NSString *name, NSString *plugin, BOOL dry) {
+    // SpringBoard 读得到 dylib 目录，直接扫，别用设置页那份清单（可能过期）。
+    if (!TGScanPluginDylibs(plugin)) { TGBottomLog(@"plugin %@ missing", plugin); return NO; }
+    if (dry) return YES;
+    if ([name hasPrefix:@"me.tomt000.copylog."]) return TGPostDarwin(name);
+    return TGPostDistributed(name);
 }
 
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
