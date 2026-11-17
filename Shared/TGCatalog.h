@@ -222,6 +222,11 @@ static const TGItem TGPluginSnapper[] = {
 static const TGItem TGPluginCopyLog[] = {
     {"copylog.showView", "打开 CopyLog"}, {"copylog.showFavoritesView", "打开 CopyLog 收藏"},
 };
+// 手势：控制项是固定的，播放项在设置页按当前手势库动态列出（gesture:<name>）。
+static const TGItem TGGestureActions[] = {
+    {TGGestureRecordAction, "录制／停止录制手势"}, {TGGestureStopAction, "停止播放手势"},
+    {TGGestureLatestAction, "播放最近录制的手势"},
+};
 
 static const TGGroup TGActionGroups[] = {
     {"系统", TGSystemActions, TG_COUNT(TGSystemActions), NULL},
@@ -233,6 +238,7 @@ static const TGGroup TGActionGroups[] = {
     {"条件", TGSeqConditions, TG_COUNT(TGSeqConditions), "构建带条件的序列：条件为真才执行其后的动作，到「否则」换分支，「结束条件」收尾。"},
     {"Snapper 3", TGPluginSnapper, TG_COUNT(TGPluginSnapper), "由 Snapper 3 执行：Triggr 只负责唤起，界面和保存都在 Snapper 里。"},
     {"CopyLog", TGPluginCopyLog, TG_COUNT(TGPluginCopyLog), "由 CopyLog 执行：打开主界面，或直接打开收藏夹。"},
+    {"手势", TGGestureActions, TG_COUNT(TGGestureActions), "录制屏幕手势并回放。「录制／停止」点一次开始、再点一次保存并命名；播放项在下方「手势」分类里按已保存的手势列出。"},
 };
 
 // （TGSpringCutsBinary 已删：快捷指令动作改走 VoiceShortcutClient 后台通道，
@@ -262,6 +268,18 @@ static const TGGroup TGActionGroups[] = {
 #define TGOnlyPrefix @"only:"
 #define TGMenuPrefix @"menu:"   // "menu:<id>" shows that menu
 #define TGMenuKeyPrefix @"menu/" // "menu/<id>" = the menu's items
+
+// 手势（RemoteCompanion 移植）：动作 id 用点号表示控制项、冒号表示手势名，
+// 两者永不冲突。播放手势把 <name> 放在冒号后，倍速写成 name@2x。
+//   gesture.record / gesture.recordcancel / gesture.stop —— 录制开关、取消、停止播放
+//   gesture.latest / gesture.latest@2x —— 播放最新录制
+//   gesture:<name>[@SPEED] —— 播放指定手势
+#define TGGestureControlPrefix @"gesture."
+#define TGGesturePlayPrefix @"gesture:"
+#define TGGestureRecordAction @"gesture.record"
+#define TGGestureRecordCancelAction @"gesture.recordcancel"
+#define TGGestureStopAction @"gesture.stop"
+#define TGGestureLatestAction @"gesture.latest"
 
 // 第三方动作扩展：别的包往 Library/Triggr/Extensions 放一个 plist，动作选择器里就多出
 // 一个分类，条目是某个目录下的文件。执行 <Program> <文件名>，文件名只作参数、永不进 shell。
@@ -627,6 +645,12 @@ static inline NSString *TGAssignmentKey(NSString *mode, NSString *trigger) {
 #define TGRunQueue @"/var/tmp/com.johndie.triggr-run"
 #define TGRunRequestNotification "com.johndie.triggr/run-request"
 
+// 手势：设置页把 gesture 命令写进这个文件再 notify_post，SpringBoard 读文件执行。
+// Darwin 通知不带载荷，所以命令必须走文件。只跑 gesture 子命令，不接受 shell。
+#define TGGestureCommandPath @"/var/tmp/com.johndie.triggr-gesture-command.plist"
+#define TGGestureCommandNotification "com.johndie.triggr/gesture-command"
+#define TGGestureCommandKey @"cmd"
+
 // "2200" -> "22:00"。
 static inline NSString *TGClockString(int hhmm) {
     return [NSString stringWithFormat:@"%02d:%02d", hhmm / 100, hhmm % 100];
@@ -798,6 +822,16 @@ static inline NSString *TGActionTitle(NSString *action) {
     if ([action hasPrefix:TGUnlockPrefix]) return @"密码解锁";
     if ([action hasPrefix:TGShortcutPrefix]) return [@"快捷指令：" stringByAppendingString:[action substringFromIndex:TGShortcutPrefix.length]];
     if ([action hasPrefix:TGAutotouchPrefix]) return [@"AutoTouch：" stringByAppendingString:[action substringFromIndex:TGAutotouchPrefix.length]];
+    if ([action hasPrefix:TGGesturePlayPrefix]) {
+        NSString *name = [action substringFromIndex:TGGesturePlayPrefix.length];
+        NSRange at = [name rangeOfString:@"@" options:NSBackwardsSearch];
+        if (at.location != NSNotFound) name = [name substringToIndex:at.location];
+        return [@"播放手势：" stringByAppendingString:name];
+    }
+    if ([action isEqualToString:TGGestureRecordAction]) return @"录制／停止录制手势";
+    if ([action isEqualToString:TGGestureRecordCancelAction]) return @"取消录制手势";
+    if ([action isEqualToString:TGGestureStopAction]) return @"停止播放手势";
+    if ([action isEqualToString:TGGestureLatestAction]) return @"播放最近录制的手势";
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
     if ([action hasPrefix:TGGetPrefix]) return [@"请求 URL: " stringByAppendingString:[action substringFromIndex:TGGetPrefix.length]];
     if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];

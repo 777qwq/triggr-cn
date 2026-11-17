@@ -34,6 +34,12 @@
 #import "../Shared/TGPaths.h"
 #import "../Shared/TGRelay.h"
 #import "../Shared/TGSteps.h"
+#import "TGGestures.h"
+
+// 回放时注入的是真的系统触摸，会走到我们自己注册的识别器上。若不停一下，
+// 回放一个「底边上滑」就会再次触发底边上滑动作，形成递归。按钮/音量/通知类
+// 触发器不受影响——只在触摸类触发器的入口挡住。
+static BOOL TGGesturePlaybackBusy(void) { return TGGesturePlaying(); }
 
 @interface SBLockScreenManager : NSObject
 + (instancetype)sharedInstance;
@@ -1255,6 +1261,49 @@ static BOOL TGPostToPlugin(NSString *name, NSString *plugin, BOOL dry) {
     return TGPostDistributed(name);
 }
 
+// 手势动作 id -> TGGestureCommand 命令串。控制项用 "gesture." 前缀，播放用 "gesture:"。
+// 倍速写在名字后面 @2x，取最后一个 @（名字里允许出现 @，速度串必须像 0.5x/2x）。
+static NSString *TGGestureCommandForAction(NSString *action) {
+    if ([action isEqualToString:TGGestureRecordAction]) return @"gesture record-toggle";
+    if ([action isEqualToString:TGGestureRecordCancelAction]) return @"gesture record-cancel";
+    if ([action isEqualToString:TGGestureStopAction]) return @"gesture stop";
+    if ([action hasPrefix:TGGestureLatestAction]) {
+        NSString *tail = [action substringFromIndex:TGGestureLatestAction.length];
+        return tail.length ? [@"gesture play-latest " stringByAppendingString:tail] : @"gesture play-latest";
+    }
+    if ([action hasPrefix:TGGesturePlayPrefix]) {
+        NSString *spec = [action substringFromIndex:TGGesturePlayPrefix.length];
+        NSRange at = [spec rangeOfString:@"@" options:NSBackwardsSearch];
+        NSString *name = at.location == NSNotFound ? spec : [spec substringToIndex:at.location];
+        NSString *speed = at.location == NSNotFound ? nil : [spec substringFromIndex:at.location + 1];
+        if (!name.length) return nil;
+        // 名字里的引号会被命令解析器当作分隔符，去掉，避免拼出非法命令。
+        name = [name stringByReplacingOccurrencesOfString:@"\"" withString:@""];
+        NSString *cmd = [NSString stringWithFormat:@"gesture play \"%@\"", name];
+        return speed.length ? [cmd stringByAppendingFormat:@" %@", speed] : cmd;
+    }
+    return nil;
+}
+
+// dryRun：录制/停止永远可用；播放要看库里有没有这个名字，否则配了没反应。
+static BOOL TGGestureActionAvailable(NSString *action) {
+    if ([action isEqualToString:TGGestureRecordAction] || [action isEqualToString:TGGestureRecordCancelAction] ||
+        [action isEqualToString:TGGestureStopAction]) return YES;
+    NSString *name = nil;
+    if ([action hasPrefix:TGGestureLatestAction]) {
+        return TGGestureList().count > 0;
+    }
+    if ([action hasPrefix:TGGesturePlayPrefix]) {
+        NSString *spec = [action substringFromIndex:TGGesturePlayPrefix.length];
+        NSRange at = [spec rangeOfString:@"@" options:NSBackwardsSearch];
+        name = at.location == NSNotFound ? spec : [spec substringToIndex:at.location];
+    }
+    if (!name.length) return NO;
+    for (NSDictionary *g in TGGestureList())
+        if ([g[@"name"] isKindOfClass:NSString.class] && [g[@"name"] caseInsensitiveCompare:name] == NSOrderedSame) return YES;
+    return NO;
+}
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -1476,6 +1525,9 @@ static BOOL TGCanPerform(NSString *action) {
     if (TGStepIsDirective(action)) return YES; // 控制流，不是动作
     if ([action hasPrefix:TGPausePrefix]) return YES;
     if ([action hasPrefix:TGMenuPrefix]) return tgMenuNames[[action substringFromIndex:TGMenuPrefix.length]] != nil;
+    if ([action isEqualToString:TGGestureRecordAction] || [action isEqualToString:TGGestureRecordCancelAction] ||
+        [action isEqualToString:TGGestureStopAction] || [action hasPrefix:TGGesturePlayPrefix])
+        return TGGestureActionAvailable(action);
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGGetPrefix]) {
         NSURL *url = [NSURL URLWithString:[action substringFromIndex:TGGetPrefix.length]];
@@ -1498,6 +1550,10 @@ static void TGPerform(NSString *action) {
         TGActionBlock block = TGActionTable()[action] ?: TGSwitchAction(action);
         if (block) {
             block(NO);
+        } else if ([action isEqualToString:TGGestureRecordAction] || [action isEqualToString:TGGestureRecordCancelAction] ||
+                   [action isEqualToString:TGGestureStopAction] || [action hasPrefix:TGGesturePlayPrefix]) {
+            NSString *cmd = TGGestureCommandForAction(action);
+            if (cmd) TGGestureCommand(cmd);
         } else if ([action hasPrefix:TGShortcutPrefix]) {
             TGRunShortcut([action substringFromIndex:TGShortcutPrefix.length]);
         } else if ([action hasPrefix:TGAutotouchPrefix]) {
@@ -2752,6 +2808,7 @@ static void TGStatusBarHoldEnded(void) {
 }
 
 static void TGStatusBarTapped(TGStatusBarSide side) {
+    if (TGGesturePlaybackBusy()) return; // 回放的注入触摸不算真实点击
     CFTimeInterval now = CACurrentMediaTime();
     // The release of a hold that already ran (the app's report comes a moment later).
     if (tgStatusBarHeld || now - tgStatusBarHoldEndedAt < 0.6) { tgStatusBarHoldEndedAt = 0; tgStatusBarHeld = NO; return; }
@@ -2912,7 +2969,7 @@ static BOOL TGFireFlick(UIView *iconView, NSString *trigger) {
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (!tgWantIconFlicks || self.numberOfTouches != 1) {
+    if (TGGesturePlaybackBusy() || !tgWantIconFlicks || self.numberOfTouches != 1) {
         self.state = UIGestureRecognizerStateFailed;
         return;
     }
@@ -3110,6 +3167,7 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 
 @implementation TGEdgeRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
     // 只有第一根手指决定归属：第二根落在屏幕中间不影响双指版。
     if (event.allTouches.count == 1) {
         UITouch *touch = [touches anyObject];
@@ -3225,6 +3283,7 @@ static BOOL TGBottomPointInBar(CGPoint p, BOOL *left, BOOL *right);
 @implementation TGBottomEdgeRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
+    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
     CGPoint p = [[touches anyObject] locationInView:nil];
     BOOL left = NO, right = NO;
     BOOL ok = TGBottomPointInBar(p, &left, &right) && (self.left ? left : right);
@@ -3353,6 +3412,7 @@ static void TGHomeBarDouble(void) {
 @implementation TGBottomTapRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
+    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
     if (!TGBottomPointInTapBar([[touches anyObject] locationInView:nil]))
         self.state = UIGestureRecognizerStateFailed;
 }
@@ -3363,6 +3423,7 @@ static void TGHomeBarDouble(void) {
 @implementation TGBottomPressRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
+    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
     if (!TGBottomPointInTapBar([[touches anyObject] locationInView:nil]))
         self.state = UIGestureRecognizerStateFailed;
 }
@@ -4346,11 +4407,17 @@ static void TGResyncAfterLaunch(void) {
             else TGRunActions(actions);
         }
     });
-    int tapToken;
-    int airPlayListToken;
-    notify_register_dispatch(TGAirPlayListRequest, &airPlayListToken, dispatch_get_main_queue(), ^(int t) { TGWriteAirPlayList(); });
     int shortcutListToken;
+    notify_register_dispatch(TGAirPlayListRequest, &airPlayListToken, dispatch_get_main_queue(), ^(int t) { TGWriteAirPlayList(); });
     notify_register_dispatch(TGShortcutListRequest, &shortcutListToken, dispatch_get_main_queue(), ^(int t) { TGWriteShortcutList(); });
+    // 设置页的手势库页：试播/录制/停止/gesture 设置都走「写文件 + notify」这条路。
+    int tapToken;
+    int gestureCommandToken;
+    notify_register_dispatch(TGGestureCommandNotification, &gestureCommandToken, dispatch_get_main_queue(), ^(int t) {
+        NSDictionary *request = [NSDictionary dictionaryWithContentsOfFile:TGGestureCommandPath];
+        NSString *cmd = request[TGGestureCommandKey];
+        if ([cmd isKindOfClass:NSString.class] && [cmd hasPrefix:@"gesture "]) TGGestureCommand(cmd);
+    });
     notify_register_dispatch(TGRelayStatusBarTap, &tapToken, dispatch_get_main_queue(), ^(int t) {
         TGStatusBarTapped(TGStatusBarSideUnknown);
     });
@@ -4365,6 +4432,8 @@ static void TGResyncAfterLaunch(void) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         tgSpringBoardReady = YES;
         TGResyncAfterLaunch();
+        // 手势录制需要在 HID 层看到每一帧触摸；监听线程独立于 SpringBoard 主队列。
+        TGGestureStartListener();
     });
     %init(_ungrouped);
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");

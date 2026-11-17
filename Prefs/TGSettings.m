@@ -17,6 +17,47 @@
 #import "../Shared/TGHardware.h"
 #import "../Shared/TGSteps.h"
 
+#pragma mark - Gesture library (shared with the tweak)
+
+// 手势库存放在真实 /var/mobile/Library/Preferences，不用 jbroot 前缀——那是用户
+// 资产，换根/重装不能丢。设置 App 有 no-sandbox 权限，可直接读写。
+static NSString *const TGGestureLibraryPath = @"/var/mobile/Library/Preferences/com.johndie.triggr.gestures.plist";
+
+static NSArray<NSDictionary *> *TGGestureLibrary(void) {
+    NSDictionary *root = [NSDictionary dictionaryWithContentsOfFile:TGGestureLibraryPath];
+    NSArray *list = root[@"gestures"];
+    return [list isKindOfClass:NSArray.class] ? list : @[];
+}
+
+static NSDictionary *TGGestureNamed(NSString *name) {
+    for (NSDictionary *g in TGGestureLibrary())
+        if ([g[@"name"] isKindOfClass:NSString.class] && [g[@"name"] caseInsensitiveCompare:name] == NSOrderedSame) return g;
+    return nil;
+}
+
+// 设置页 -> SpringBoard：写命令文件再 notify。只发 gesture 子命令。
+static void TGSendGestureCommand(NSString *cmd) {
+    if (![cmd hasPrefix:@"gesture "]) return;
+    NSDictionary *request = @{ TGGestureCommandKey: cmd };
+    [request writeToFile:TGGestureCommandPath atomically:YES];
+    notify_post(TGGestureCommandNotification);
+}
+
+// 手势设置也存在库 plist 的根字典里，和 SpringBoard 共用（TGGestures.m 读写同一批键）。
+static NSDictionary *TGGestureSettings(void) {
+    return [NSDictionary dictionaryWithContentsOfFile:TGGestureLibraryPath] ?: @{};
+}
+static id TGGestureSetting(NSString *key, id fallback) {
+    id v = TGGestureSettings()[key];
+    return v ?: fallback;
+}
+static void TGSetGestureSetting(NSString *key, id value) {
+    NSMutableDictionary *root = [TGGestureSettings() mutableCopy] ?: [NSMutableDictionary dictionary];
+    if (!root[@"gestures"]) root[@"gestures"] = @[];
+    root[key] = value;
+    [root writeToFile:TGGestureLibraryPath atomically:YES];
+}
+
 // Private (MobileCoreServices), used only for the app's display name; AltList
 // itself relies on it.
 @interface LSApplicationProxy : NSObject
@@ -932,7 +973,7 @@ static void TGPromptWait(UIViewController *host, NSString *encoded, void (^done)
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *list = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"gestures", @"手势"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
     // cn4.59: 插件动作只在装了插件时出现——没装却列出「新建截图」，点了没反应。
     if (TGPluginInstalled(@"snapper3")) [list addObject:@[@"snapper", @"Snapper 3"]];
     if (TGPluginInstalled(@"copylog")) [list addObject:@[@"copylog", @"CopyLog"]];
@@ -949,6 +990,7 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
         @"open": @[@"arrow.up.right.square.fill", UIColor.systemIndigoColor],
         @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
         @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor],
+        @"gestures": @[@"hand.draw", UIColor.systemBrownColor],
         @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
         @"snapper": @[@"camera.viewfinder", UIColor.systemOrangeColor],
         @"copylog": @[@"doc.on.clipboard.fill", UIColor.systemTealColor],
@@ -959,6 +1001,7 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
 static NSString *TGCategoryOf(NSString *action) {
     if ([action isEqualToString:TGElseAction] || [action isEqualToString:TGEndIfAction] || [action hasPrefix:TGIfPrefix]) return @"conditions";
     if ([action hasPrefix:TGMenuPrefix]) return @"menus";
+    if ([action hasPrefix:TGGesturePlayPrefix] || [action hasPrefix:TGGestureControlPrefix]) return @"gestures";
     if ([action hasPrefix:TGAutotouchPrefix]) return @"autotouch";
     // 扩展动作的分类是 "ext:<扩展名>"：展开后要点到的那一行属于哪个扩展。
     if (TGExtensionAction(action)) return [TGExtensionPrefix stringByAppendingString:TGExtensionAction(action)[0]];
@@ -1305,6 +1348,17 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
     } else if ([category isEqualToString:@"menus"] && !_menuEditor) {
         for (NSDictionary *menu in TGReadMenus())
             [rows addObject:[self rowForAction:[TGMenuPrefix stringByAppendingString:menu[@"id"]] title:[menu[@"name"] description]]];
+    } else if ([category isEqualToString:@"gestures"]) {
+        for (int i = 0; i < TG_COUNT(TGGestureActions); i++)
+            [rows addObject:[self rowForAction:@(TGGestureActions[i].identifier) title:@(TGGestureActions[i].title)]];
+        PSSpecifier *library = [PSSpecifier preferenceSpecifierNamed:@"管理手势库…" target:self set:nil get:nil detail:NSClassFromString(@"TGGesturesController") cell:PSLinkCell edit:nil];
+        [library setProperty:@YES forKey:@"tgGestureLibrary"];
+        [rows addObject:library];
+        for (NSDictionary *g in TGGestureLibrary()) {
+            NSString *name = g[@"name"];
+            if (![name isKindOfClass:NSString.class]) continue;
+            [rows addObject:[self rowForAction:[TGGesturePlayPrefix stringByAppendingString:name] title:[@"播放 " stringByAppendingString:name]]];
+        }
     } else if ([category isEqualToString:@"autotouch"]) {
         // 脚本名直接当标题：分类头已经写着 AutoTouch，再拼一遍只会更长。
         for (NSString *script in TGAutoTouchScripts())
@@ -1325,7 +1379,7 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
         for (int i = 0; i < TGActionGroups[g].count; i++)
             [rows addObject:[self rowForAction:@(TGActionGroups[g].items[i].identifier) title:@(TGActionGroups[g].items[i].title)]];
     }
-    for (NSString *category in @[@"levels", @"open", @"text", @"menus", @"autotouch"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
+    for (NSString *category in @[@"levels", @"open", @"text", @"menus", @"gestures", @"autotouch"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
     // 扩展条目在搜索里带上分类名，否则「Bass Boost」孤零零的，不知道属于谁。
     for (NSString *name in TGExtensionNames())
         for (NSString *item in TGExtensionItems(TGExtension(name))) {
@@ -2898,6 +2952,218 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
 
 @end
 
+#pragma mark - Gesture library page
+
+@interface TGGesturesController : TGListController
+@end
+
+@implementation TGGesturesController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"手势库";
+    // 从别的页面进来（管理手势库）时是 push；库有变动就重读。
+    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadSpecifiers)
+        name:UIApplicationDidBecomeActiveNotification object:nil];
+}
+
+// 命令执行后 SpringBoard 改了库，稍等再重读，让列表反映最新录制/删除。
+- (void)runCommand:(NSString *)cmd {
+    TGSendGestureCommand(cmd);
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self reloadSpecifiers];
+    });
+}
+
+- (PSSpecifier *)toggleSpec:(NSString *)title key:(NSString *)key {
+    PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:title target:self
+        set:@selector(setToggle:specifier:) get:@selector(readToggle:)
+        detail:nil cell:PSSwitchCell edit:nil];
+    [spec setProperty:key forKey:@"tgGestureKey"];
+    return spec;
+}
+
+- (id)readToggle:(PSSpecifier *)spec {
+    NSString *key = [spec propertyForKey:@"tgGestureKey"];
+    return [TGGestureSetting(key, @YES) boolValue] ? @YES : @NO;
+}
+
+- (void)setToggle:(id)value specifier:(PSSpecifier *)spec {
+    NSString *key = [spec propertyForKey:@"tgGestureKey"];
+    BOOL on = [value boolValue];
+    TGSetGestureSetting(key, @(on)); // 先落盘，SpringBoard 的每次读取都立刻看到
+    [self runCommand:[NSString stringWithFormat:@"gesture %@ %@", key, on ? @"on" : @"off"]];
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        NSMutableArray *specs = [NSMutableArray array];
+        NSArray *library = TGGestureLibrary();
+
+        PSSpecifier *top = [PSSpecifier groupSpecifierWithName:nil];
+        [top setProperty:@"录制时屏幕顶部出现红色标记，点它展开「停止」。录完后按手势名保存，再从动作选择器「手势」分类指派给触发器。" forKey:@"footerText"];
+        [specs addObject:top];
+        PSSpecifier *record = [PSSpecifier preferenceSpecifierNamed:@"录制新手势…" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+        [record setProperty:@"record" forKey:@"tgGestureCommand"];
+        [specs addObject:record];
+
+        PSSpecifier *options = [PSSpecifier groupSpecifierWithName:@"回放选项"];
+        [options setProperty:@"停止于触摸：手指碰到屏幕就停下回放。显示触点：回放时标出每根手指的位置。" forKey:@"footerText"];
+        [specs addObject:options];
+        [specs addObject:[self toggleSpec:@"停止于触摸" key:@"stopOnTouch"]];
+        [specs addObject:[self toggleSpec:@"显示触点" key:@"showTouches"]];
+
+        PSSpecifier *tab = [PSSpecifier preferenceSpecifierNamed:@"录制标记大小" target:self set:nil get:@selector(readTabSize:) detail:nil cell:PSListItemCell edit:nil];
+        [specs addObject:tab];
+
+        PSSpecifier *list = [PSSpecifier groupSpecifierWithName:@"已保存的手势"];
+        [list setProperty:library.count ? @"点「试播」在 1 秒后回放；左滑可重命名或删除。" : @"还没有手势。先点上方「录制新手势」。" forKey:@"footerText"];
+        [specs addObject:list];
+        for (NSDictionary *g in library) {
+            NSString *name = g[@"name"];
+            if (![name isKindOfClass:NSString.class]) continue;
+            PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name target:self set:nil get:@selector(gestureSummary:)
+                detail:nil cell:PSLinkListCell edit:nil];
+            [row setProperty:name forKey:@"tgGestureName"];
+            [specs addObject:row];
+        }
+
+        [specs addObject:[PSSpecifier emptyGroupSpecifier]];
+        PSSpecifier *import = [PSSpecifier preferenceSpecifierNamed:@"从文件导入手势…" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+        [import setProperty:@"import" forKey:@"tgGestureCommand"];
+        [specs addObject:import];
+        PSSpecifier *export = [PSSpecifier preferenceSpecifierNamed:@"导出全部手势…" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+        [export setProperty:@"export" forKey:@"tgGestureCommand"];
+        [specs addObject:export];
+        _specifiers = specs;
+    }
+    return _specifiers;
+}
+
+- (NSString *)readTabSize:(PSSpecifier *)spec {
+    NSString *size = TGGestureSetting(@"tabSize", @"medium");
+    NSString *label = @{ @"small": @"小", @"medium": @"中", @"large": @"大" }[size] ?: @"中";
+    return [label stringByAppendingString:@" ›"];
+}
+
+- (NSString *)gestureSummary:(PSSpecifier *)spec {
+    NSDictionary *g = TGGestureNamed([spec propertyForKey:@"tgGestureName"]);
+    if (!g) return @"";
+    double duration = [g[@"duration"] doubleValue];
+    NSInteger strokes = [g[@"strokes"] integerValue];
+    return [NSString stringWithFormat:@"%ld 次 · %.1f 秒", (long)strokes, duration];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
+    NSString *command = [spec propertyForKey:@"tgGestureCommand"];
+    NSString *name = [spec propertyForKey:@"tgGestureName"];
+    if ([spec propertyForKey:@"tgGestureKey"] || (!command && !name)) {
+        [super tableView:tableView didSelectRowAtIndexPath:indexPath];
+        return;
+    }
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if ([command isEqualToString:@"record"]) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"录制手势"
+            message:@"3 秒后开始录制。做一遍手势，再点屏幕顶部的红色标记停止并保存。" preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"开始" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self runCommand:@"gesture record-toggle"];
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+    if ([command isEqualToString:@"import"]) { [self importGestures]; return; }
+    if ([command isEqualToString:@"export"]) { [self exportGestures]; return; }
+    if ([[spec propertyForKey:@"tgGestureKey"] isEqualToString:@"tabSize"] || [spec.name isEqualToString:@"录制标记大小"]) {
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"录制标记大小" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        for (NSArray *pair in @[@[@"small", @"小"], @[@"medium", @"中"], @[@"large", @"大"]]) {
+            [sheet addAction:[UIAlertAction actionWithTitle:pair[1] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+                TGSetGestureSetting(@"tabSize", pair[0]);
+                [self runCommand:[NSString stringWithFormat:@"gesture tab-size %@", pair[0]]];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        sheet.popoverPresentationController.sourceView = self.tableView;
+        [self presentViewController:sheet animated:YES completion:nil];
+        return;
+    }
+    if (name) {
+        UIAlertController *sheet = [UIAlertController alertControllerWithTitle:name message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"试播" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self runCommand:[NSString stringWithFormat:@"gesture play-soon \"%@\"", name]];
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"重命名…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { [self renameGesture:name]; }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+            [self runCommand:[NSString stringWithFormat:@"gesture delete \"%@\"", name]];
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+        sheet.popoverPresentationController.sourceView = self.tableView;
+        [self presentViewController:sheet animated:YES completion:nil];
+    }
+}
+
+- (void)renameGesture:(NSString *)oldName {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"重命名手势" message:oldName preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.text = oldName; }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weak = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *to = [weak.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (!to.length || [to isEqualToString:oldName]) return;
+        [self runCommand:[NSString stringWithFormat:@"gesture rename \"%@\" \"%@\"", oldName, to]];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)exportGestures {
+    NSArray *library = TGGestureLibrary();
+    if (!library.count) return;
+    NSMutableArray *out = [NSMutableArray array];
+    for (NSDictionary *g in library) {
+        NSString *frames = [g[@"frames"] isKindOfClass:NSData.class] ? [g[@"frames"] base64EncodedStringWithOptions:0] : @"";
+        [out addObject:@{ @"name": g[@"name"] ?: @"", @"duration": g[@"duration"] ?: @0,
+                          @"strokes": g[@"strokes"] ?: @0, @"frames": frames, @"screen": g[@"screen"] ?: @[] }];
+    }
+    NSData *json = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+    if (!json) return;
+    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[json] applicationActivities:nil];
+    share.popoverPresentationController.sourceView = self.tableView;
+    [self presentViewController:share animated:YES completion:nil];
+}
+
+- (void)importGestures {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"导入手势"
+        message:@"把导出的 JSON 内容粘贴进来。同名手势会被覆盖。" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) { field.placeholder = @"JSON"; }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weak = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"导入" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSData *data = [weak.textFields.firstObject.text dataUsingEncoding:NSUTF8StringEncoding];
+        NSArray *incoming = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if (![incoming isKindOfClass:NSArray.class]) return;
+        NSMutableArray *library = [TGGestureLibrary() mutableCopy];
+        for (NSDictionary *g in incoming) {
+            if (![g isKindOfClass:NSDictionary.class] || ![g[@"name"] isKindOfClass:NSString.class] || ![g[@"frames"] isKindOfClass:NSString.class]) continue;
+            NSMutableDictionary *entry = [g mutableCopy];
+            entry[@"frames"] = [[NSData alloc] initWithBase64EncodedString:g[@"frames"] options:0];
+            entry[@"created"] = [NSDate date];
+            NSString *name = entry[@"name"];
+            [library filterUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *x, NSDictionary *b) {
+                return ![x[@"name"] isEqualToString:name];
+            }]];
+            [library addObject:entry];
+        }
+        NSMutableDictionary *root = [TGGestureSettings() mutableCopy] ?: [NSMutableDictionary dictionary];
+        root[@"gestures"] = library;
+        [root writeToFile:TGGestureLibraryPath atomically:YES];
+        [self reloadSpecifiers];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+@end
+
 #pragma mark - Setups (profiles, export / import, reset)
 
 // Settings keys that belong to a setup, besides "<mode>/<trigger>" and "menu/<id>".
@@ -3358,6 +3624,12 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         TGSetIcon(menus, @"list.bullet.rectangle.fill", UIColor.systemPinkColor);
         [specs addObject:menus];
 
+        [specs addObject:[PSSpecifier groupSpecifierWithName:@"动作库"]];
+        PSSpecifier *gestures = [PSSpecifier preferenceSpecifierNamed:@"手势库" target:self set:nil get:@selector(gestureCount:)
+            detail:NSClassFromString(@"TGGesturesController") cell:PSLinkListCell edit:nil];
+        TGSetIcon(gestures, @"hand.draw", UIColor.systemBrownColor);
+        [specs addObject:gestures];
+
         PSSpecifier *more = [PSSpecifier groupSpecifierWithName:nil];
         [more setProperty:[NSString stringWithFormat:@"Triggr %@ · 汉化 777qwq · 原作 John d_ie", [TG_VERSION stringByReplacingOccurrencesOfString:@"~" withString:@" "]] forKey:@"footerText"];
         [more setProperty:@1 forKey:@"footerAlignment"]; // centred
@@ -3392,6 +3664,10 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
 
 - (NSString *)menuCount:(PSSpecifier *)spec {
     return TGCountTitle(TGReadMenus().count);
+}
+
+- (NSString *)gestureCount:(PSSpecifier *)spec {
+    return TGCountTitle(TGGestureLibrary().count);
 }
 
 - (NSString *)activeProfileName:(PSSpecifier *)spec {
