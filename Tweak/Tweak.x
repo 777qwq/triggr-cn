@@ -3346,11 +3346,67 @@ static NSString *TGBottomCornerKey(UITouch *touch) {
     return key;
 }
 
+// 只在底角有动作、且判据命中时才写一行，用来核实到底是哪条识别器在跑。
+// 平时一个字节都不会写。用 Filza 直接看这个文件。
+static void TGBottomLog(NSString *format, ...) {
+    va_list args;
+    va_start(args, format);
+    NSString *line = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    static NSString *path;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        path = @"/var/mobile/Library/Preferences/com.johndie.triggr/bottom.log";
+    });
+    NSData *data = [[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding];
+    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!handle) {
+        [data writeToFile:path atomically:YES];
+        return;
+    }
+    @try {
+        [handle seekToEndOfFile];
+        [handle writeData:data];
+    } @catch (__unused NSException *e) {
+    }
+    [handle closeFile];
+}
+
 %hook UIScreenEdgePanGestureRecognizer
 - (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
     // 自己注册的那三条不能拦，否则动作根本收不到手。
-    if (![self isKindOfClass:[TGBottomEdgeRecognizer class]] && TGBottomCornerKey(touch)) return NO;
-    return %orig;
+    // 另外照 RC 的做法只看 Bottom 边（edges == 0 视为没设边），屏幕左右两侧那条一概不碰。
+    if ([self isKindOfClass:[TGBottomEdgeRecognizer class]]) return %orig;
+    if ([self respondsToSelector:@selector(edges)]) {
+        UIRectEdge edges = [(UIScreenEdgePanGestureRecognizer *)self edges];
+        if (edges != 0 && !(edges & UIRectEdgeBottom)) return %orig;
+    }
+    NSString *key = TGBottomCornerKey(touch);
+    if (!key) return %orig;
+    CGPoint p = [touch locationInView:nil];
+    TGBottomLog(@"screen-edge refused (%@) at (%.0f, %.0f) type=%s", key, p.x, p.y, class_getName([self class]));
+    return NO;
+}
+%end
+
+// iOS 15+ 上真正驱动「底边上滑回主屏」的是这一条，它继承 UIPanGestureRecognizer，
+// 不是 screen-edge 那一支——上面那个 hook 压根碰不到它，这就是拒绝层看起来无效的原因。
+@interface SBHomeGesturePanGestureRecognizer : UIPanGestureRecognizer
+@end
+
+// 判据与动作触发区完全重合（底角 24pt × 左右各 1/3），区外一律 %orig。
+// touchesBegan 是最早的回调，那会儿它还在 Possible，置 Failed 之后就不会 Began，回主屏也就不会发生。
+%hook SBHomeGesturePanGestureRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    UITouch *touch = [touches anyObject];
+    NSString *key = TGBottomCornerKey(touch);
+    if (key) {
+        CGPoint p = [touch locationInView:nil];
+        TGBottomLog(@"home gesture refused (%@) at (%.0f, %.0f)", key, p.x, p.y);
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+    }
+    %orig;
 }
 %end
 

@@ -3,6 +3,34 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.55
+
+cn4.54 的拒绝层实测无效。原因找到了：**挂错了类**。
+
+### 为什么无效
+
+2.1 的拒绝层挂在 `UIScreenEdgePanGestureRecognizer` 的 `_shouldReceiveTouch:withEvent:` 上（`0x66ec`）。但在 iOS 15 之后，真正驱动「底边上滑回主屏」的是 `SBHomeGesturePanGestureRecognizer`——它继承 `UIPanGestureRecognizer`，跟 `UIScreenEdgePanGestureRecognizer` 是两条不同的继承链。那条 hook 压根碰不到它，所以动作照执行、屏幕照回主屏。
+
+RC 也踩在同一个坑里：它 hook 了 `UIScreenEdgePanGestureRecognizer` / `_UIScreenEdgePanGestureRecognizer` / `SBScreenEdgePanGestureRecognizer` 三个类，一个都不沾 home gesture。它能"看起来"没事，是因为另一套冻结滚动把画面钉住了，手势本身该发生还是发生。
+
+### 加了什么
+
+`SBHomeGesturePanGestureRecognizer` 的 `touchesBegan:withEvent:`，判据复用 `TGBottomCornerKey`：
+
+```
+竖屏 + y >= h-24 + x 在左右各 1/3 + 该角配了动作 + 未锁屏 + 当前模式有动作
+→ self.state = Failed，不调 %orig
+```
+
+`touchesBegan:` 是最早的回调，此时它还在 Possible，置 Failed 之后不会 Began，回主屏也就不会发生。范围与动作触发区完全重合，中间 1/3 与屏幕左右两侧仍是零接触。
+
+### screen-edge 那条也补了两点
+
+- **按 `edges` 过滤**：只处理 `edges & Bottom` 或 `edges == 0` 的，屏幕左右两侧那条（`SBFluidSwitcher…`）一概 `%orig`。这是 RC 里已有的判断，上一版漏了。
+- 命中时写一行日志到 `/var/mobile/Library/Preferences/com.johndie.triggr/bottom.log`，记录类名与坐标。只在命中时写，平时不产生 IO。
+
+这份日志是给下一次排查用的：如果还是无效，看文件里有没有 `home gesture refused`。有 → 拦住了，问题在别处；没有 → 这条识别器根本没走，需要换类名。
+
 ## 1.5.0+cn4.54
 
 补上 2.1 底边手势的另一半：**拒绝系统识别器**。cn4.53 只做了自注册，动作能收到，但系统回主屏幕也在同一块起手，于是「动作执行 + 画面跟着上去」。
