@@ -1267,6 +1267,10 @@ static NSString *TGGestureCommandForAction(NSString *action) {
     if ([action isEqualToString:TGGestureRecordAction]) return @"gesture record-toggle";
     if ([action isEqualToString:TGGestureRecordCancelAction]) return @"gesture record-cancel";
     if ([action isEqualToString:TGGestureStopAction]) return @"gesture stop";
+    if ([action hasPrefix:TGGestureLatestAction]) {
+        NSString *tail = [action substringFromIndex:TGGestureLatestAction.length];
+        return tail.length ? [@"gesture play-latest " stringByAppendingString:tail] : @"gesture play-latest";
+    }
     if ([action hasPrefix:TGGesturePlayPrefix]) {
         NSString *spec = [action substringFromIndex:TGGesturePlayPrefix.length];
         NSRange at = [spec rangeOfString:@"@" options:NSBackwardsSearch];
@@ -1286,6 +1290,9 @@ static BOOL TGGestureActionAvailable(NSString *action) {
     if ([action isEqualToString:TGGestureRecordAction] || [action isEqualToString:TGGestureRecordCancelAction] ||
         [action isEqualToString:TGGestureStopAction]) return YES;
     NSString *name = nil;
+    if ([action hasPrefix:TGGestureLatestAction]) {
+        return TGGestureList().count > 0;
+    }
     if ([action hasPrefix:TGGesturePlayPrefix]) {
         NSString *spec = [action substringFromIndex:TGGesturePlayPrefix.length];
         NSRange at = [spec rangeOfString:@"@" options:NSBackwardsSearch];
@@ -1519,7 +1526,8 @@ static BOOL TGCanPerform(NSString *action) {
     if ([action hasPrefix:TGPausePrefix]) return YES;
     if ([action hasPrefix:TGMenuPrefix]) return tgMenuNames[[action substringFromIndex:TGMenuPrefix.length]] != nil;
     if ([action isEqualToString:TGGestureRecordAction] || [action isEqualToString:TGGestureRecordCancelAction] ||
-        [action isEqualToString:TGGestureStopAction] || [action hasPrefix:TGGesturePlayPrefix])
+        [action isEqualToString:TGGestureStopAction] || [action hasPrefix:TGGesturePlayPrefix] ||
+        [action hasPrefix:TGGestureLatestAction])
         return TGGestureActionAvailable(action);
     if (TGValueAction(action, YES)) return YES;
     if ([action hasPrefix:TGGetPrefix]) {
@@ -1544,7 +1552,8 @@ static void TGPerform(NSString *action) {
         if (block) {
             block(NO);
         } else if ([action isEqualToString:TGGestureRecordAction] || [action isEqualToString:TGGestureRecordCancelAction] ||
-                   [action isEqualToString:TGGestureStopAction] || [action hasPrefix:TGGesturePlayPrefix]) {
+                   [action isEqualToString:TGGestureStopAction] || [action hasPrefix:TGGesturePlayPrefix] ||
+                   [action hasPrefix:TGGestureLatestAction]) {
             NSString *cmd = TGGestureCommandForAction(action);
             if (cmd) TGGestureCommand(cmd);
         } else if ([action hasPrefix:TGShortcutPrefix]) {

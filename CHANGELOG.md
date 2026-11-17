@@ -3,6 +3,13 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.64
+
+- **恢复动作「播放最近录制的手势」**：`gesture.latest`（含 `@倍速`）。这一版起把执行链路补完整——动作表、显示标题、`TGGestureCommandForAction`、`TGGestureActionAvailable` 及 `TGCanPerform`/`TGPerform` 两个入口都接上，底层 `play-latest` 命令一直在。
+- **修复手势库页两处真机问题**：
+  - 点「录制标记大小」闪退：根因是这两处 action sheet 用了 `self.tableView` 作 popover source，在 TriggrApp 独立 App 里该私有属性不存在，触发 `doesNotRecognizeSelector`。改用 `self.view`，与其它页面一致。
+  - 「已保存的手势」行有点按无反应、行末却带箭头：cell 误用 `PSLinkListCell` + `detail:nil`，改回 `PSListItemCell`——不显示箭头、保留右侧摘要、点击能正常进 didSelect 弹操作面板。
+
 ## 1.5.0+cn4.63
 
 首版手势功能的真机反馈修复。

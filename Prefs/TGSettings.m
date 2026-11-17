@@ -3013,6 +3013,9 @@ static NSURL *tgGestureExportURL;
         [specs addObject:[self toggleSpec:@"停止于触摸" key:@"stopOnTouch"]];
         [specs addObject:[self toggleSpec:@"显示触点" key:@"showTouches"]];
 
+        // 一律用 PSListItemCell：它点击能正常进 didSelect、右侧能显示摘要、且不带箭头。
+        // 之前手势行误用 PSLinkListCell + detail:nil，既留下"下一页"箭头，点击又因为
+        // PreferenceLoader 尝试 push 一个 nil 的 detail 而没反应。
         PSSpecifier *tab = [PSSpecifier preferenceSpecifierNamed:@"录制标记大小" target:self set:nil get:@selector(readTabSize:) detail:nil cell:PSListItemCell edit:nil];
         [tab setProperty:@YES forKey:@"tgGestureTabSize"];
         [specs addObject:tab];
@@ -3024,7 +3027,7 @@ static NSURL *tgGestureExportURL;
             NSString *name = g[@"name"];
             if (![name isKindOfClass:NSString.class]) continue;
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name target:self set:nil get:@selector(gestureSummary:)
-                detail:nil cell:PSLinkListCell edit:nil];
+                detail:nil cell:PSListItemCell edit:nil];
             [row setProperty:name forKey:@"tgGestureName"];
             [specs addObject:row];
         }
@@ -3088,7 +3091,7 @@ static NSURL *tgGestureExportURL;
             }]];
         }
         [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        sheet.popoverPresentationController.sourceView = self.tableView;
+        sheet.popoverPresentationController.sourceView = self.view;
         [self presentViewController:sheet animated:YES completion:nil];
         return;
     }
@@ -3102,7 +3105,7 @@ static NSURL *tgGestureExportURL;
             [self runCommand:[NSString stringWithFormat:@"gesture delete \"%@\"", name]];
         }]];
         [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        sheet.popoverPresentationController.sourceView = self.tableView;
+        sheet.popoverPresentationController.sourceView = self.view;
         [self presentViewController:sheet animated:YES completion:nil];
     }
 }
