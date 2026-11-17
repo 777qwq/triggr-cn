@@ -3,6 +3,17 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.63
+
+首版手势功能的真机反馈修复。
+
+- **删两个无效动作**：移除「播放最近录制的手势」（`gesture.latest`，连同宏/display/命令映射一起删净）和动作选择器里的「管理手势库…」入口；手势库仍从主页「动作库」进入。
+- **录制标记回到 RC 原版**：贴屏幕左/右边缘、可沿边缘拖拽（撤销 cn4.62 误改的顶部居中），设置页文案同步改为「边缘」。
+- **录制标记大小可选**：修复设置页点击分发 bug——「录制标记大小」行原先被当作无动作行交给基类，点不出选择面板；现在用专用标记分流，小/中/大可选。
+- **全中文弹窗**：预设名 `Gesture N`→`手势 N`，保存弹窗 Save Gesture/Discard/Save→保存手势/放弃/保存，详情 `N touches`→`N 次触摸`，倒计时 Starting in N/Cancel→`N 秒后开始`/取消。
+- **手势行可点可滑**：修复已保存手势点按无反应（分发逻辑重写）；补上左滑删除（`swipeTitleForSpecifier:`/`swipedSpecifier:`）；点按仍可试播/重命名/删除。
+- **导出不再闪退**：弃用把裸 `NSData` 丢给 `UIActivityViewController` 的做法（缺 UTI/文件名会崩），改为写临时 JSON 文件后用 `UIDocumentPicker` 让用户选保存位置，回调里清理临时文件。
+
 ## 1.5.0+cn4.62
 
 移植 RemoteCompanion 4.4.0 的手势录制/回放，P1–P3 一次到位。

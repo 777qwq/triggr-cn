@@ -1267,10 +1267,6 @@ static NSString *TGGestureCommandForAction(NSString *action) {
     if ([action isEqualToString:TGGestureRecordAction]) return @"gesture record-toggle";
     if ([action isEqualToString:TGGestureRecordCancelAction]) return @"gesture record-cancel";
     if ([action isEqualToString:TGGestureStopAction]) return @"gesture stop";
-    if ([action hasPrefix:TGGestureLatestAction]) {
-        NSString *tail = [action substringFromIndex:TGGestureLatestAction.length];
-        return tail.length ? [@"gesture play-latest " stringByAppendingString:tail] : @"gesture play-latest";
-    }
     if ([action hasPrefix:TGGesturePlayPrefix]) {
         NSString *spec = [action substringFromIndex:TGGesturePlayPrefix.length];
         NSRange at = [spec rangeOfString:@"@" options:NSBackwardsSearch];
@@ -1290,9 +1286,6 @@ static BOOL TGGestureActionAvailable(NSString *action) {
     if ([action isEqualToString:TGGestureRecordAction] || [action isEqualToString:TGGestureRecordCancelAction] ||
         [action isEqualToString:TGGestureStopAction]) return YES;
     NSString *name = nil;
-    if ([action hasPrefix:TGGestureLatestAction]) {
-        return TGGestureList().count > 0;
-    }
     if ([action hasPrefix:TGGesturePlayPrefix]) {
         NSString *spec = [action substringFromIndex:TGGesturePlayPrefix.length];
         NSRange at = [spec rangeOfString:@"@" options:NSBackwardsSearch];

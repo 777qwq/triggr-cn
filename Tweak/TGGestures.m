@@ -448,7 +448,7 @@ static UIColor *tg_record_red(void) { return [UIColor colorWithRed:1.0 green:0.2
     self.view.backgroundColor = [UIColor clearColor];
     self.view.clipsToBounds = NO;
 
-    // Countdown pill: dark glass, the count, a white Cancel button. Sized when shown.
+    // Countdown pill: dark glass, the count, a white 取消 button. Sized when shown.
     UIView *countdown = [[UIView alloc] init];
     countdown.layer.cornerCurve = kCACornerCurveContinuous;
     countdown.layer.borderWidth = 1.2;
@@ -474,7 +474,7 @@ static UIColor *tg_record_red(void) { return [UIColor colorWithRed:1.0 green:0.2
     x.tag = 1;
     [cancel addSubview:x];
     UILabel *cancelLabel = [[UILabel alloc] init];
-    cancelLabel.text = @"Cancel";
+    cancelLabel.text = @"取消";
     cancelLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
     cancelLabel.textColor = [UIColor colorWithWhite:0.08 alpha:1];
     cancelLabel.tag = 2;
@@ -561,11 +561,11 @@ static UIColor *tg_record_red(void) { return [UIColor colorWithRed:1.0 green:0.2
 
 - (void)showCountdown:(int)secondsLeft {
     UIWindow *window = self.view.window;
-    self.countdownLabel.text = [NSString stringWithFormat:@"Starting in %d", secondsLeft];
+    self.countdownLabel.text = [NSString stringWithFormat:@"%d 秒后开始", secondsLeft];
     UILabel *cancelLabel = [self.cancelButton viewWithTag:2];
     UIView *x = [self.cancelButton viewWithTag:1];
     CGFloat height = 40, buttonHeight = 30;
-    CGFloat labelWidth = ceil([@"Starting in 0" sizeWithAttributes:@{ NSFontAttributeName: self.countdownLabel.font }].width);
+    CGFloat labelWidth = ceil([@"0 秒后开始" sizeWithAttributes:@{ NSFontAttributeName: self.countdownLabel.font }].width);
     CGFloat cancelWidth = ceil([cancelLabel.text sizeWithAttributes:@{ NSFontAttributeName: cancelLabel.font }].width);
     CGFloat buttonWidth = 12 + 11 + 6 + cancelWidth + 12;
     CGFloat width = 16 + labelWidth + 14 + buttonWidth + 5;
@@ -847,11 +847,11 @@ static BOOL tg_gesture_store(NSString *name, NSData *raw) {
     return ok;
 }
 
-// The next free "Gesture N"
+// 下一个空闲的「手势 N」
 static NSString *tg_gesture_suggested_name(void) {
     NSArray *list = tg_gestures_load();
     for (NSInteger n = 1; ; n++) {
-        NSString *name = [NSString stringWithFormat:@"Gesture %ld", (long)n];
+        NSString *name = [NSString stringWithFormat:@"手势 %ld", (long)n];
         if (!tg_gesture_named(list, name)) return name;
     }
 }
@@ -874,8 +874,8 @@ static void tg_gesture_ask_name(NSData *raw) {
     g_namePromptWindow = window;
 
     NSUInteger strokes = tg_gesture_stroke_count(frames, count);
-    NSString *detail = [NSString stringWithFormat:@"%lu %@, %.1f s", (unsigned long)strokes, strokes == 1 ? @"touch" : @"touches", frames[count - 1].t];
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"Save Gesture" message:detail preferredStyle:UIAlertControllerStyleAlert];
+    NSString *detail = [NSString stringWithFormat:@"%lu 次触摸 · %.1f 秒", (unsigned long)strokes, frames[count - 1].t];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"保存手势" message:detail preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.text = suggested;
         field.placeholder = suggested;
@@ -886,12 +886,12 @@ static void tg_gesture_ask_name(NSData *raw) {
         g_namePromptWindow.hidden = YES;
         g_namePromptWindow = nil;
     };
-    [alert addAction:[UIAlertAction actionWithTitle:@"Discard" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
+    [alert addAction:[UIAlertAction actionWithTitle:@"放弃" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) {
         g_recResult = @"cancelled";
         TGLog(@"[Gesture] recording discarded");
         close();
     }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"Save" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
         NSString *name = [[alert.textFields.firstObject.text stringByReplacingOccurrencesOfString:@"\"" withString:@""]
                           stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         tg_gesture_store(name.length ? name : suggested, raw);

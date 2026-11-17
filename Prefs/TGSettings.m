@@ -1351,9 +1351,6 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
     } else if ([category isEqualToString:@"gestures"]) {
         for (int i = 0; i < TG_COUNT(TGGestureActions); i++)
             [rows addObject:[self rowForAction:@(TGGestureActions[i].identifier) title:@(TGGestureActions[i].title)]];
-        PSSpecifier *library = [PSSpecifier preferenceSpecifierNamed:@"管理手势库…" target:self set:nil get:nil detail:NSClassFromString(@"TGGesturesController") cell:PSLinkCell edit:nil];
-        [library setProperty:@YES forKey:@"tgGestureLibrary"];
-        [rows addObject:library];
         for (NSDictionary *g in TGGestureLibrary()) {
             NSString *name = g[@"name"];
             if (![name isKindOfClass:NSString.class]) continue;
@@ -2954,15 +2951,18 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
 
 #pragma mark - Gesture library page
 
-@interface TGGesturesController : TGListController
+@interface TGGesturesController : TGListController <UIDocumentPickerDelegate>
 @end
 
 @implementation TGGesturesController
 
+// 导出用的临时文件，用户存好后在回调里删掉。
+static NSURL *tgGestureExportURL;
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.title = @"手势库";
-    // 从别的页面进来（管理手势库）时是 push；库有变动就重读。
+    // 库有变动就重读。
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadSpecifiers)
         name:UIApplicationDidBecomeActiveNotification object:nil];
 }
@@ -3001,7 +3001,7 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
         NSArray *library = TGGestureLibrary();
 
         PSSpecifier *top = [PSSpecifier groupSpecifierWithName:nil];
-        [top setProperty:@"录制时屏幕顶部出现红色标记，点它展开「停止」。录完后按手势名保存，再从动作选择器「手势」分类指派给触发器。" forKey:@"footerText"];
+        [top setProperty:@"录制时屏幕左/右边缘出现红色标记，点它展开「停止」，可沿边缘上下拖动。录完后按手势名保存，再从动作选择器「手势」分类指派给触发器。" forKey:@"footerText"];
         [specs addObject:top];
         PSSpecifier *record = [PSSpecifier preferenceSpecifierNamed:@"录制新手势…" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
         [record setProperty:@"record" forKey:@"tgGestureCommand"];
@@ -3014,10 +3014,11 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
         [specs addObject:[self toggleSpec:@"显示触点" key:@"showTouches"]];
 
         PSSpecifier *tab = [PSSpecifier preferenceSpecifierNamed:@"录制标记大小" target:self set:nil get:@selector(readTabSize:) detail:nil cell:PSListItemCell edit:nil];
+        [tab setProperty:@YES forKey:@"tgGestureTabSize"];
         [specs addObject:tab];
 
         PSSpecifier *list = [PSSpecifier groupSpecifierWithName:@"已保存的手势"];
-        [list setProperty:library.count ? @"点「试播」在 1 秒后回放；左滑可重命名或删除。" : @"还没有手势。先点上方「录制新手势」。" forKey:@"footerText"];
+        [list setProperty:library.count ? @"点按可试播、重命名或删除；从右往左滑可删除。" : @"还没有手势。先点上方「录制新手势」。" forKey:@"footerText"];
         [specs addObject:list];
         for (NSDictionary *g in library) {
             NSString *name = g[@"name"];
@@ -3058,14 +3059,17 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
     PSSpecifier *spec = [self specifierAtIndex:[self indexForIndexPath:indexPath]];
     NSString *command = [spec propertyForKey:@"tgGestureCommand"];
     NSString *name = [spec propertyForKey:@"tgGestureName"];
-    if ([spec propertyForKey:@"tgGestureKey"] || (!command && !name)) {
+    BOOL tabSize = [[spec propertyForKey:@"tgGestureTabSize"] boolValue];
+    // 开关行、分组头等交给基类。
+    if (!command && !name && !tabSize) {
         [super tableView:tableView didSelectRowAtIndexPath:indexPath];
         return;
     }
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
+
     if ([command isEqualToString:@"record"]) {
         UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"录制手势"
-            message:@"3 秒后开始录制。做一遍手势，再点屏幕顶部的红色标记停止并保存。" preferredStyle:UIAlertControllerStyleAlert];
+            message:@"3 秒后开始录制。做一遍手势，再点屏幕边缘的红色标记停止并保存。" preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
         [alert addAction:[UIAlertAction actionWithTitle:@"开始" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             [self runCommand:@"gesture record-toggle"];
@@ -3075,7 +3079,7 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
     }
     if ([command isEqualToString:@"import"]) { [self importGestures]; return; }
     if ([command isEqualToString:@"export"]) { [self exportGestures]; return; }
-    if ([[spec propertyForKey:@"tgGestureKey"] isEqualToString:@"tabSize"] || [spec.name isEqualToString:@"录制标记大小"]) {
+    if (tabSize) {
         UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"录制标记大小" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
         for (NSArray *pair in @[@[@"small", @"小"], @[@"medium", @"中"], @[@"large", @"大"]]) {
             [sheet addAction:[UIAlertAction actionWithTitle:pair[1] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
@@ -3125,11 +3129,42 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
         [out addObject:@{ @"name": g[@"name"] ?: @"", @"duration": g[@"duration"] ?: @0,
                           @"strokes": g[@"strokes"] ?: @0, @"frames": frames, @"screen": g[@"screen"] ?: @[] }];
     }
-    NSData *json = [NSJSONSerialization dataWithJSONObject:out options:0 error:nil];
+    NSData *json = [NSJSONSerialization dataWithJSONObject:out options:NSJSONWritingPrettyPrinted error:nil];
     if (!json) return;
-    UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[json] applicationActivities:nil];
-    share.popoverPresentationController.sourceView = self.tableView;
-    [self presentViewController:share animated:YES completion:nil];
+    // 之前这里把裸 NSData 丢给 UIActivityViewController，系统 activity 没有 UTI/文件名会直接崩。
+    // 改成写临时文件交给 UIDocumentPicker，让用户自己选保存位置。
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:@"triggr-gestures.json"];
+    if (![json writeToFile:path atomically:YES]) return;
+    tgGestureExportURL = [NSURL fileURLWithPath:path];
+    UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForExportingURLs:@[tgGestureExportURL] asCopy:YES];
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    if (tgGestureExportURL) {
+        [[NSFileManager defaultManager] removeItemAtURL:tgGestureExportURL error:nil];
+        tgGestureExportURL = nil;
+    }
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+    if (tgGestureExportURL) {
+        [[NSFileManager defaultManager] removeItemAtURL:tgGestureExportURL error:nil];
+        tgGestureExportURL = nil;
+    }
+}
+
+// 左滑删除已保存的手势；点按仍可试播/重命名/删除。
+- (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
+    return [spec propertyForKey:@"tgGestureName"] ? @"删除" : nil;
+}
+
+- (BOOL)swipedSpecifier:(PSSpecifier *)spec {
+    NSString *name = [spec propertyForKey:@"tgGestureName"];
+    if (!name) return NO;
+    TGSendGestureCommand([NSString stringWithFormat:@"gesture delete \"%@\"", name]);
+    return YES;
 }
 
 - (void)importGestures {

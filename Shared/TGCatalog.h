@@ -225,7 +225,6 @@ static const TGItem TGPluginCopyLog[] = {
 // 手势：控制项是固定的，播放项在设置页按当前手势库动态列出（gesture:<name>）。
 static const TGItem TGGestureActions[] = {
     {"gesture.record", "录制／停止录制手势"}, {"gesture.stop", "停止播放手势"},
-    {"gesture.latest", "播放最近录制的手势"},
 };
 
 static const TGGroup TGActionGroups[] = {
@@ -272,14 +271,12 @@ static const TGGroup TGActionGroups[] = {
 // 手势（RemoteCompanion 移植）：动作 id 用点号表示控制项、冒号表示手势名，
 // 两者永不冲突。播放手势把 <name> 放在冒号后，倍速写成 name@2x。
 //   gesture.record / gesture.recordcancel / gesture.stop —— 录制开关、取消、停止播放
-//   gesture.latest / gesture.latest@2x —— 播放最新录制
 //   gesture:<name>[@SPEED] —— 播放指定手势
 #define TGGestureControlPrefix @"gesture."
 #define TGGesturePlayPrefix @"gesture:"
 #define TGGestureRecordAction @"gesture.record"
 #define TGGestureRecordCancelAction @"gesture.recordcancel"
 #define TGGestureStopAction @"gesture.stop"
-#define TGGestureLatestAction @"gesture.latest"
 
 // 第三方动作扩展：别的包往 Library/Triggr/Extensions 放一个 plist，动作选择器里就多出
 // 一个分类，条目是某个目录下的文件。执行 <Program> <文件名>，文件名只作参数、永不进 shell。
@@ -831,7 +828,6 @@ static inline NSString *TGActionTitle(NSString *action) {
     if ([action isEqualToString:TGGestureRecordAction]) return @"录制／停止录制手势";
     if ([action isEqualToString:TGGestureRecordCancelAction]) return @"取消录制手势";
     if ([action isEqualToString:TGGestureStopAction]) return @"停止播放手势";
-    if ([action isEqualToString:TGGestureLatestAction]) return @"播放最近录制的手势";
     if ([action hasPrefix:TGURLPrefix]) return [@"URL: " stringByAppendingString:[action substringFromIndex:TGURLPrefix.length]];
     if ([action hasPrefix:TGGetPrefix]) return [@"请求 URL: " stringByAppendingString:[action substringFromIndex:TGGetPrefix.length]];
     if ([action hasPrefix:TGShellPrefix]) return [@"命令：" stringByAppendingString:[action substringFromIndex:TGShellPrefix.length]];
