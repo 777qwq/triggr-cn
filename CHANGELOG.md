@@ -3,6 +3,42 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.59
+
+接上 2.1 的 Tweak Actions：不再自己实现功能，而是喊一声，让装着的插件去做。
+
+### 机制
+
+都是发**分布式通知**（`CFNotificationCenterGetDistributedCenter`），不是 Darwin 通知中心——
+2.1 反汇编里 `dlsym` 的正是前者，发错中心插件收不到。Triggr 只负责把名字喊出去：
+
+| 分组 | 键 | 通知名 |
+|---|---|---|
+| Snapper 3 | `snapper3.force.open` | `com.jontelang.snapper3.force.open` |
+| | `snapper3.forceinstant.open` | `com.jontelang.snapper3.forceinstant.open` |
+| | `snapper3.forcefreeze.open` | `com.jontelang.snapper3.forcefreeze.open` |
+| | `snapper3.openlast` | `com.jontelang.snapper3.openlast` |
+| | `snapper3.history` | `com.jontelang.snapper3.history` |
+| | `snapper3.closecrop` | `com.jontelang.snapper3.closecrop` |
+| | `snapper3.close.all` | `com.jontelang.snapper3.close.all` |
+| CopyLog | `copylog.showView` | `me.tomt000.copylog.showView` |
+| | `copylog.showFavoritesView` | `me.tomt000.copylog.showFavoritesView` |
+
+名字照 2.1 的字符串表：New Snap / Instant Snap / Freeze Screen & Snap / Reopen Last Snap /
+Snap History / Cancel Cropping / Close All Snaps、Show CopyLog / Show CopyLog Favorites。
+
+### 没装插件时
+
+按 2.1 的做法在 dylib 目录里按文件名找（rootless 的 `/var/jb`、rootful 的老路径、TweakInject
+都查）。找不到就**不显示这个分类**，而不是显示了点下去没反应。执行时也会再判一次，
+返回 NO 让动作选择器标成不可用。
+
+### 备注
+
+这两组是「动作」，不是触发器：出现在动作选择器的分类里，可以单独用，也能放进序列。
+
+---
+
 ## 1.5.0+cn4.58
 
 只做两件事：把单击的等待砍掉一半，把底边这一组的名义理顺。
