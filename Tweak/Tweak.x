@@ -3139,125 +3139,205 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 }
 @end
 
-// 底部横条（Triggr 2.1 的手势集，但不进系统手势表）。
+// 底部横条。按 2.1 的做法：真的是 screen-edge 识别器，注册进 SpringBoard 的系统手势表。
 //
-// 为什么不用 addGestureRecognizer:withType:：UIKit 把 UIScreenEdgePanGestureRecognizer 按族互斥，
-// 同一个 window 上只要有一条，别的 screen-edge 识别器（含 SpringBoard 切应用那条
-// SBFluidSwitcherScreenEdgePanGestureRecognizer）就要等它先失败。我们注册的三条 edges=Bottom
-// 覆盖整条底边，从屏幕左右两侧起手时它们不会立刻失败，切应用就被无限期推迟——实测「配了底边动作，
-// 两侧就切不了应用」就是这么来的。2.1 与 RemoteCompanion 用的都是注册式，同样有这个代价。
+// 两条 edges=Bottom、edgeRegionSize=24 的识别器管左下 / 右下两个角的上滑；小白条的三下
+// （单击 / 双击 / 长按）不在这里——它们是点击与长按识别器，只认底边中间那一段。
+// 中间 1/3 之所以不挂 pan，是因为那块地方的上滑要完整留给系统回主屏幕。
 //
-// 所以这里回到最朴素的做法：一条 UIPanGestureRecognizer，直接挂到 SpringBoard 的窗口上，
-// 完全不进系统手势管理器。系统那边只留一处介入——SBHomeGesturePanGestureRecognizer 的
-// touchesBegan，在底角 24pt 的小方块里把它按掉（见下）。
-static const CGFloat TGBottomRegion = 24;   // 与 2.1 的 setEdgeRegionSize 一致
-
-@interface TGBottomPanRecognizer : UIPanGestureRecognizer
-@property (nonatomic) NSInteger third;   // 0 左，1 右，-1 全区（双指）
-@property (nonatomic) BOOL fired;
-@property (nonatomic, copy) NSString *trigger;
-@end
+// 代价是已知且用户接受的：UIKit 把 screen-edge 识别器按族互斥，底边上只要有一条在，
+// 系统那三条 SBFluidSwitcherScreenEdgePanGestureRecognizer（左右两侧切应用）就要等它先失败，
+// 于是「配了底部上滑动作，两侧就切不了应用」。2.1 和 RemoteCompanion 用的是同一种注册式，
+// 有完全相同的代价；小白条的三下不走这条路，配了不影响任何系统手势。
+static const CGFloat TGBottomRegion = 24;   // 与 2.1 的 edgeRegionSize 一致
 
 static void TGBottomLog(NSString *format, ...);
+static BOOL TGBottomPortrait(void);
+static BOOL TGBottomPointInBar(CGPoint p, BOOL *left, BOOL *right);
 
-@implementation TGBottomPanRecognizer
+// 2.1 就是这么建识别器的（-initWithTarget:action:type:options:，type 2 = SpringBoard 自己那类），
+// 再用 _setEdgeRegionSize: 把热区收到 24pt。真手指能收到触摸，合成触摸收不到（要 digitizer 的贴边标志）。
+@interface UIScreenEdgePanGestureRecognizer (TGPrivate)
+- (instancetype)initWithTarget:(id)target action:(SEL)action type:(long long)type options:(unsigned long long)options;
+- (void)_setEdgeRegionSize:(double)size;
+@end
+
+@interface TGBottomEdgeRecognizer : UIScreenEdgePanGestureRecognizer
+@property (nonatomic, copy) NSString *trigger;
+@property (nonatomic) BOOL left;    // 起手必须在左 1/3，否则就在右 1/3
+@property (nonatomic) BOOL fired;
+@end
+
+@implementation TGBottomEdgeRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesBegan:touches withEvent:event];
     CGPoint p = [[touches anyObject] locationInView:nil];
-    CGSize size = [UIScreen mainScreen].bounds.size;
-    if (p.y >= size.height - 60)
-        TGBottomLog(@"pan began (%@) at (%.0f, %.0f) locked=%d action=%d",
-                    self.trigger, p.x, p.y, TGConditionLocked(), TGActionFor(self.trigger) != nil);
-    // 锁屏上从底边往上滑是解锁，不是我们的动作区。
-    if (TGConditionLocked()) {
-        self.state = UIGestureRecognizerStateFailed;
-        return;
-    }
-    // 注册看的是「任何模式里配过」，这里再看「当前模式有没有事可做」：
-    // 只在某个 App 里配了动作时，主屏上的底边上滑必须还给系统。
-    if (!TGActionFor(self.trigger)) {
-        self.state = UIGestureRecognizerStateFailed;
-        return;
-    }
-    // 起手点不在底边 24pt 带里，或不在自己那 1/3，就不认这一下。
-    // 这条判据是整套实现里唯一的几何约束，也是「不误伤两侧切应用」的全部依据。
-    BOOL inBottom = p.y >= size.height - TGBottomRegion;
-    BOOL inThird = self.third < 0 ? YES
-                 : (self.third == 0 ? p.x < size.width / 3.0 : p.x > size.width * 2.0 / 3.0);
-    if (!inBottom || !inThird) {
+    BOOL left = NO, right = NO;
+    BOOL ok = TGBottomPointInBar(p, &left, &right) && (self.left ? left : right);
+    // 锁屏上从底边往上滑是解锁；当前模式里没动作时，这一下也得还给系统。
+    if (!ok || TGConditionLocked() || !TGActionFor(self.trigger)) {
         self.state = UIGestureRecognizerStateFailed;
         return;
     }
     self.fired = NO;
-    [super touchesBegan:touches withEvent:event];
 }
 @end
 
 @interface TGBottomTarget : NSObject
 @end
 @implementation TGBottomTarget
-- (void)slid:(TGBottomPanRecognizer *)recognizer {
+- (void)slid:(TGBottomEdgeRecognizer *)recognizer {
     if (recognizer.fired) return;
-    if (recognizer.state != UIGestureRecognizerStateBegan && recognizer.state != UIGestureRecognizerStateChanged) return;
-    // 只认竖直向上。横滑留给系统，这一条是「底边上沿横滑仍能切应用」的保证。
+    if (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded) return;
+    // 只认「往上、且以竖直为主」。60pt 是 2.1 的 TGEdgeDistance。
     CGPoint t = [recognizer translationInView:nil];
-    if (t.y > -8 || fabs(t.y) < fabs(t.x) * 1.2) return;
+    if (-t.y < TGEdgeDistance || fabs(t.x) > -t.y) return;
     recognizer.fired = YES;
     TGFire(recognizer.trigger);
 }
 @end
 
-static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
-static NSMutableArray<TGBottomPanRecognizer *> *tgBottomRecognizers;
-static BOOL tgGestureManagerReady;
+#pragma mark - Bottom edge
 
-// SpringBoard 自己那个接收 App 区域触摸的窗口。App 的 window 在别的进程里，拿不到，
-// 也不需要——SpringBoard 是事件源，挂在自己窗口上的识别器照样能看到每一次触摸。
-static UIWindow *TGBottomHostWindow(void) {
+static BOOL TGBottomPortrait(void) {
+    UIApplication *app = UIApplication.sharedApplication;
+    if ([app respondsToSelector:@selector(activeInterfaceOrientation)]) {
+        NSInteger o = ((NSInteger (*)(id, SEL))objc_msgSend)(app, @selector(activeInterfaceOrientation));
+        return o == UIInterfaceOrientationPortrait || o == UIInterfaceOrientationPortraitUpsideDown;
+    }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    CGSize screen = [UIScreen mainScreen].bounds.size;
-    Class homeClass = NSClassFromString(@"SBHomeGesturePanGestureRecognizer");
-    UIWindow *best = nil;
-    for (UIWindow *w in UIApplication.sharedApplication.windows) {
-        if (w.hidden || !w.isUserInteractionEnabled) continue;
-        CGSize size = w.bounds.size;
-        if (size.width < screen.width - 1 || size.height < screen.height - 1) continue;
-        // 系统自己的 home 手势挂在哪，底边的触摸就一定能到哪。优先用那个窗口，
-        // 省得猜 SpringBoard 这一堆 window 里哪个真的收得到 App 区域的触摸。
-        if (homeClass) {
-            for (UIGestureRecognizer *g in w.gestureRecognizers)
-                if ([g isKindOfClass:homeClass]) return w;
-        }
-        if (!best || w.windowLevel > best.windowLevel) best = w;
-    }
-    return best ?: UIApplication.sharedApplication.keyWindow;
+    UIInterfaceOrientation o = app.statusBarOrientation;
 #pragma clang diagnostic pop
+    return o == UIInterfaceOrientationPortrait || o == UIInterfaceOrientationPortraitUpsideDown;
 }
 
-// 窗口会在 App 切换、锁屏这些时候重建，识别器跟着被摘掉，所以每次检查一遍再挂回去。
-static void TGBottomReattach(void) {
-    if (!tgBottomRecognizers.count) return;
-    UIWindow *host = TGBottomHostWindow();
-    if (!host) return;
-    for (TGBottomPanRecognizer *r in tgBottomRecognizers) {
-        if (r.view == host) continue;
-        [r.view removeGestureRecognizer:r];
-        [host addGestureRecognizer:r];
-    }
+// 底边 24pt 的带子里才成立；left/right 只对左右 1/3 有意义，中间段两个都是 NO。
+// 2.1 的底角判据就是这三条：竖屏、y 落在底边 24pt 内、x 落在左右各 1/3。
+static BOOL TGBottomPointInBar(CGPoint p, BOOL *left, BOOL *right) {
+    if (!TGBottomPortrait()) return NO;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    CGSize size = [UIScreen mainScreen].bounds.size;
+#pragma clang diagnostic pop
+    if (p.y < size.height - TGBottomRegion) return NO;
+    CGFloat w = size.width;
+    if (left) *left = p.x < w / 3.0;
+    if (right) *right = p.x > w * 2.0 / 3.0;
+    return YES;
 }
+
+// 小白条的三下。两条来源（我们注册的点击识别器、SpringBoard 自己的横条回调）可能都看到同一下，
+// 所以同一条键 250ms 内只算一次——这比判断「哪条路径更权威」可靠。
+static void TGFireHomeBar(NSString *key) {
+    if (TGConditionLocked()) return;
+    if (!TGActionFor(key)) return;
+    static NSMutableDictionary<NSString *, NSNumber *> *last;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ last = [NSMutableDictionary dictionary]; });
+    CFTimeInterval now = CACurrentMediaTime();
+    if (now - last[key].doubleValue < 0.25) return;
+    last[key] = @(now);
+    TGBottomLog(@"fire %@", key);
+    TGFire(key);
+}
+
+// 单击要等双击失败才成立；双击没配就立刻走。
+static NSInteger tgHomeBarSingleSerial;
+static CFTimeInterval tgHomeBarLongAt;
+static void TGHomeBarSingle(void) {
+    if ([tgAssignedTriggers containsObject:@"homebar.single"] == NO) return;
+    // 刚认过一下长按：手指抬起时点击识别器还会再认一次，这一下不是单击。
+    if (CACurrentMediaTime() - tgHomeBarLongAt < 1.0) return;
+    if (![tgAssignedTriggers containsObject:@"homebar.doubletap"]) {
+        TGFireHomeBar(@"homebar.single");
+        return;
+    }
+    NSInteger serial = ++tgHomeBarSingleSerial;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (serial != tgHomeBarSingleSerial) return;   // 中间来了第二下，改成双击了
+        TGFireHomeBar(@"homebar.single");
+    });
+}
+
+static void TGHomeBarDouble(void) {
+    tgHomeBarSingleSerial++;   // 撤掉还没落地的单击
+    TGFireHomeBar(@"homebar.doubletap");
+}
+
+// 点击与长按都只在中间 1/3 认：小白条就在那儿，左右 1/3 归上滑。
+@interface TGBottomTapRecognizer : UITapGestureRecognizer
+@end
+@implementation TGBottomTapRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesBegan:touches withEvent:event];
+    BOOL left = NO, right = NO;
+    if (!TGBottomPointInBar([[touches anyObject] locationInView:nil], &left, &right) || left || right)
+        self.state = UIGestureRecognizerStateFailed;
+}
+@end
+
+@interface TGBottomPressRecognizer : UILongPressGestureRecognizer
+@end
+@implementation TGBottomPressRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesBegan:touches withEvent:event];
+    BOOL left = NO, right = NO;
+    if (!TGBottomPointInBar([[touches anyObject] locationInView:nil], &left, &right) || left || right)
+        self.state = UIGestureRecognizerStateFailed;
+}
+@end
+
+@interface TGBottomHomeBarTarget : NSObject
+@end
+@implementation TGBottomHomeBarTarget
+- (void)tapped:(TGBottomTapRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateEnded) return;
+    if (recognizer.numberOfTapsRequired >= 2) TGHomeBarDouble();
+    else TGHomeBarSingle();
+}
+- (void)pressed:(TGBottomPressRecognizer *)recognizer {
+    if (recognizer.state != UIGestureRecognizerStateBegan) return;
+    tgHomeBarLongAt = CACurrentMediaTime();
+    TGFireHomeBar(@"homebar.longpress");
+}
+@end
+
+// 只在有动作时才写一行，用来核实识别器到底有没有建起来、有没有收到触摸。
+static void TGBottomLog(NSString *format, ...) {
+    va_list args;
+    va_start(args, format);
+    NSString *line = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+    static NSString *path;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        path = @"/var/mobile/Library/Preferences/com.johndie.triggr/bottom.log";
+    });
+    NSData *data = [[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding];
+    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
+    if (!handle) {
+        [data writeToFile:path atomically:YES];
+        return;
+    }
+    @try {
+        [handle seekToEndOfFile];
+        [handle writeData:data];
+    } @catch (__unused NSException *e) {
+    }
+    [handle closeFile];
+}
+
+// 第二条来源：2.1 走的就是这两条回调（横条被点一下 / 两下）。我们主要靠注册的识别器，
+// 这里只是备一条——系统手势表若不把点击喂给 UITapGestureRecognizer，这一条还能接住。
+// 判据同样要求位置在横条上，避免把任何地方的点击都当成横条。
+static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
+static NSMutableArray<TGBottomEdgeRecognizer *> *tgBottomEdgeRecognizers;
+static NSMutableArray<UIGestureRecognizer *> *tgHomeBarRecognizers;
+static BOOL tgGestureManagerReady;
 
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
 // init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
-
-// 窗口重建不会通知我们，所以每 2 秒摸一次：六次指针比较，没有别的开销。
-static void TGBottomWatchWindows(void) {
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:YES block:^(__unused NSTimer *timer) {
-            TGBottomReattach();
-        }];
-    });
-}
 
 static void TGUpdateEdgeGestures(void) {
     if (!tgGestureManagerReady) return; // -[SBMainDisplaySystemGestureManager _init] calls this again
@@ -3299,34 +3379,82 @@ static void TGUpdateEdgeGestures(void) {
 
     static TGBottomTarget *bottomTarget;
     if (!bottomTarget) bottomTarget = [TGBottomTarget new];
-    if (!tgBottomRecognizers) tgBottomRecognizers = [NSMutableArray array];
-    struct { const char *trigger; NSInteger third; NSUInteger fingers; } bottoms[] = {
-        {"edge.bottomleft", 0, 1},
-        {"edge.bottomright", 1, 1},
-        {"edge.bottom2", -1, 2},
+    if (!tgBottomEdgeRecognizers) tgBottomEdgeRecognizers = [NSMutableArray array];
+    struct { const char *trigger; BOOL left; } corners[] = {
+        {"edge.bottomleft", YES}, {"edge.bottomright", NO},
     };
-    for (int i = 0; i < 3; i++) {
-        TGBottomPanRecognizer *existing = nil;
-        for (TGBottomPanRecognizer *r in tgBottomRecognizers)
-            if ([r.trigger isEqualToString:@(bottoms[i].trigger)]) existing = r;
-        BOOL want = [tgAssignedTriggers containsObject:@(bottoms[i].trigger)];
+    for (int i = 0; i < 2; i++) {
+        NSString *trigger = @(corners[i].trigger);
+        TGBottomEdgeRecognizer *existing = nil;
+        for (TGBottomEdgeRecognizer *r in tgBottomEdgeRecognizers)
+            if ([r.trigger isEqualToString:trigger]) existing = r;
+        BOOL want = [tgAssignedTriggers containsObject:trigger];
         if (want && !existing) {
-            TGBottomPanRecognizer *r = [[TGBottomPanRecognizer alloc] initWithTarget:bottomTarget action:@selector(slid:)];
-            r.third = bottoms[i].third;
-            r.trigger = @(bottoms[i].trigger);
-            r.minimumNumberOfTouches = bottoms[i].fingers;
-            r.maximumNumberOfTouches = bottoms[i].fingers;
+            TGBottomEdgeRecognizer *r = [[TGBottomEdgeRecognizer alloc] initWithTarget:bottomTarget action:@selector(slid:) type:2 options:0];
+            r.edges = UIRectEdgeBottom;
+            r.left = corners[i].left;
+            r.trigger = trigger;
+            r.minimumNumberOfTouches = 1;
+            r.maximumNumberOfTouches = 1;
+            if ([r respondsToSelector:@selector(_setEdgeRegionSize:)]) [r _setEdgeRegionSize:TGBottomRegion];
             r.cancelsTouchesInView = NO;
             r.delaysTouchesBegan = NO;
             r.delaysTouchesEnded = NO;
-            [tgBottomRecognizers addObject:r];
+            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + 4 + i];
+            [tgBottomEdgeRecognizers addObject:r];
+            TGBottomLog(@"registered %@", trigger);
         } else if (!want && existing) {
-            [existing.view removeGestureRecognizer:existing];
-            [tgBottomRecognizers removeObject:existing];
+            [manager removeGestureRecognizer:existing];
+            [tgBottomEdgeRecognizers removeObject:existing];
+            TGBottomLog(@"removed %@", trigger);
         }
     }
-    TGBottomReattach();
-    TGBottomWatchWindows();
+
+    // 小白条的三下：全都注册成系统手势，这样 App 之上也收得到。
+    static TGBottomHomeBarTarget *homeBarTarget;
+    if (!homeBarTarget) homeBarTarget = [TGBottomHomeBarTarget new];
+    if (!tgHomeBarRecognizers) tgHomeBarRecognizers = [NSMutableArray array];
+    BOOL wantSingle = [tgAssignedTriggers containsObject:@"homebar.single"];
+    BOOL wantDouble = [tgAssignedTriggers containsObject:@"homebar.doubletap"];
+    BOOL wantLong = [tgAssignedTriggers containsObject:@"homebar.longpress"];
+    NSUInteger mask = (wantSingle ? 1u : 0u) | (wantDouble ? 2u : 0u) | (wantLong ? 4u : 0u);
+    static NSUInteger built;
+    if (mask != built) {
+        for (UIGestureRecognizer *r in tgHomeBarRecognizers) [manager removeGestureRecognizer:r];
+        [tgHomeBarRecognizers removeAllObjects];
+        built = mask;
+        TGBottomTapRecognizer *single = nil;
+        TGBottomTapRecognizer *doubleTap = nil;
+        if (mask & 1) {
+            single = [[TGBottomTapRecognizer alloc] initWithTarget:homeBarTarget action:@selector(tapped:)];
+            single.numberOfTapsRequired = 1;
+            single.cancelsTouchesInView = NO;
+            single.delaysTouchesBegan = NO;
+            single.delaysTouchesEnded = NO;
+            [manager addGestureRecognizer:single withType:TGEdgeGestureTypeBase + 6];
+            [tgHomeBarRecognizers addObject:single];
+        }
+        if (mask & 2) {
+            doubleTap = [[TGBottomTapRecognizer alloc] initWithTarget:homeBarTarget action:@selector(tapped:)];
+            doubleTap.numberOfTapsRequired = 2;
+            doubleTap.cancelsTouchesInView = NO;
+            doubleTap.delaysTouchesBegan = NO;
+            doubleTap.delaysTouchesEnded = NO;
+            [manager addGestureRecognizer:doubleTap withType:TGEdgeGestureTypeBase + 7];
+            [tgHomeBarRecognizers addObject:doubleTap];
+        }
+        if (single && doubleTap) [single requireGestureRecognizerToFail:doubleTap];
+        if (mask & 4) {
+            TGBottomPressRecognizer *press = [[TGBottomPressRecognizer alloc] initWithTarget:homeBarTarget action:@selector(pressed:)];
+            press.minimumPressDuration = 0.5;
+            press.allowableMovement = 12;
+            press.cancelsTouchesInView = NO;
+            press.delaysTouchesBegan = NO;
+            [manager addGestureRecognizer:press withType:TGEdgeGestureTypeBase + 8];
+            [tgHomeBarRecognizers addObject:press];
+        }
+        TGBottomLog(@"home bar mask=%lu", (unsigned long)mask);
+    }
 }
 
 %hook SBMainDisplaySystemGestureManager
@@ -3342,117 +3470,29 @@ static void TGUpdateEdgeGestures(void) {
 
 %hook SBSystemGestureManager
 - (BOOL)_isGestureWithTypeAllowed:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 9) return YES;
     return %orig;
 }
 - (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 9) return YES;
     return %orig;
 }
 %end
 
-#pragma mark - Bottom edge
-
-// 双击底部横条。挂的是 iOS 自己那套回调，不注册识别器、不碰任何系统手势：
-// 单击（滚动到顶部）、上滑回主屏幕、左右滑动切换应用都走原来的路径，Triggr 只在双击这一下插队。
-// 类在 iOS 12 之后都有；老系统没有就自然不生效。
 %hook SBHomeAffordanceInteractionManager
+- (void)_bounceTapRecognized:(UIGestureRecognizer *)recognizer {
+    BOOL left = NO, right = NO;
+    if (TGBottomPointInBar([recognizer locationInView:nil], &left, &right) && !left && !right)
+        TGHomeBarSingle();
+    %orig;
+}
 - (void)_bounceDoubleTapRecognized:(UIGestureRecognizer *)recognizer {
-    if (![tgAssignedTriggers containsObject:@"homebar.doubletap"] || TGConditionLocked()) {
-        %orig;
-        return;
-    }
-    // 只在应用内：主屏幕上的双击是「下拉半屏」，锁屏同理，都留给 iOS。
-    NSString *front = TGFrontAppIdentifier();
-    if (!front.length || [front isEqualToString:@"com.apple.springboard"]) {
-        %orig;
-        return;
-    }
-    TGFire(@"homebar.doubletap");
-    // 不调 %orig：这一下不再触发 Reachability。
-}
-%end
-
-// 自注册识别器只解决「动作能收到」，管不住「系统也在同一块起手」。系统的底部上滑优先级更高，
-// 在那 24pt 高的两个角上仍然会起来，于是动作执行、屏幕同时回主屏——就是你最早说的「画面跟着动」。
-// 2.1 还有另一半（0xa928 → 0x167dc）：在这些系统 screen-edge 识别器上，对这些矩形里的触摸返回 NO。
-// 判据只有三条：竖屏、y 落在底边 24pt 内、x 落在左右各 1/3。中间 1/3 与屏幕左右两侧一个字节都不碰，
-// 所以不会再把左右切应用连带按死——那是前十几版翻车的地方。
-static BOOL TGBottomPortrait(void) {
-    UIApplication *app = UIApplication.sharedApplication;
-    if ([app respondsToSelector:@selector(activeInterfaceOrientation)]) {
-        NSInteger o = ((NSInteger (*)(id, SEL))objc_msgSend)(app, @selector(activeInterfaceOrientation));
-        return o == UIInterfaceOrientationPortrait || o == UIInterfaceOrientationPortraitUpsideDown;
-    }
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    UIInterfaceOrientation o = app.statusBarOrientation;
-#pragma clang diagnostic pop
-    return o == UIInterfaceOrientationPortrait || o == UIInterfaceOrientationPortraitUpsideDown;
-}
-
-// 这一下要不要从系统手里接过来；返回 nil 表示放行。2.1 文案里的 "portrait only" 就是从这来的。
-static NSString *TGBottomCornerKey(UITouch *touch) {
-    if (!touch || !tgAssignedTriggers.count || TGConditionLocked() || !TGBottomPortrait()) return nil;
-    CGPoint p = [touch locationInView:nil];
-    CGSize size = [UIScreen mainScreen].bounds.size;
-    if (p.y < size.height - TGBottomRegion) return nil;
-    NSString *key = p.x < size.width / 3.0 ? @"edge.bottomleft"
-                  : p.x > size.width * 2.0 / 3.0 ? @"edge.bottomright" : nil;
-    if (!key || ![tgAssignedTriggers containsObject:key]) return nil;
-    // 当前模式里这个 key 没动作时，我们自己的识别器会当场 Failed；此时再拒系统手势就是两头空
-    //（既不回主屏也没动作）。所以这一条必须和 TGBottomPanRecognizer 的判据保持一致。
-    if (!TGActionFor(key)) return nil;
-    return key;
-}
-
-// 只在底角有动作、且判据命中时才写一行，用来核实到底是哪条识别器在跑。
-// 平时一个字节都不会写。用 Filza 直接看这个文件。
-static void TGBottomLog(NSString *format, ...) {
-    va_list args;
-    va_start(args, format);
-    NSString *line = [[NSString alloc] initWithFormat:format arguments:args];
-    va_end(args);
-    static NSString *path;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        path = @"/var/mobile/Library/Preferences/com.johndie.triggr/bottom.log";
-    });
-    NSData *data = [[line stringByAppendingString:@"\n"] dataUsingEncoding:NSUTF8StringEncoding];
-    NSFileHandle *handle = [NSFileHandle fileHandleForWritingAtPath:path];
-    if (!handle) {
-        [data writeToFile:path atomically:YES];
-        return;
-    }
-    @try {
-        [handle seekToEndOfFile];
-        [handle writeData:data];
-    } @catch (__unused NSException *e) {
-    }
-    [handle closeFile];
-}
-
-// 早先这里还有一条 UIScreenEdgePanGestureRecognizer 的 _shouldReceiveTouch: 拒绝层（照 2.1 抄的）。
-// 实测它对「底边上滑回主屏」完全无用——那一下根本不由 screen-edge 识别器驱动——却覆盖了
-// SpringBoard 切应用那条（SBFluidSwitcher… 是它的子类），是个纯粹的干扰项，所以删掉了。
-// 我们自己也不再注册任何 screen-edge 识别器，这一段没有存在的理由。
-
-// iOS 15+ 上真正驱动「底边上滑回主屏」的是这一条，它继承 UIPanGestureRecognizer，
-// 跟 screen-edge 不是同一条链——这也是为什么照着 2.1 抄那一层没有效果。
-@interface SBHomeGesturePanGestureRecognizer : UIPanGestureRecognizer
-@end
-
-// 判据与动作触发区完全重合（底角 24pt × 左右各 1/3），区外一律 %orig。
-// touchesBegan 是最早的回调，那会儿它还在 Possible，置 Failed 之后就不会 Began，回主屏也就不会发生。
-%hook SBHomeGesturePanGestureRecognizer
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    UITouch *touch = [touches anyObject];
-    NSString *key = TGBottomCornerKey(touch);
-    if (key) {
-        CGPoint p = [touch locationInView:nil];
-        TGBottomLog(@"home gesture refused (%@) at (%.0f, %.0f)", key, p.x, p.y);
-        self.state = UIGestureRecognizerStateFailed;
-        return;
+    BOOL left = NO, right = NO;
+    BOOL onBar = TGBottomPointInBar([recognizer locationInView:nil], &left, &right) && !left && !right;
+    // 当前模式里没动作就整条放行：Reachability 还得照旧能用。
+    if (onBar && !TGConditionLocked() && TGActionFor(@"homebar.doubletap")) {
+        TGHomeBarDouble();
+        return;   // 这一下不再拉下半屏
     }
     %orig;
 }

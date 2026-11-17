@@ -3,6 +3,36 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.57
+
+把 cn4.52~cn4.56 那一串底边实验全部撤掉，回到「还没加底部手势」的地基，按 2.1 重做。
+
+### 上一版错在哪
+
+cn4.56 把 `UIPanGestureRecognizer` 直接挂到 SpringBoard 的窗口上。窗口是挂上了，但那个窗口收不到 App 区域的手指——真机上 `bottom.log` 里连 `pan began` 都没有，于是底部上滑、双击全部哑火，而这一整套还顺手把上一版能用的东西一起带走了。
+
+结论：**只有进系统手势表（`addGestureRecognizer:withType:`）的识别器，才在 App 之上收得到触摸**。绕开它没有第二条路。
+
+### 这一版怎么做的
+
+- 底角上滑：`TGBottomEdgeRecognizer : UIScreenEdgePanGestureRecognizer`，用 2.1 那个私有初始化器 `-initWithTarget:action:type:options:` 建（`type:2`、`options:0`），`edges = UIRectEdgeBottom`，`-setEdgeRegionSize: 24`，按 `0x7467004 / 0x7467005` 两个 type 注册
+- 起手判据只有三条（2.1 的底角判据）：竖屏、`y >= h - 24`、`x` 在左 1/3 或右 1/3；不满足当场 Failed
+- 触发判据：向上 60pt 以上、且 `|dx| <= -dy`（以竖直为主）
+- **中间 1/3 不挂 pan**，回主屏幕的上滑完整留给系统
+- 小白条单击 / 双击 / 长按：`UITapGestureRecognizer`（1 下、2 下，单击 `requireGestureRecognizerToFail:` 双击）与 `UILongPressGestureRecognizer`（0.5s），同样注册进系统手势表，只认底边中间 1/3
+- 长按认过之后 1 秒内不认单击——手指抬起时点击识别器会再认一次
+- 双击保留 2.1 那条 `SBHomeAffordanceInteractionManager` 回调作为第二条来源；两条路径命中同一下时按 250ms 去重，不会双触发
+
+### 明确的代价
+
+配了「底部上滑」的动作，左右两侧滑动切换应用会失效。这是 `UIScreenEdgePanGestureRecognizer` 按族互斥的必然结果，2.1 与 RemoteCompanion 一样；不配底边上滑就照旧能切。小白条的三下不走这条路，配了不影响任何系统手势。
+
+### 清理
+
+删掉 `TGBottomPanRecognizer`、宿主窗口挑选、2 秒重挂、`SBHomeGesturePanGestureRecognizer` 的 `touchesBegan:` 拒绝层，以及 `edge.bottom2`（双指底部上滑，这一版不含）。`bottom.log` 保留，只记注册与触发。
+
+---
+
 ## 1.5.0+cn4.56
 
 底边识别器不再进系统手势表。这是换实现，不是调判据。
