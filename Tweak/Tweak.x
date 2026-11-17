@@ -3313,6 +3313,47 @@ static void TGUpdateEdgeGestures(void) {
 }
 %end
 
+// 自注册识别器只解决「动作能收到」，管不住「系统也在同一块起手」。系统的底部上滑优先级更高，
+// 在那 24pt 高的两个角上仍然会起来，于是动作执行、屏幕同时回主屏——就是你最早说的「画面跟着动」。
+// 2.1 还有另一半（0xa928 → 0x167dc）：在这些系统 screen-edge 识别器上，对这些矩形里的触摸返回 NO。
+// 判据只有三条：竖屏、y 落在底边 24pt 内、x 落在左右各 1/3。中间 1/3 与屏幕左右两侧一个字节都不碰，
+// 所以不会再把左右切应用连带按死——那是前十几版翻车的地方。
+static BOOL TGBottomPortrait(void) {
+    UIApplication *app = UIApplication.sharedApplication;
+    if ([app respondsToSelector:@selector(activeInterfaceOrientation)]) {
+        NSInteger o = ((NSInteger (*)(id, SEL))objc_msgSend)(app, @selector(activeInterfaceOrientation));
+        return o == UIInterfaceOrientationPortrait || o == UIInterfaceOrientationPortraitUpsideDown;
+    }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    UIInterfaceOrientation o = app.statusBarOrientation;
+#pragma clang diagnostic pop
+    return o == UIInterfaceOrientationPortrait || o == UIInterfaceOrientationPortraitUpsideDown;
+}
+
+// 这一下要不要从系统手里接过来；返回 nil 表示放行。2.1 文案里的 "portrait only" 就是从这来的。
+static NSString *TGBottomCornerKey(UITouch *touch) {
+    if (!touch || !tgAssignedTriggers.count || TGConditionLocked() || !TGBottomPortrait()) return nil;
+    CGPoint p = [touch locationInView:nil];
+    CGSize size = [UIScreen mainScreen].bounds.size;
+    if (p.y < size.height - TGBottomRegion) return nil;
+    NSString *key = p.x < size.width / 3.0 ? @"edge.bottomleft"
+                  : p.x > size.width * 2.0 / 3.0 ? @"edge.bottomright" : nil;
+    if (!key || ![tgAssignedTriggers containsObject:key]) return nil;
+    // 当前模式里这个 key 没动作时，我们自己的识别器会当场 Failed；此时再拒系统手势就是两头空
+    //（既不回主屏也没动作）。所以这一条必须和 TGBottomEdgeRecognizer 的判据保持一致。
+    if (!TGActionFor(key)) return nil;
+    return key;
+}
+
+%hook UIScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    // 自己注册的那三条不能拦，否则动作根本收不到手。
+    if (![self isKindOfClass:[TGBottomEdgeRecognizer class]] && TGBottomCornerKey(touch)) return NO;
+    return %orig;
+}
+%end
+
 #pragma mark - Notifications and calls
 
 // "Notification from <app>": only which app posted, never what it says. A

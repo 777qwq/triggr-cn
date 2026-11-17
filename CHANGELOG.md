@@ -3,6 +3,35 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.54
+
+补上 2.1 底边手势的另一半：**拒绝系统识别器**。cn4.53 只做了自注册，动作能收到，但系统回主屏幕也在同一块起手，于是「动作执行 + 画面跟着上去」。
+
+### 加的是什么
+
+`0xa928` → `0x167dc`。2.1 在 `UIScreenEdgePanGestureRecognizer` 的 `_shouldReceiveTouch:withEvent:` 里，对底边两个角上的触摸直接返回 NO，系统那条识别器收不到手指。
+
+判据照抄，只有三条：
+
+- 竖屏（`activeInterfaceOrientation` 为 portrait）
+- `y >= h - 24`（底边 24pt 带内，与识别器热区同宽）
+- `x < w/3` → `edge.bottomleft`；`x > 2w/3` → `edge.bottomright`；中间 1/3 不管
+
+范围严格限定在这两块 24pt 高的小方块。**中间 1/3 与屏幕左右两侧一个字节都不碰**，所以左右切应用不受影响——那是前十几版翻车的地方。
+
+### 两条防「两头空」的判据
+
+拒绝系统手势的前提，是我们自己的识别器真的会执行动作。所以再加两条：
+
+- `TGConditionLocked()` 时放行（锁屏上滑是解锁）
+- `TGActionFor(key)` 为空时放行（当前模式没动作，我们的识别器会当场 Failed，再拒系统就是既不回主屏也没动作）
+
+这两条与 `TGBottomEdgeRecognizer` 的 `touchesBegan:` 判据一一对应，两边不会打架。
+
+### 排除自己
+
+`isKindOfClass:[TGBottomEdgeRecognizer class]` 的三条不拦，否则动作根本收不到手。
+
 ## 1.5.0+cn4.53
 
 cn4.52 把底部删得只剩双击，砍过头了。这一版按 Triggr 2.1 把手势补回来，仍然是**不碰任何系统识别器**的注册式实现。
