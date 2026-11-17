@@ -931,8 +931,12 @@ static void TGPromptWait(UIViewController *host, NSString *encoded, void (^done)
 // (one at a time). Each shows what's picked inside it, and the search field
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
-    return [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
+    NSMutableArray *list = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
         @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
+    // cn4.59: 插件动作只在装了插件时出现——没装却列出「新建截图」，点了没反应。
+    if (TGPluginInstalled(@"snapper3")) [list addObject:@[@"snapper", @"Snapper 3"]];
+    if (TGPluginInstalled(@"copylog")) [list addObject:@[@"copylog", @"CopyLog"]];
+    return list;
 }
 
 static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
@@ -946,6 +950,8 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
         @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
         @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor],
         @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
+        @"snapper": @[@"camera.viewfinder", UIColor.systemOrangeColor],
+        @"copylog": @[@"doc.on.clipboard.fill", UIColor.systemTealColor],
     };
     if (icons[category]) TGSetIcon(spec, icons[category][0], icons[category][1]);
 }
@@ -965,6 +971,8 @@ static NSString *TGCategoryOf(NSString *action) {
     // cn2.70: scanner presets live in the "open" category (TA request) —
     // their system.* ids would otherwise fall into "system" below.
     for (int i = 0; i < TG_COUNT(TGQuickActionPresets); i++) if ([action isEqualToString:@(TGQuickActionPresets[i].identifier)]) return @"open";
+    if ([action hasPrefix:@"snapper3."]) return @"snapper";
+    if ([action hasPrefix:@"copylog."]) return @"copylog";
     if ([action hasPrefix:@"system."]) return @"system";
     return nil;
 }
@@ -1241,6 +1249,8 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
     if ([category isEqualToString:@"system"]) { items = TGSystemActions; count = TG_COUNT(TGSystemActions); }
     else if ([category isEqualToString:@"power"]) { items = TGPowerActions; count = TG_COUNT(TGPowerActions); }
     else if ([category isEqualToString:@"media"]) { items = TGMediaActions; count = TG_COUNT(TGMediaActions); }
+    else if ([category isEqualToString:@"snapper"]) { items = TGPluginSnapper; count = TG_COUNT(TGPluginSnapper); }
+    else if ([category isEqualToString:@"copylog"]) { items = TGPluginCopyLog; count = TG_COUNT(TGPluginCopyLog); }
     for (int i = 0; i < count; i++) [rows addObject:[self rowForAction:@(items[i].identifier) title:@(items[i].title)]];
     if ([category isEqualToString:@"system"]) {
         // cn2.72: 返回上级 sits right below 密码解锁 (TA order).

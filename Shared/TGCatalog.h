@@ -209,6 +209,20 @@ static const TGItem TGMediaActions[] = {
     {"media.airplay", "AirPlay 选择器"}, {"media.airplayiphone", "在本机播放"},
 };
 
+// cn4.59: 2.1 的插件动作。都是发分布式通知（不是 Darwin 通知）：插件自己监听
+// com.jontelang.snapper3.* / me.tomt000.copylog.*，Triggr 只负责喊一声。
+// 名字照 2.1 的字符串表：New Snap / Instant Snap / Freeze Screen & Snap / Reopen Last Snap /
+// Snap History / Cancel Cropping / Close All Snaps；CopyLog 两项。
+static const TGItem TGPluginSnapper[] = {
+    {"snapper3.force.open", "新建截图"}, {"snapper3.forceinstant.open", "立即截图"},
+    {"snapper3.forcefreeze.open", "冻结画面并截图"}, {"snapper3.openlast", "重开上一张截图"},
+    {"snapper3.history", "截图历史"}, {"snapper3.closecrop", "取消裁剪"},
+    {"snapper3.close.all", "关闭全部截图"},
+};
+static const TGItem TGPluginCopyLog[] = {
+    {"copylog.showView", "打开 CopyLog"}, {"copylog.showFavoritesView", "打开 CopyLog 收藏"},
+};
+
 static const TGGroup TGActionGroups[] = {
     {"系统", TGSystemActions, TG_COUNT(TGSystemActions), NULL},
     {"电源", TGPowerActions, TG_COUNT(TGPowerActions), NULL},
@@ -217,6 +231,8 @@ static const TGGroup TGActionGroups[] = {
     {"关闭", TGOffActions, TG_COUNT(TGOffActions), NULL},
     {"媒体", TGMediaActions, TG_COUNT(TGMediaActions), NULL},
     {"条件", TGSeqConditions, TG_COUNT(TGSeqConditions), "构建带条件的序列：条件为真才执行其后的动作，到「否则」换分支，「结束条件」收尾。"},
+    {"Snapper 3", TGPluginSnapper, TG_COUNT(TGPluginSnapper), "需要安装 Snapper 3。"},
+    {"CopyLog", TGPluginCopyLog, TG_COUNT(TGPluginCopyLog), "需要安装 CopyLog。"},
 };
 
 // （TGSpringCutsBinary 已删：快捷指令动作改走 VoiceShortcutClient 后台通道，
@@ -828,4 +844,20 @@ static inline NSString *TGActionTitle(NSString *action) {
         for (int i = 0; i < TGActionGroups[g].count; i++)
             if ([action isEqualToString:@(TGActionGroups[g].items[i].identifier)]) return @(TGActionGroups[g].items[i].title);
     return action;
+}
+
+// cn4.59: 插件在不在。2.1 的做法是去 dylib 目录里按文件名找，这里照做——
+// 覆盖 rootless（/var/jb）与 rootful 两套路径，也覆盖 TweakInject 的新布局。
+static BOOL TGPluginInstalled(NSString *name) {
+    NSArray<NSString *> *dirs = @[
+        @"/var/jb/Library/MobileSubstrate/DynamicLibraries",
+        @"/Library/MobileSubstrate/DynamicLibraries",
+        @"/var/jb/usr/lib/TweakInject",
+        @"/usr/lib/TweakInject",
+    ];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *dir in dirs)
+        for (NSString *file in [fm contentsOfDirectoryAtPath:dir error:nil])
+            if ([file.lowercaseString containsString:name]) return YES;
+    return NO;
 }

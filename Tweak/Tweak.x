@@ -1213,6 +1213,25 @@ static void TGTransientHaptic(double intensity, double sharpness) {
     });
 }
 
+// cn4.59: 2.1 的插件动作都是发一条分布式通知（CFNotificationCenterGetDistributedCenter，
+// 不是 Darwin 通知中心；2.1 反汇编里 dlsym 的正是前者）。插件不在就返回 NO，
+// 让动作在选择器里显示成不可用，而不是点了没反应。
+static BOOL TGPostToPlugin(NSString *name, NSString *plugin, BOOL dry) {
+    if (!TGPluginInstalled(plugin)) return NO;
+    if (dry) return YES;
+    static CFNotificationCenterRef (*getCenter)(void);
+    static BOOL resolved;
+    if (!resolved) {
+        resolved = YES;
+        getCenter = (CFNotificationCenterRef (*)(void))dlsym(RTLD_DEFAULT, "CFNotificationCenterGetDistributedCenter");
+    }
+    if (!getCenter) return NO;
+    CFNotificationCenterRef center = getCenter();
+    if (!center) return NO;
+    CFNotificationCenterPostNotification(center, (__bridge CFStringRef)name, NULL, NULL, YES);
+    return YES;
+}
+
 static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
     static NSDictionary *table;
     static dispatch_once_t once;
@@ -1383,6 +1402,18 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.closeapps": ^BOOL(BOOL dry) { return TGCloseBackgroundApps(dry); },
             @"media.volup": ^BOOL(BOOL dry) { return TGVolumeStep(springBoard, YES, dry); },
             @"media.voldown": ^BOOL(BOOL dry) { return TGVolumeStep(springBoard, NO, dry); },
+            // cn4.59: 2.1 的插件动作。插件自己监听分布式通知，Triggr 只负责喊一声——
+            // 注意是 DistributedCenter，不是 DarwinCenter（2.1 反汇编里 dlsym 的就是前者）。
+            // 插件不在就返回 NO，动作选择器会显示成不可用。
+            @"snapper3.force.open": ^BOOL(BOOL dry) { return TGPostToPlugin(@"com.jontelang.snapper3.force.open", @"snapper3", dry); },
+            @"snapper3.forceinstant.open": ^BOOL(BOOL dry) { return TGPostToPlugin(@"com.jontelang.snapper3.forceinstant.open", @"snapper3", dry); },
+            @"snapper3.forcefreeze.open": ^BOOL(BOOL dry) { return TGPostToPlugin(@"com.jontelang.snapper3.forcefreeze.open", @"snapper3", dry); },
+            @"snapper3.openlast": ^BOOL(BOOL dry) { return TGPostToPlugin(@"com.jontelang.snapper3.openlast", @"snapper3", dry); },
+            @"snapper3.history": ^BOOL(BOOL dry) { return TGPostToPlugin(@"com.jontelang.snapper3.history", @"snapper3", dry); },
+            @"snapper3.closecrop": ^BOOL(BOOL dry) { return TGPostToPlugin(@"com.jontelang.snapper3.closecrop", @"snapper3", dry); },
+            @"snapper3.close.all": ^BOOL(BOOL dry) { return TGPostToPlugin(@"com.jontelang.snapper3.close.all", @"snapper3", dry); },
+            @"copylog.showView": ^BOOL(BOOL dry) { return TGPostToPlugin(@"me.tomt000.copylog.showView", @"copylog", dry); },
+            @"copylog.showFavoritesView": ^BOOL(BOOL dry) { return TGPostToPlugin(@"me.tomt000.copylog.showFavoritesView", @"copylog", dry); },
         };
     });
     return table;
