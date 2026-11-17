@@ -3087,7 +3087,8 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     // 还没识别之前先看方向：这条边没配竖直动作时，竖直滑动要留给应用自己滚动，不能让它被系统手势取消。
-    if (self.state == UIGestureRecognizerStatePossible) {
+    // 只在单指时预判——双指的第二根手指离起点很远，按它算方向会误判。
+    if (self.state == UIGestureRecognizerStatePossible && self.numberOfTouches <= 1) {
         CGPoint p = [[touches anyObject] locationInView:nil];
         CGFloat ax = fabs(p.x - self.startPoint.x), ay = fabs(p.y - self.startPoint.y);
         if (ax > 4 || ay > 4) {
