@@ -3,6 +3,26 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.53
+
+cn4.52 把底部删得只剩双击，砍过头了。这一版按 Triggr 2.1 把手势补回来，仍然是**不碰任何系统识别器**的注册式实现。
+
+### 补回的三项（2.1 的 `edge.bottomleft` / `edge.bottomright` / `edge.bottom2`）
+
+| 触发器 | 起手位置 | 手指数 |
+|---|---|---|
+| `edge.bottomleft` | 底边 24pt 内、屏幕左 1/3 | 单指 |
+| `edge.bottomright` | 底边 24pt 内、屏幕右 1/3 | 单指 |
+| `edge.bottom2` | 底边 24pt 内、全区 | 双指 |
+
+实现是一套 `TGBottomEdgeRecognizer : UIScreenEdgePanGestureRecognizer`，`edges = Bottom`、`setEdgeRegionSize:24`，注册进系统手势表（type `0x7467004`–`0x7467006`）。选 edge pan 子类而不是 `UIPanGestureRecognizer`，是因为系统把它当「屏幕边缘手势」：一 Began，iOS 自己的底部上滑就让位，用不着我们去按系统识别器——前面十几版把左右切应用按死的就是那一步。
+
+### 中间 1/3 与左右两侧始终不碰
+
+- 底边中间 1/3 有单独判据：起手落在那里的识别器直接 Failed，回主屏幕上滑照常。
+- 屏幕左右两侧（`edge.left` / `edge.right` 那一组）继续用原来的 `UIPanGestureRecognizer`，与底部这三条互不相干。
+- 没配动作时不注册任何识别器。
+
 ## 1.5.0+cn4.52
 
 回退「底部横条手势」，按 Triggr 2.1 的做法重做底部：**只保留双击底边横条**。

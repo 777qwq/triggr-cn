@@ -3139,7 +3139,60 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 }
 @end
 
+// 底部横条（Triggr 2.1 的做法）：同样是往系统手势表里注册自己的识别器，只是换成
+// UIScreenEdgePanGestureRecognizer + edges = Bottom + 24pt 热区。用这个子类而不是 UIPan，
+// 是因为它被系统视为「屏幕边缘手势」，一旦 Began，iOS 自己的底部上滑（回主屏幕）就会让位；
+// UIPan 拿不到这个待遇，只能靠去按住系统识别器，那正是前十几版把左右切应用一起按死的原因。
+// 只认底边左 1/3 与右 1/3，中间那 1/3 一个字节都不碰，留给系统回主屏幕。
+static const CGFloat TGBottomRegion = 24;   // 与 2.1 的 setEdgeRegionSize 一致
+
+@interface TGBottomEdgeRecognizer : UIScreenEdgePanGestureRecognizer
+@property (nonatomic) NSInteger third;   // 0 左，1 右，-1 全区（双指）
+@property (nonatomic) BOOL fired;
+@property (nonatomic, copy) NSString *trigger;
+@end
+
+@implementation TGBottomEdgeRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    // 锁屏上从底边往上滑是解锁，不是我们的动作区。
+    if (TGConditionLocked()) {
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+    }
+    // 注册看的是「任何模式里配过」，这里再看「当前模式有没有事可做」：
+    // 只在某个 App 里配了动作时，主屏上的底边上滑必须还给系统。
+    if (!TGActionFor(self.trigger)) {
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+    }
+    if (self.third >= 0 && event.allTouches.count == self.minimumNumberOfTouches) {
+        CGRect screen = self.view.window ? self.view.window.bounds : [UIScreen mainScreen].bounds;
+        CGFloat x = [[touches anyObject] locationInView:nil].x;
+        BOOL inThird = self.third == 0 ? (x < screen.size.width / 3) : (x > screen.size.width * 2 / 3);
+        if (!inThird) {
+            self.state = UIGestureRecognizerStateFailed;
+            return;
+        }
+    }
+    self.fired = NO;
+    [super touchesBegan:touches withEvent:event];
+}
+@end
+
+@interface TGBottomTarget : NSObject
+@end
+@implementation TGBottomTarget
+- (void)slid:(TGBottomEdgeRecognizer *)recognizer {
+    if (recognizer.fired) return;
+    // edge pan 一旦 Began，系统那条底部上滑已经让位，这时执行动作不会再有「屏幕也上去了」。
+    if (recognizer.state != UIGestureRecognizerStateBegan && recognizer.state != UIGestureRecognizerStateChanged) return;
+    recognizer.fired = YES;
+    TGFire(recognizer.trigger);
+}
+@end
+
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
+static NSMutableArray<TGBottomEdgeRecognizer *> *tgBottomRecognizers;
 static BOOL tgGestureManagerReady;
 
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
@@ -3182,6 +3235,38 @@ static void TGUpdateEdgeGestures(void) {
             [tgEdgeRecognizers removeObject:existing];
         }
     }
+
+    static TGBottomTarget *bottomTarget;
+    if (!bottomTarget) bottomTarget = [TGBottomTarget new];
+    if (!tgBottomRecognizers) tgBottomRecognizers = [NSMutableArray array];
+    struct { const char *trigger; NSInteger third; NSUInteger fingers; unsigned long long type; } bottoms[] = {
+        {"edge.bottomleft", 0, 1, TGEdgeGestureTypeBase + 4},
+        {"edge.bottomright", 1, 1, TGEdgeGestureTypeBase + 5},
+        {"edge.bottom2", -1, 2, TGEdgeGestureTypeBase + 6},
+    };
+    for (int i = 0; i < 3; i++) {
+        TGBottomEdgeRecognizer *existing = nil;
+        for (TGBottomEdgeRecognizer *r in tgBottomRecognizers)
+            if ([r.trigger isEqualToString:@(bottoms[i].trigger)]) existing = r;
+        BOOL want = [tgAssignedTriggers containsObject:@(bottoms[i].trigger)];
+        if (want && !existing) {
+            TGBottomEdgeRecognizer *r = [[TGBottomEdgeRecognizer alloc] initWithTarget:bottomTarget action:@selector(slid:)];
+            r.third = bottoms[i].third;
+            r.trigger = @(bottoms[i].trigger);
+            r.edges = UIRectEdgeBottom;
+            [r setValue:@(TGBottomRegion) forKey:@"edgeRegionSize"];
+            r.minimumNumberOfTouches = bottoms[i].fingers;
+            r.maximumNumberOfTouches = bottoms[i].fingers;
+            r.cancelsTouchesInView = NO;
+            r.delaysTouchesBegan = NO;
+            r.delaysTouchesEnded = NO;
+            [manager addGestureRecognizer:r withType:bottoms[i].type];
+            [tgBottomRecognizers addObject:r];
+        } else if (!want && existing) {
+            [manager removeGestureRecognizer:existing];
+            [tgBottomRecognizers removeObject:existing];
+        }
+    }
 }
 
 %hook SBMainDisplaySystemGestureManager
@@ -3197,16 +3282,16 @@ static void TGUpdateEdgeGestures(void) {
 
 %hook SBSystemGestureManager
 - (BOOL)_isGestureWithTypeAllowed:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 7) return YES;
     return %orig;
 }
 - (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 7) return YES;
     return %orig;
 }
 %end
 
-#pragma mark - Home Bar
+#pragma mark - Bottom edge
 
 // 双击底部横条。挂的是 iOS 自己那套回调，不注册识别器、不碰任何系统手势：
 // 单击（滚动到顶部）、上滑回主屏幕、左右滑动切换应用都走原来的路径，Triggr 只在双击这一下插队。
