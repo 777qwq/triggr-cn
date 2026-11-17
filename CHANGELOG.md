@@ -6,6 +6,7 @@
 ## 1.5.0+cn4.59
 
 接上 2.1 的 Tweak Actions：不再自己实现功能，而是喊一声，让装着的插件去做。
+（这个包同时包含 cn4.58 的单击延时与底边文案改动。）
 
 ### 机制
 
@@ -29,9 +30,12 @@ Snap History / Cancel Cropping / Close All Snaps、Show CopyLog / Show CopyLog F
 
 ### 没装插件时
 
-按 2.1 的做法在 dylib 目录里按文件名找（rootless 的 `/var/jb`、rootful 的老路径、TweakInject
-都查）。找不到就**不显示这个分类**，而不是显示了点下去没反应。执行时也会再判一次，
-返回 NO 让动作选择器标成不可用。
+SpringBoard 启动时按 2.1 的做法在 dylib 目录里按文件名找（rootless 的 `/var/jb`、rootful 的
+老路径、TweakInject 都查），把结果写进共享清单 `com.johndie.triggr.plugins.plist`。
+设置页在沙盒里读不到那些目录，只能读这份清单——所以是「这边探、那边读」。
+
+找不到就**不显示这个分类**，搜索里也搜不到，而不是显示了点下去没反应。执行时会再扫一次目录，
+返回 NO 让动作标成不可用。
 
 ### 备注
 

@@ -231,8 +231,8 @@ static const TGGroup TGActionGroups[] = {
     {"关闭", TGOffActions, TG_COUNT(TGOffActions), NULL},
     {"媒体", TGMediaActions, TG_COUNT(TGMediaActions), NULL},
     {"条件", TGSeqConditions, TG_COUNT(TGSeqConditions), "构建带条件的序列：条件为真才执行其后的动作，到「否则」换分支，「结束条件」收尾。"},
-    {"Snapper 3", TGPluginSnapper, TG_COUNT(TGPluginSnapper), "需要安装 Snapper 3。"},
-    {"CopyLog", TGPluginCopyLog, TG_COUNT(TGPluginCopyLog), "需要安装 CopyLog。"},
+    {"Snapper 3", TGPluginSnapper, TG_COUNT(TGPluginSnapper), "由 Snapper 3 执行：Triggr 只负责唤起，界面和保存都在 Snapper 里。"},
+    {"CopyLog", TGPluginCopyLog, TG_COUNT(TGPluginCopyLog), "由 CopyLog 执行：打开主界面，或直接打开收藏夹。"},
 };
 
 // （TGSpringCutsBinary 已删：快捷指令动作改走 VoiceShortcutClient 后台通道，
