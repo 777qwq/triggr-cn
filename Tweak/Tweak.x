@@ -3049,11 +3049,23 @@ static const CGFloat TGEdgeDistance = 60;  // and travel this far away from it
 @end
 
 @interface TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer
-@property (nonatomic, copy) NSString *trigger;
 @property (nonatomic) UIRectEdge edge;
 @property (nonatomic) NSUInteger fingers;
 @property (nonatomic) BOOL fired;
 @end
+
+// 这条边、这个手指数上，有没有配任何一个变体。
+// cn4.39：一条边只建一个识别器，滑入与上下滑在 slid: 里按方向分开——
+// 两个 edge pan 抢同一串触摸会互相判负，配了上滑就再也滑不进。
+static BOOL TGEdgeAssigned(UIRectEdge edge, NSUInteger fingers) {
+    NSArray<NSString *> *ids;
+    if (fingers == 2) ids = edge == UIRectEdgeLeft ? @[@"edge.left2"] : @[@"edge.right2"];
+    else if (edge == UIRectEdgeLeft) ids = @[@"edge.left", @"edge.leftup", @"edge.leftdown"];
+    else if (edge == UIRectEdgeRight) ids = @[@"edge.right", @"edge.rightup", @"edge.rightdown"];
+    else return NO;
+    for (NSString *i in ids) if ([tgAssignedTriggers containsObject:i]) return YES;
+    return NO;
+}
 
 @implementation TGEdgeRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -3063,7 +3075,7 @@ static const CGFloat TGEdgeDistance = 60;  // and travel this far away from it
         return;
     }
     self.fired = NO;
-    if (![tgAssignedTriggers containsObject:self.trigger]) self.state = UIGestureRecognizerStateFailed;
+    if (!TGEdgeAssigned(self.edge, self.fingers)) self.state = UIGestureRecognizerStateFailed;
 }
 @end
 
@@ -3073,11 +3085,23 @@ static const CGFloat TGEdgeDistance = 60;  // and travel this far away from it
 - (void)slid:(TGEdgeRecognizer *)recognizer {
     if (recognizer.fired || (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded)) return;
     CGPoint t = [recognizer translationInView:nil];
-    CGFloat along = recognizer.edge == UIRectEdgeBottom ? -t.y : recognizer.edge == UIRectEdgeLeft ? t.x : -t.x;
-    CGFloat across = recognizer.edge == UIRectEdgeBottom ? fabs(t.x) : fabs(t.y);
-    if (along < TGEdgeDistance || across > along) return; // far enough, and mostly away from the edge
+    NSString *trigger = nil;
+    // 单指且竖向为主 → 沿这条边上滑 / 下滑；否则按原来的「垂直滑入」判定。
+    if (recognizer.fingers == 1 && fabs(t.y) > fabs(t.x)) {
+        if (fabs(t.y) < TGEdgeDistance) return;
+        BOOL up = t.y < 0;
+        trigger = recognizer.edge == UIRectEdgeLeft ? (up ? @"edge.leftup" : @"edge.leftdown")
+                                                    : (up ? @"edge.rightup" : @"edge.rightdown");
+    } else {
+        CGFloat along = recognizer.edge == UIRectEdgeBottom ? -t.y : recognizer.edge == UIRectEdgeLeft ? t.x : -t.x;
+        CGFloat across = recognizer.edge == UIRectEdgeBottom ? fabs(t.x) : fabs(t.y);
+        if (along < TGEdgeDistance || across > along) return; // far enough, and mostly away from the edge
+        trigger = recognizer.fingers == 2 ? (recognizer.edge == UIRectEdgeLeft ? @"edge.left2" : @"edge.right2")
+                                          : (recognizer.edge == UIRectEdgeLeft ? @"edge.left" : @"edge.right");
+    }
+    if (![tgAssignedTriggers containsObject:trigger]) return; // 这个方向没配，继续等下一个方向
     recognizer.fired = YES; // once per slide, as soon as it's far enough
-    TGFire(recognizer.trigger);
+    TGFire(trigger);
 }
 @end
 
@@ -3093,15 +3117,14 @@ static void TGUpdateEdgeGestures(void) {
     static TGEdgeTarget *target;
     if (!target) target = [TGEdgeTarget new];
     if (!tgEdgeRecognizers) tgEdgeRecognizers = [NSMutableArray array];
-    struct { const char *trigger; UIRectEdge edge; NSUInteger fingers; } edges[] = {
-        {"edge.left", UIRectEdgeLeft, 1}, {"edge.right", UIRectEdgeRight, 1},
-        {"edge.left2", UIRectEdgeLeft, 2}, {"edge.right2", UIRectEdgeRight, 2},
+    struct { UIRectEdge edge; NSUInteger fingers; } edges[] = {
+        {UIRectEdgeLeft, 1}, {UIRectEdgeRight, 1},
+        {UIRectEdgeLeft, 2}, {UIRectEdgeRight, 2},
     };
-    for (int i = 0; i < 4; i++) {
-        NSString *trigger = @(edges[i].trigger);
+    for (int i = 0; i < (int)(sizeof(edges) / sizeof(edges[0])); i++) {
         TGEdgeRecognizer *existing = nil;
-        for (TGEdgeRecognizer *r in tgEdgeRecognizers) if ([r.trigger isEqualToString:trigger]) existing = r;
-        BOOL want = [tgAssignedTriggers containsObject:trigger];
+        for (TGEdgeRecognizer *r in tgEdgeRecognizers) if (r.edge == edges[i].edge && r.fingers == edges[i].fingers) existing = r;
+        BOOL want = TGEdgeAssigned(edges[i].edge, edges[i].fingers);
         if (want && !existing) {
             // type 2 as SpringBoard's own: real fingers work (verified by hand on iOS 16.2). Synthetic tapctl touches
             // never do: the recognizer wants the digitizer's edge flag.
@@ -3112,7 +3135,6 @@ static void TGUpdateEdgeGestures(void) {
             r.minimumNumberOfTouches = r.fingers;
             r.maximumNumberOfTouches = r.fingers;
             if ([r respondsToSelector:@selector(_setEdgeRegionSize:)]) [r _setEdgeRegionSize:TGEdgeMargin];
-            r.trigger = trigger;
             [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + i];
             [tgEdgeRecognizers addObject:r];
         } else if (!want && existing) {
@@ -3772,35 +3794,24 @@ static void TGUpdateOtherEvents(void) {
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    // cn2.74：多指手势位段 bit2..13（inapp.* 12 触发器）
+    // cn4.39：多指手势扩到 18 个（四指、五指）。位段从 bit2 起，槽位号就是 TGInAppGestures 的下标，
+    // 名单只从目录取一份，避免两边各写一遍而后面对不上。
     uint64_t mfBits = 0;
-    for (int idx = 0; idx < 12; idx++) {
-        static NSString *ids[] = {
-            @"inapp.twotap", @"inapp.threetap",
-            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
-            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
-            @"inapp.pinchin", @"inapp.pinchout",
-        };
-        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
-        if ([tgAssignedTriggers containsObject:ids[idx]]) mfBits |= bit;
+    for (int idx = 0; idx < TG_COUNT(TGInAppGestures); idx++) {
+        NSString *idn = [NSString stringWithUTF8String:TGInAppGestures[idx].identifier];
+        if ([tgAssignedTriggers containsObject:idn]) mfBits |= (1ULL << (idx + 2));
     }
     if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | mfBits);
-    // cn2.77：多指手势分发（Relay 经 notify_post cn.triggr.inappidxN 上报，idx 与 TGCatalog 顺序一致）
+    // cn4.39：多指手势分发（Relay 经 notify_post cn.triggr.inappidxN 上报，idx 与 TGCatalog 顺序一致）
     {
-        static int toks[12] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
-        static NSString *nids[] = {
-            @"inapp.twotap", @"inapp.threetap",
-            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
-            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
-            @"inapp.pinchin", @"inapp.pinchout",
-        };
+        static int toks[TG_COUNT(TGInAppGestures)];
         // 只注册一次：TGUpdateOtherEvents 每次跑都会到这里，重复注册会叠加派发（一次手势多次执行动作）
         static BOOL registered = NO;
         if (!registered) {
             registered = YES;
-            for (int i = 0; i < 12; i++) {
+            for (int i = 0; i < TG_COUNT(TGInAppGestures); i++) {
                 NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", i];
-                NSString *idn = nids[i];
+                NSString *idn = [NSString stringWithUTF8String:TGInAppGestures[i].identifier];
                 notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
             }
         }

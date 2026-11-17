@@ -275,10 +275,101 @@ static void TGRelayDoBack(void) {
 %end
 
 static void CNRelayAttachAll(void);
-// ---- 多指手势（cn2.75b，严格按 2.0 Relay 反汇编复刻）----
-// 12 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10/11=pinch（scale<0.7 捏合 / >1.4 张开）
+// ---- 多指手势（cn4.39：12 槽位扩到 18）----
+// 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10/11=2指pinch
+//       12=4指tap 13=5指tap 14/15=4指pinch 16/17=5指pinch
 // 方向表 DAT_000076c8 实证：Up/Down/Left/Right，三指组复用同表；并发委托返回 YES；tap/swipe 到 Ended 派发
-// wanted 位：bit(idx+2)；pinch 特例 bit12/13。上报 notify_post("cn.triggr.inappidxN")
+// wanted 位：bit(idx+2)（Relay 的前两位留给状态栏和摇一摇）。上报 notify_post("cn.triggr.inappidxN")
+// 顺序必须与 TGCatalog.h 的 TGInAppGestures 一字不差：idx 就是那个数组的下标。
+
+enum { TGInAppTap = 0, TGInAppSwipe = 1, TGInAppPinch = 2 };
+static const struct { unsigned char fingers; unsigned char kind; unsigned char dir; } TGInAppSlots[] = {
+    {2, TGInAppTap, 0}, {3, TGInAppTap, 0},
+    {2, TGInAppSwipe, UISwipeGestureRecognizerDirectionUp},
+    {2, TGInAppSwipe, UISwipeGestureRecognizerDirectionDown},
+    {2, TGInAppSwipe, UISwipeGestureRecognizerDirectionLeft},
+    {2, TGInAppSwipe, UISwipeGestureRecognizerDirectionRight},
+    {3, TGInAppSwipe, UISwipeGestureRecognizerDirectionUp},
+    {3, TGInAppSwipe, UISwipeGestureRecognizerDirectionDown},
+    {3, TGInAppSwipe, UISwipeGestureRecognizerDirectionLeft},
+    {3, TGInAppSwipe, UISwipeGestureRecognizerDirectionRight},
+    {2, TGInAppPinch, 0}, {2, TGInAppPinch, 0},
+    {4, TGInAppTap, 0}, {5, TGInAppTap, 0},
+    {4, TGInAppPinch, 0}, {4, TGInAppPinch, 0},
+    {5, TGInAppPinch, 0}, {5, TGInAppPinch, 0},
+};
+#define TGInAppSlotCount ((int)(sizeof(TGInAppSlots) / sizeof(TGInAppSlots[0])))
+
+// 同一组捏合/张开的两个槽互为搭档（小的是捏合，大的是张开）。非 pinch 返回 -1。
+static int TGInAppPinchPartner(int idx) {
+    switch (idx) {
+        case 10: return 11; case 11: return 10;
+        case 14: return 15; case 15: return 14;
+        case 16: return 17; case 17: return 16;
+    }
+    return -1;
+}
+
+// UIPinchGestureRecognizer 固定两指，四指、五指只能自己算：以质心为中心，
+// 取各指到质心的平均半径，与起始值相比。不追求和系统捏合一样精确，只要能分清
+// 「明显收拢」和「明显张开」——判定阈值与两指版一致（0.7 / 1.4）。
+@interface TGMultiPinchGestureRecognizer : UIGestureRecognizer
+@property (nonatomic) NSUInteger fingers;
+@property (nonatomic, readonly) CGFloat scale;
+@end
+
+@implementation TGMultiPinchGestureRecognizer {
+    CGFloat _baseline;
+    CGFloat _scale;
+    BOOL _tracking;
+}
+
+@synthesize scale = _scale;
+
+- (CGFloat)averageRadius:(NSSet<UITouch *> *)touches {
+    NSArray<UITouch *> *all = touches.allObjects;
+    if (!all.count) return 0;
+    CGPoint centre = CGPointZero;
+    for (UITouch *t in all) {
+        CGPoint p = [t locationInView:self.view];
+        centre.x += p.x; centre.y += p.y;
+    }
+    centre.x /= all.count; centre.y /= all.count;
+    CGFloat sum = 0;
+    for (UITouch *t in all) {
+        CGPoint p = [t locationInView:self.view];
+        sum += hypot(p.x - centre.x, p.y - centre.y);
+    }
+    return sum / all.count;
+}
+
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    NSUInteger count = event.allTouches.count;
+    if (count < self.fingers) return; // 手指是一根一根落下的，等齐再开始
+    if (count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
+    _baseline = [self averageRadius:event.allTouches];
+    if (_baseline < 1) { self.state = UIGestureRecognizerStateFailed; return; }
+    _tracking = YES;
+    _scale = 1;
+    self.state = UIGestureRecognizerStateBegan;
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (!_tracking) return;
+    _scale = [self averageRadius:event.allTouches] / _baseline;
+    self.state = UIGestureRecognizerStateChanged;
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (_tracking) self.state = UIGestureRecognizerStateEnded;
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    self.state = UIGestureRecognizerStateCancelled;
+}
+
+@end
+
 
 @interface TGInAppTarget : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
@@ -324,23 +415,26 @@ static const void *TGInAppIndexKey = &TGInAppIndexKey;
 }
 
 - (UIGestureRecognizer *)recognizerFor:(int)idx {
+    if (idx < 0 || idx >= TGInAppSlotCount) return nil;
+    NSUInteger fingers = TGInAppSlots[idx].fingers;
+    unsigned char kind = TGInAppSlots[idx].kind;
     UIGestureRecognizer *g = nil;
-    if (idx >= 10) {
-        g = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
-    } else if (idx < 2) {
+    if (kind == TGInAppTap) {
         UITapGestureRecognizer *t = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
-        t.numberOfTouchesRequired = idx == 0 ? 2 : 3;
+        t.numberOfTouchesRequired = fingers;
         t.numberOfTapsRequired = 1;
         g = t;
-    } else {
+    } else if (kind == TGInAppSwipe) {
         UISwipeGestureRecognizer *s = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
-        s.numberOfTouchesRequired = idx < 6 ? 2 : 3;
-        int k = (idx - 2) % 4;
-        s.direction = (k == 0) ? UISwipeGestureRecognizerDirectionUp
-                   : (k == 1) ? UISwipeGestureRecognizerDirectionDown
-                   : (k == 2) ? UISwipeGestureRecognizerDirectionLeft
-                              : UISwipeGestureRecognizerDirectionRight;
+        s.numberOfTouchesRequired = fingers;
+        s.direction = TGInAppSlots[idx].dir;
         g = s;
+    } else if (fingers == 2) {
+        g = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+    } else {
+        TGMultiPinchGestureRecognizer *p = [[TGMultiPinchGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        p.fingers = fingers;
+        g = p;
     }
     g.delegate = self;
     g.cancelsTouchesInView = NO;
@@ -350,18 +444,25 @@ static const void *TGInAppIndexKey = &TGInAppIndexKey;
     return g;
 }
 
+// 一个槽要不要启用。捏合/张开是一对，任一配了就得建那个识别器。
+static BOOL TGInAppSlotWanted(uint64_t wanted, int idx) {
+    int partner = TGInAppPinchPartner(idx);
+    if (partner >= 0 && (wanted & (1ULL << (partner + 2)))) return YES;
+    return (wanted & (1ULL << (idx + 2))) != 0;
+}
+
 - (void)refresh:(UIWindow *)window wanted:(uint64_t)wanted {
     if (!window) return;
     for (UIGestureRecognizer *g in [window.gestureRecognizers copy]) {
         NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
         if (!idxN) continue;
-        int idx = idxN.intValue;
-        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
-        if (!(wanted & bit)) [window removeGestureRecognizer:g];
+        if (!TGInAppSlotWanted(wanted, idxN.intValue)) [window removeGestureRecognizer:g];
     }
-    for (int idx = 0; idx < 12; idx++) {
-        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
-        if (!(wanted & bit)) continue;
+    for (int idx = 0; idx < TGInAppSlotCount; idx++) {
+        if (!TGInAppSlotWanted(wanted, idx)) continue;
+        // 捏合/张开合用一个识别器，挂在组里较小的那个槽上（组首）。
+        int partner = TGInAppPinchPartner(idx);
+        if (partner >= 0 && partner < idx) continue;
         BOOL present = NO;
         for (UIGestureRecognizer *g in window.gestureRecognizers) {
             NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
@@ -374,27 +475,25 @@ static const void *TGInAppIndexKey = &TGInAppIndexKey;
 - (void)recognized:(UIGestureRecognizer *)g {
     NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
     int idx = idxN ? idxN.intValue : -1;
-    if (idx >= 0 && (idx & 0xfffffffe) == 10) {
-        if (g.state != UIGestureRecognizerStateEnded) return;
-        CGFloat scale = [(UIPinchGestureRecognizer *)g scale];
-        if (scale < 0.7) idx = 10;
-        else if (scale > 1.4) idx = 11;
+    if (idx < 0 || idx >= TGInAppSlotCount) return;
+    if (g.state != UIGestureRecognizerStateEnded) return;
+    int partner = TGInAppPinchPartner(idx);
+    if (partner >= 0) {
+        CGFloat scale = 1;
+        if ([g isKindOfClass:[UIPinchGestureRecognizer class]]) scale = ((UIPinchGestureRecognizer *)g).scale;
+        else if ([g isKindOfClass:[TGMultiPinchGestureRecognizer class]]) scale = ((TGMultiPinchGestureRecognizer *)g).scale;
+        if (scale < 0.7) idx = MIN(idx, partner);
+        else if (scale > 1.4) idx = MAX(idx, partner);
         else return;
-    } else {
-        if (g.state != UIGestureRecognizerStateEnded) return;
     }
-    if (idx >= 0 && idx <= 11) {
-        NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
-        notify_post(nm.UTF8String);
-    }
+    NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
+    notify_post(nm.UTF8String);
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
     NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
     if (!idxN) return NO;
-    int idx = idxN.intValue;
-    uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
-    return (CNRelayWanted() & bit) != 0;
+    return TGInAppSlotWanted(CNRelayWanted(), idxN.intValue);
 }
 
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
