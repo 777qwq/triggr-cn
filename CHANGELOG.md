@@ -3,6 +3,29 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.52
+
+回退「底部横条手势」，按 Triggr 2.1 的做法重做底部：**只保留双击底边横条**。
+
+前十几版一直在修同一件事：底边上滑配了动作后，从屏幕左右边缘往内滑就切不了应用。根因不在判据，在于这条路本身——单指底边就是系统「回主屏」的起手区，想接管它只能去抑制系统识别器，而抑制一旦按几何展开，就必然连带按住同一带的左右切应用。RC 也有同样的毛病，说明不是抄错。
+
+看了 2.1 的反汇编，它对这个问题的答案是**不做**：15 个自注册手势槽里，底部只有 `edge.bottomleft`、`edge.bottomright` 和双指 `edge.bottom2`，单指底边专门空着。它只挂 Home Bar 自己的双击回调。
+
+### 删掉
+
+- `bottom.bar.left` / `bottom.bar.right` / `bottom.up.left` / `bottom.up.center` / `bottom.up.right` 五个触发器。
+- `Tweak.x` 里整套底边判定：`TGBottomTakeTouch`、`TGBottomShouldSuppress*`、`TGBottomIsBottomTarget`、三份识别器 `touchesBegan/Moved` 钩子、`SBGrabberTongue` / `SBControlCenterController` / `SBHomeGesturePanGestureRecognizer` 钩子、`SBFluidSwitcher*` 的 `setState:` 钩子、`UIApplication sendEvent:` 记账（共 499 行）。
+- `Shared/TGBottomGeometry.h`、`Shared/TGBottomFreeze.h`。
+- `Relay.x` 的 `BottomStrip` 分组（App 内认底边、钉住画面、notify 上报）、`Shared/TGRelay.h` 的五个通知名与 bit 16–20。
+
+### 新增
+
+- `homebar.doubletap`：hook `SBHomeAffordanceInteractionManager` 的 `_bounceDoubleTapRecognized:`。配了动作才吞掉系统回调（不再触发 Reachability），单击、上滑、左右滑动一概不经过这里。只在应用内生效，主屏与锁屏留给 iOS。
+
+### 为什么这次不会再把左右切应用弄坏
+
+这条路径上没有任何「判断要不要抑制系统手势」的代码。没配动作时 Triggr 连一个识别器都不注册；配了也只是占住 Home Bar 的双击回调。左右边缘切应用、底边上滑回主屏、单击滚到顶部，全都走 iOS 原来的实现。
+
 ## 1.5.0+cn4.51
 
 修的是**从屏幕左右边缘往内滑切应用**，在底部上滑配了动作时被吃掉。

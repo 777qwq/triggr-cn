@@ -104,12 +104,9 @@ static const TGItem TGEdges[] = {
     {"edge.rightup", "沿右边缘上滑"}, {"edge.rightdown", "沿右边缘下滑"},
     {"edge.left2", "双指从左侧滑入"}, {"edge.right2", "双指从右侧滑入"},
 };
-// Bottom strip gestures, ported from RemoteCompanion 4.4: they start within ~50pt of the UI-bottom edge.
-// 横条左右滑与系统的切换应用并行；上滑三区只要该区有动作，就按区接管 iOS 自己的底部手势（见 TGBottomShouldSuppressTouch）。
-static const TGItem TGBottom[] = {
-    {"bottom.bar.left", "底部横条左滑"}, {"bottom.bar.right", "底部横条右滑"},
-    {"bottom.up.left", "底部上滑（左侧）"}, {"bottom.up.center", "底部上滑（中部）"},
-    {"bottom.up.right", "底部上滑（右侧）"},
+// The home bar's own double-tap callback (Triggr 2.1). Single taps keep scrolling to the top.
+static const TGItem TGHomeBar[] = {
+    {"homebar.doubletap", "双击"},
 };
 static const TGItem TGOther[] = {
     {"power.connected", "接入充电器"}, {"power.disconnected", "断开充电器"},
@@ -155,7 +152,7 @@ static const TGGroup TGTriggerGroups[] = {
     {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
     {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。"},
     {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入或上下滑，应用内、主屏幕和锁屏均有效。单指「从左侧滑入」会取代多数应用的返回手势；双指版（同 Activator）不会。上下滑只认贴着边缘起步、以竖直为主的滑动。"},
-    {"底部横条手势", TGBottom, TG_COUNT(TGBottom), "在屏幕最底部约 50pt 内起步，按起点位置分左、中、右三段。上滑的某一区指派了动作后，该区就由 Triggr 接管，iOS 自己的上滑（回主屏幕）在该区不再发生；没指派的区照常交给系统。锁屏上不接管，以免上滑解不开锁。横条左右滑是单指，始终与系统的切换应用并行。"},
+    {"Home Bar", TGHomeBar, TG_COUNT(TGHomeBar), "在应用内双击屏幕底部横条。单击仍会滚动到顶部，上滑回主屏幕和左右滑动切换应用都不受影响。"},
     {"主屏幕手势", TGHomeGestures, TG_COUNT(TGHomeGestures), "在主屏幕页面上（而非图标上）。双指滑动和捏合不影响单指滚动、聚焦搜索和今天视图；双击只在空白处生效。编辑主屏幕或打开文件夹时忽略。"},
     {"应用内手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "在应用内有效。先两指七项、再三指七项。原应用仍会收到同样的手势，所以挑它没占用的：点按和最不常用的方向最安全。两指捏合、张开就是应用自己的缩放，会和照片、Safari、地图等放大手势同时发生；三指基本没人占用。每个手势只在有指派的应用里启用。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},

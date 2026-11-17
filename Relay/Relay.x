@@ -7,8 +7,6 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import "../Shared/TGRelay.h"
-#import "../Shared/TGBottomFreeze.h"
-#import "../Shared/TGBottomGeometry.h"
 
 
 static void TGRelay(const char *name, uint64_t wantedBit) {
@@ -488,143 +486,16 @@ static const void *TGInAppIndexKey = &TGInAppIndexKey;
 %end
 %end
 
-// ---- 底部横条手势（App 里那一半）----
-// SpringBoard 那边负责按住系统手势；这边补上它看不见的两件事：
-//   1. 手指刚从底边往上走时把画面钉住，列表不跟手滚（Shared/TGBottomFreeze.h）；
-//   2. 45pt 上滑 / 60pt 横滑成立时告诉 SpringBoard，动作在那边执行。
-// 坐标不用换算方向：App 的窗口坐标跟着界面转，底边永远是 y 最大那条边。
-
-static BOOL tgRelayIsSpringBoard;
-static BOOL tgBottomActive;
-static BOOL tgBottomDone;
-static BOOL tgBottomFrozen;
-static CGPoint tgBottomStart;
-static UITouch *tgBottomTouch;
-static CGFloat tgBottomWidth;
-
-static UIWindow *TGBottomWindow(void) {
-    if (@available(iOS 13.0, *)) {
-        for (__kindof UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
-            UIWindowScene *ws = (UIWindowScene *)scene;
-            if (ws.activationState == UISceneActivationStateBackground) continue;
-            for (UIWindow *window in ws.windows) if (window.isKeyWindow) return window;
-        }
-    }
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-    return UIApplication.sharedApplication.keyWindow;
-#pragma clang diagnostic pop
-}
-
-// 分区规则与 Triggr 共用（Shared/TGBottomGeometry.h），这里只把「第几段」翻成位和通知名。
-static int TGBottomZoneAt(CGFloat x, CGFloat width) {
-    return TGBottomZoneIndex(width > 0 ? x / width : 0.5);
-}
-
-static uint64_t TGBottomZoneBit(int zone) {
-    static const uint64_t bits[3] = { TGRelayWantsBottomUpLeft, TGRelayWantsBottomUpCenter, TGRelayWantsBottomUpRight };
-    return bits[zone];
-}
-
-static const char *TGBottomZoneName(int zone) {
-    static const char *names[3] = { TGRelayBottomUpLeft, TGRelayBottomUpCenter, TGRelayBottomUpRight };
-    return names[zone];
-}
-
-static void TGBottomReset(void) {
-    tgBottomActive = NO;
-    tgBottomDone = NO;
-    tgBottomTouch = nil;
-    if (tgBottomFrozen) {
-        tgBottomFrozen = NO;
-        TGFreezeEnd();
-    }
-}
-
-static void TGBottomBegan(UITouch *touch, NSUInteger count) {
-    TGBottomReset();
-    if (count != 1) return; // 双指落在底边是系统自己的意思
-    UIWindow *window = TGBottomWindow();
-    if (!window) return;
-    CGSize size = window.bounds.size;
-    CGPoint p = [touch locationInView:window];
-    if (!(p.y > size.height - TGBottomZoneHeight)) return;
-    if (p.x < 0 || p.x > size.width) return;
-    tgBottomActive = YES;
-    tgBottomTouch = touch;
-    tgBottomStart = p;
-    tgBottomWidth = size.width;
-}
-
-static void TGBottomMoved(UITouch *touch, BOOL ended) {
-    if (!tgBottomActive) return;
-    if (tgBottomTouch && touch != tgBottomTouch) return;
-    CGPoint p = [touch locationInView:nil];
-    CGFloat dx = p.x - tgBottomStart.x;
-    CGFloat dy = p.y - tgBottomStart.y;
-    CGFloat ax = fabs(dx), ay = fabs(dy);
-    uint64_t wanted = CNRelayWanted();
-    int zone = TGBottomZoneAt(tgBottomStart.x, tgBottomWidth);
-    BOOL zoneWanted = (wanted & TGBottomZoneBit(zone)) != 0;
-
-    // 往上滑的意图一明确就钉住：再晚列表已经跟着走了（RC 的提前冻结，阈值取 10pt 以内）。
-    if (!tgBottomFrozen && zoneWanted && dy <= -6 && ay > ax) {
-        tgBottomFrozen = YES;
-        TGFreezeBegin();
-    }
-    // 45pt 执行，抬手时 35pt 兜底（RC 的阈值）。
-    if (!tgBottomDone && zoneWanted && dy < -TGBottomUpMin && ay > ax * TGBottomUpRatio &&
-        (ay > TGBottomUpFire || (ended && ay > TGBottomUpLift))) {
-        tgBottomDone = YES;
-        notify_post(TGBottomZoneName(zone));
-    }
-    if (ended) {
-        if (!tgBottomDone && ax > ay * TGBottomSideRatio && ax > TGBottomBarFire) {
-            if (dx > 0 && (wanted & TGRelayWantsBottomBarRight)) {
-                tgBottomDone = YES;
-                notify_post(TGRelayBottomBarRight);
-            } else if (dx < 0 && (wanted & TGRelayWantsBottomBarLeft)) {
-                tgBottomDone = YES;
-                notify_post(TGRelayBottomBarLeft);
-            }
-        }
-        TGBottomReset();
-    }
-}
-
-%group BottomStrip
-%hook UIApplication
-- (void)sendEvent:(UIEvent *)event {
-    if (!tgRelayIsSpringBoard && event.type == UIEventTypeTouches) {
-        UITouch *touch = [event.allTouches anyObject];
-        if (touch) {
-            switch (touch.phase) {
-                case UITouchPhaseBegan: TGBottomBegan(touch, event.allTouches.count); break;
-                case UITouchPhaseMoved: TGBottomMoved(touch, NO); break;
-                case UITouchPhaseEnded: TGBottomMoved(touch, YES); break;
-                case UITouchPhaseCancelled: TGBottomReset(); break;
-                default: break;
-            }
-        }
-    }
-    %orig;
-}
-%end
-%end
-
 %ctor {
     // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
     NSBundle *bundle = NSBundle.mainBundle;
     if (![bundle.bundlePath hasSuffix:@".app"]) return;
     %init(Shake);
     BOOL springBoard = [bundle.bundleIdentifier isEqualToString:@"com.apple.springboard"];
-    tgRelayIsSpringBoard = springBoard;
     if (!springBoard) {
         %init(StatusBar);
         %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
         %init(InAppGestures); // 多指手势（cn2.75b，2.0 逆向复刻）
-        %init(BottomStrip); // 底部横条手势：钉住画面 + 上报
         CNRelayAttachAll();
         [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:nil usingBlock:^(NSNotification *n) {
             CNRelayAttachAll();
