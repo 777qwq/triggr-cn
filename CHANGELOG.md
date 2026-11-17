@@ -3,6 +3,22 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.42
+
+底部手势的执行改走 RemoteCompanion 4.4 的 `sendEvent` 记账：不再依赖手势识别器，动作和「接管系统手势」读同一份状态。
+
+### 修的问题
+
+- **配了动作仍会触发系统手势、而且动作没执行**。根因是两条路各自判：识别器从 `touchesBegan` 到识别要几十毫秒，系统底部手势可能已经起来；识别器一旦判失败（第二根手指、方向不符）就再也收不到后面的事件，动作也就没了。cn4.41 的 `shouldBegin:` 兜底同样依赖识别器先落地记账，来不及。
+- **横屏方向取错**。原来问的是 `windowScene`，SpringBoard 的窗口常年停在竖屏，横屏时底边带会算到屏幕下边，实际手势在侧边，于是拦不住、也判不出区。现在先问 SpringBoard 自己的 `activeInterfaceOrientation`（RC 的注释里写明这是唯一可靠的方向源）。
+
+### 实现
+
+- `UIApplication` 的 `sendEvent:` 里记账：`Began` 记起点与所在区、`Moved` 走 45pt 上滑（抬手 35pt 兜底）、`Ended` 判横条左右滑 60pt。阈值、分区 0.33/0.67、四方向换算全部照 RC。
+- 只认单指；起手后再落下第二根手指不改账，也不参与位移。
+- 锁屏、通知中心 / 控制中心面板放行（上滑是解锁、收起），这两种情况不接管。
+- 删掉 `TGBottomRecognizer` 及其 target、`TGUpdateBottomGestures`、`tgBottomOwnsTouch` 一整套；gestureType 范围从 6 收回 4，只剩三条边滑加双指边滑。**没有留兼容分支**。
+
 ## 1.5.0+cn4.41
 
 底部横条手势对齐 RemoteCompanion 4.4：删掉双指，名称、顺序、分组图标跟 RC 一致，配了动作的上滑区接管系统手势。

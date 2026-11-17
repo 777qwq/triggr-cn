@@ -3150,8 +3150,12 @@ static const CGFloat TGBottomUpDistance = 45;   // 上滑要走的距离
 static const CGFloat TGBottomBarDistance = 60;  // 横条左右滑要走的距离
 
 // UIKit 的 window 坐标不跟着界面旋转，所以「底部在哪条边」「哪个方向算上」都要按界面方向换算。
-// view 传 nil（系统手势的回调里没有起点视图）时退到前台窗口所在的场景。
+// SpringBoard 自己知道前台界面转到了哪，它的 windowScene 常常还停在竖屏
+// （RemoteCompanion 的现场日志也是这个结论），所以先问它，问不到才退到场景。
 static UIInterfaceOrientation TGBottomOrientation(UIView *view) {
+    UIApplication *app = UIApplication.sharedApplication;
+    if ([app respondsToSelector:@selector(activeInterfaceOrientation)])
+        return (UIInterfaceOrientation)((NSInteger (*)(id, SEL))objc_msgSend)(app, @selector(activeInterfaceOrientation));
     if (@available(iOS 13.0, *)) {
         UIWindowScene *scene = view.window.windowScene;
         if (!scene) {
@@ -3211,159 +3215,132 @@ static CGPoint TGBottomUserDelta(CGPoint d, UIInterfaceOrientation o) {
     return d;
 }
 
+// 底边这一下的全部状态。RC（RemoteCompanion 4.4）在 UIApplication 的 sendEvent 里记账，
+// 不等手势识别器——识别器从 touchesBegan 到真正识别要几十毫秒，系统底部手势可能已经起来了，
+// 而且识别器一旦判失败（第二根手指、方向不符）就再也收不到后面的事件。这里照它的做法。
+// 动作执行和「系统手势让不让路」读同一份状态，不会出现一边生效一边没生效。
+static BOOL tgBottomActive;            // 这一下从底边带里起手
+static BOOL tgBottomDone;              // 已经执行过动作（或确认不该执行）
+static CGPoint tgBottomStart;
+static NSString *tgBottomZone;         // 落在哪个区；nil = 这个区没配 / 不该接管
+static UIInterfaceOrientation tgBottomLatched;
+static BOOL tgBottomLatchedValid;
+static UITouch *tgBottomTouch;          // 起手那根手指；多指时不让别的触点把位移算歪
+
+// 通知中心 / 控制中心拉下来的那块面板、锁屏，上滑是系统自己的（解锁、收起面板）。
+// 这两处放行，否则上滑解不开锁。
+static BOOL TGCoverSheetShowing(void) {
+    id manager = TGShared("SBCoverSheetPresentationManager");
+    if (manager && [manager respondsToSelector:@selector(isVisible)]) return TGCallBool(manager, @selector(isVisible));
+    return TGConditionLocked();
+}
+
 // 这个分区有没有上滑动作。按分区判、不按「底部配没配动作」一刀切，是 RC 踩过的坑：
 // 中间区配了会把右下角打开控制中心的那一滑一起吃掉（CHANGELOG 4.3「Center Bottom Swipe Up blocked Control Center」）。
-static BOOL TGBottomZoneHasAction(CGPoint p, UIInterfaceOrientation o) {
+static NSString *TGBottomZoneTrigger(CGPoint p, UIInterfaceOrientation o) {
     CGFloat progress = TGBottomProgress(p, o);
     NSString *trigger = progress < 0.33 ? @"bottom.up.left"
                       : progress > 0.67 ? @"bottom.up.right" : @"bottom.up.center";
-    return [tgAssignedTriggers containsObject:trigger];
+    return [tgAssignedTriggers containsObject:trigger] ? trigger : nil;
 }
 
-// 这一下要不要从 iOS 手里接过来：起点在底边带里、这个区有上滑动作、且不是锁屏。
-// 锁屏必须放行——上滑就是解锁，接管了就解不开。
-// 横条左右滑不参与：那是系统的切换应用，接管等于把这个常用手势废掉（RC 也没接管它）。
+// 触摸落地：只认单指，落在底边带里就记账。
+// 已经起手后再落下第二根手指不改账——那一指不是这次手势的起点。
+static void TGBottomTouchBegan(UITouch *touch, NSUInteger fingerCount) {
+    if (fingerCount != 1) return; // 双指落在底边是系统自己的意思，不接管
+    tgBottomActive = NO;
+    tgBottomDone = NO;
+    tgBottomZone = nil;
+    tgBottomLatchedValid = NO;
+    tgBottomTouch = nil;
+    UIInterfaceOrientation o = TGBottomOrientation(nil);
+    CGPoint p = [touch locationInView:nil];
+    if (!TGBottomInZone(p, o)) return;
+    tgBottomActive = YES;
+    tgBottomStart = p;
+    tgBottomLatched = o;
+    tgBottomLatchedValid = YES;
+    tgBottomTouch = touch;
+    tgBottomZone = TGCoverSheetShowing() ? nil : TGBottomZoneTrigger(p, o);
+}
+
+// 移动 / 抬手：位移按用户看到的方向换算，45pt 上滑即执行（RC 的阈值），
+// 抬手时 35pt 兜底也算——差一点没滑到 45 的手感就是靠这一条。
+static void TGBottomTouchMoved(UITouch *touch, BOOL ended) {
+    if (!tgBottomActive) return;
+    if (tgBottomTouch && touch != tgBottomTouch) return; // 第二根手指的位移不是这次手势的
+    UIInterfaceOrientation o = tgBottomLatchedValid ? tgBottomLatched : TGBottomOrientation(nil);
+    CGPoint p = [touch locationInView:nil];
+    CGPoint d = TGBottomUserDelta(CGPointMake(p.x - tgBottomStart.x, p.y - tgBottomStart.y), o);
+    CGFloat ax = fabs(d.x), ay = fabs(d.y);
+    BOOL sideways = ax > ay * 1.8;
+    BOOL up = d.y < -15 && ay > ax * 1.5;
+
+    if (!tgBottomDone && up && tgBottomZone && (ay > TGBottomUpDistance || (ended && ay > 35))) {
+        tgBottomDone = YES;
+        TGFire(tgBottomZone);
+    }
+    if (ended) {
+        // 横条左右滑不接管系统手势（那是切换应用），只执行动作。
+        if (!tgBottomDone && sideways && ax > TGBottomBarDistance) {
+            NSString *trigger = d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left";
+            if ([tgAssignedTriggers containsObject:trigger]) {
+                tgBottomDone = YES;
+                TGFire(trigger);
+            }
+        }
+        tgBottomActive = NO;
+        tgBottomDone = NO;
+        tgBottomZone = nil;
+        tgBottomLatchedValid = NO;
+        tgBottomTouch = nil;
+    }
+}
+
+static void TGBottomTouchCancelled(void) {
+    tgBottomActive = NO;
+    tgBottomDone = NO;
+    tgBottomZone = nil;
+    tgBottomLatchedValid = NO;
+    tgBottomTouch = nil;
+}
+
+// 这一下要不要从 iOS 手里接过来：落地时已经记过账，且这个区确实有动作。
+// 锁屏、通知中心/控制中心放行；横条左右滑不参与（RC 也不接管）。
 static BOOL TGBottomShouldSuppressTouch(UITouch *touch) {
-    if (!touch || !tgAssignedTriggers.count) return NO;
-    if (TGConditionLocked()) return NO;
+    if (!tgAssignedTriggers.count) return NO;
+    if (TGConditionLocked() || TGCoverSheetShowing()) return NO;
+    if (tgBottomActive && tgBottomZone) return YES;
+    // sendEvent 没覆盖到的场景（例如识别器直接问），用触点自己算一次。
+    if (!touch) return NO;
     CGPoint p = [touch locationInView:nil];
     UIInterfaceOrientation o = TGBottomOrientation(nil);
-    return TGBottomInZone(p, o) && TGBottomZoneHasAction(p, o);
+    return TGBottomInZone(p, o) && TGBottomZoneTrigger(p, o) != nil;
 }
 
-// 有的系统识别器不走 shouldReceiveTouch，而是直接问 shouldBegin（那个回调没有触点参数），
-// 所以落地时记一笔；3 秒封顶，免得被打断时标志卡住、把之后的手势都按住。
-static BOOL tgBottomOwnsTouch;
-static CFTimeInterval tgBottomOwnsTouchTime;
+// shouldBegin 没有触点参数，只能看这一下是不是我们记过账的底边触摸。
 static BOOL TGBottomOwnsTouchNow(void) {
-    return tgBottomOwnsTouch && CACurrentMediaTime() - tgBottomOwnsTouchTime < 3.0;
+    return tgBottomActive && tgBottomZone != nil;
 }
 
-// 和边缘那套一样是普通 pan：起点在底部带子里才算，方向决定是上滑还是横条左右滑。
-// 参数（带高 50、上滑 45、横滑 60、分区 0.33/0.67、四方向换算）取自 RemoteCompanion 4.4，
-// 但没搬它的 sendEvent 管线：这里只在「该区配了动作」时把系统底部手势按住（TGBottomShouldSuppressTouch）。
-@interface TGBottomRecognizer : UIPanGestureRecognizer
-@property (nonatomic) BOOL fired;
-@property (nonatomic) CGPoint startPoint;
-@property (nonatomic, copy) NSString *upTrigger;
-@property (nonatomic) BOOL wantBarLeft, wantBarRight;
-@end
-
-@implementation TGBottomRecognizer
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    // 只认单指：双指落在底边是别的意思，不接管。
-    if (event.allTouches.count != 1) {
-        self.state = UIGestureRecognizerStateFailed;
-        return;
-    }
-    CGPoint p = [[touches anyObject] locationInView:nil];
-    UIInterfaceOrientation o = TGBottomOrientation(self.view);
-    if (!TGBottomInZone(p, o)) {
-        self.state = UIGestureRecognizerStateFailed;
-        return;
-    }
-    self.startPoint = p;
-    self.fired = NO;
-    self.upTrigger = nil;
-    CGFloat progress = TGBottomProgress(p, o);
-    NSString *t = progress < 0.33 ? @"bottom.up.left"
-                : progress > 0.67 ? @"bottom.up.right" : @"bottom.up.center";
-    if ([tgAssignedTriggers containsObject:t]) self.upTrigger = t;
-    self.wantBarLeft = [tgAssignedTriggers containsObject:@"bottom.bar.left"];
-    self.wantBarRight = [tgAssignedTriggers containsObject:@"bottom.bar.right"];
-    if (!self.upTrigger && !self.wantBarLeft && !self.wantBarRight) {
-        self.state = UIGestureRecognizerStateFailed;
-        return;
-    }
-    // 上滑这一区有动作，系统手势就该让路；横滑不算（见 TGBottomShouldSuppressTouch）。
-    tgBottomOwnsTouch = self.upTrigger != nil;
-    tgBottomOwnsTouchTime = CACurrentMediaTime();
-    [super touchesBegan:touches withEvent:event];
-}
-
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    tgBottomOwnsTouch = NO;
-    [super touchesEnded:touches withEvent:event];
-}
-
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    tgBottomOwnsTouch = NO;
-    [super touchesCancelled:touches withEvent:event];
-}
-
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    // 识别之前先看方向：这个方向没配动作就立刻失败，把手势还给系统。
-    if (self.state == UIGestureRecognizerStatePossible && self.numberOfTouches <= 1) {
-        CGPoint p = [[touches anyObject] locationInView:nil];
-        UIInterfaceOrientation o = TGBottomOrientation(self.view);
-        CGPoint d = TGBottomUserDelta(CGPointMake(p.x - self.startPoint.x, p.y - self.startPoint.y), o);
-        CGFloat ax = fabs(d.x), ay = fabs(d.y);
-        if (ax > 8 || ay > 8) {
-            if (ay >= ax) {
-                if (d.y > 0 || !self.upTrigger) { // 向下，或这个区没配
-                    self.state = UIGestureRecognizerStateFailed;
-                    return;
-                }
-            } else if (d.x > 0 ? !self.wantBarRight : !self.wantBarLeft) {
-                self.state = UIGestureRecognizerStateFailed;
-                return;
+// 照 RC：所有触摸先经过这里，比任何手势识别器都早。
+%hook UIApplication
+- (void)sendEvent:(UIEvent *)event {
+    if (event.type == UIEventTypeTouches) {
+        UITouch *touch = [event.allTouches anyObject];
+        if (touch) {
+            switch (touch.phase) {
+                case UITouchPhaseBegan: TGBottomTouchBegan(touch, event.allTouches.count); break;
+                case UITouchPhaseMoved: TGBottomTouchMoved(touch, NO); break;
+                case UITouchPhaseEnded: TGBottomTouchMoved(touch, YES); break;
+                case UITouchPhaseCancelled: TGBottomTouchCancelled(); break;
+                default: break;
             }
         }
     }
-    [super touchesMoved:touches withEvent:event];
+    %orig;
 }
-@end
-
-@interface TGBottomTarget : NSObject
-@end
-@implementation TGBottomTarget
-- (void)slid:(TGBottomRecognizer *)recognizer {
-    if (recognizer.fired) return;
-    if (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded) return;
-    UIInterfaceOrientation o = TGBottomOrientation(recognizer.view);
-    CGPoint d = TGBottomUserDelta([recognizer translationInView:nil], o);
-    CGFloat ax = fabs(d.x), ay = fabs(d.y);
-    if (ay >= ax && d.y <= -TGBottomUpDistance && recognizer.upTrigger) {
-        recognizer.fired = YES;
-        TGFire(recognizer.upTrigger);
-        return;
-    }
-    if (ax > ay && ax >= TGBottomBarDistance) {
-        NSString *trigger = d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left";
-        if ([tgAssignedTriggers containsObject:trigger]) {
-            recognizer.fired = YES;
-            TGFire(trigger);
-        }
-    }
-}
-@end
-
-static TGBottomRecognizer *tgBottomRecognizer;
-
-static void TGUpdateBottomGestures(void) {
-    if (!tgGestureManagerReady) return;
-    SBSystemGestureManager *manager = [objc_getClass("SBSystemGestureManager") mainDisplayManager];
-    if (!manager) return;
-    static TGBottomTarget *target;
-    if (!target) target = [TGBottomTarget new];
-    BOOL want = [tgAssignedTriggers containsObject:@"bottom.up.left"]
-             || [tgAssignedTriggers containsObject:@"bottom.up.center"]
-             || [tgAssignedTriggers containsObject:@"bottom.up.right"]
-             || [tgAssignedTriggers containsObject:@"bottom.bar.left"]
-             || [tgAssignedTriggers containsObject:@"bottom.bar.right"];
-    if (want && !tgBottomRecognizer) {
-        TGBottomRecognizer *r = [[TGBottomRecognizer alloc] initWithTarget:target action:@selector(slid:)];
-        r.minimumNumberOfTouches = 1;
-        r.maximumNumberOfTouches = 1;
-        r.cancelsTouchesInView = YES; // 识别后取消应用自己的触摸，和边滑一致
-        r.delaysTouchesBegan = NO;
-        [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + 4];
-        tgBottomRecognizer = r;
-    } else if (!want && tgBottomRecognizer) {
-        [manager removeGestureRecognizer:tgBottomRecognizer];
-        tgBottomRecognizer = nil;
-    }
-}
+%end
 
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
 // init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
@@ -3413,7 +3390,6 @@ static void TGUpdateEdgeGestures(void) {
     tgGestureManagerReady = YES;
     dispatch_async(dispatch_get_main_queue(), ^{
         TGUpdateEdgeGestures();
-        TGUpdateBottomGestures();
     });
     return manager;
 }
@@ -3424,8 +3400,7 @@ static void TGUpdateEdgeGestures(void) {
 // 只针对 edges 含 Bottom 的识别器，以及 edges 为 0 的那个——系统 Home 手势不是 edge pan，
 // edges 就是 0，RC 用同一个条件抓它。
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
-    if ([recognizer isKindOfClass:[TGBottomRecognizer class]] || [recognizer isKindOfClass:[TGEdgeRecognizer class]])
-        return %orig;
+    if ([recognizer isKindOfClass:[TGEdgeRecognizer class]]) return %orig;
     if (TGBottomShouldSuppressTouch(touch)) {
         UIRectEdge edges = UIRectEdgeNone;
         if ([recognizer respondsToSelector:@selector(edges)])
@@ -3437,8 +3412,7 @@ static void TGUpdateEdgeGestures(void) {
 
 // 有的识别器不走 shouldReceiveTouch，直接问能不能开始；这里用手势落地时记的标志兜底。
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer {
-    if ([recognizer isKindOfClass:[TGBottomRecognizer class]] || [recognizer isKindOfClass:[TGEdgeRecognizer class]])
-        return %orig;
+    if ([recognizer isKindOfClass:[TGEdgeRecognizer class]]) return %orig;
     if (TGBottomOwnsTouchNow()) {
         UIRectEdge edges = UIRectEdgeNone;
         if ([recognizer respondsToSelector:@selector(edges)])
@@ -3449,11 +3423,11 @@ static void TGUpdateEdgeGestures(void) {
 }
 
 - (BOOL)_isGestureWithTypeAllowed:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 6) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
     return %orig;
 }
 - (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 6) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
     return %orig;
 }
 %end
@@ -4081,7 +4055,6 @@ static void TGUpdateOtherEvents(void) {
     TGUpdateIconFlicks(TGAssignedPrefix(@"icon.flick"));
     TGUpdateHomeGestures(TGAssignedPrefix(@"homescreen."));
     TGUpdateEdgeGestures();
-    TGUpdateBottomGestures();
     tgWatchNotifications = TGAssignedPrefix(@"notification.");
     TGUpdateProximity(TGAssignedPrefix(@"proximity."));
     TGUpdateMusic(TGAssignedPrefix(@"music."));
