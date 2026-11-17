@@ -3,6 +3,33 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.45
+
+两件事：底部上滑时画面不该跟着走；横条左右滑配了动作就不该切应用。
+
+### 1. 画面钉住（照 RC 的冻结）
+
+只按住系统手势不够。手指从底边往上走的那几十点仍然会送到前台 App，列表、网页、图标页都跟着上滚——动作执行了、屏幕也上滑了，用户看到的就是「没拦住」。
+
+RC 的做法（`Tweak.x:17446 RC_FreezeGestureScrolling`）：找到所有 `UIScrollView`，存下 `contentOffset`，`scrollEnabled = NO` 并把它们自己的手势识别器一起关掉；抬手时还原偏移。新增 `Shared/TGBottomFreeze.h` 实现这一套，两处调用：
+
+- **App 内**：`Relay` 在 `UIApplication sendEvent:` 里，往上滑的意图一明确（6pt）就冻住，45pt 执行动作后抬手解冻。
+- **SpringBoard**：底边落地且这一区配了动作时冻住（桌面图标页同样会被上滑带走）。
+
+2 秒兜底解冻，避免漏掉一次结束事件导致 App 永久滚不动。**不关窗口的 `userInteractionEnabled`**：RC 关它是为了防「抬手点到按钮」，代价是 UIKit 把正在进行的触摸变成 `Cancelled`，手势状态跟着丢，这里只停滚动。
+
+### 2. 横条左右滑接管
+
+之前把横滑排除了（那是系统的切换应用），现在按你的要求：**配了动作就不切应用**。
+
+- 方向要等手指动了才知道，所以在 `touchesMoved` 里判：起点在底边带、横向压过纵向 1.8 倍、位移过 12pt，且该方向配了动作 → 识别器 `Failed`。
+- 再补一层 `SBFluidSwitcherScreenEdgePanGestureRecognizer` / `SBCoverSheetScreenEdgePanGestureRecognizer` 的 `setState:`（RC 的 `Tweak.x:19151`）：刚要 `Began` 就改判 `Failed`，防个别系统版本上位移还没累积就判开始。
+- 没配动作的方向原样放行，切换应用照常。
+
+### 3. App 内底边手势开始真正生效
+
+之前 `Triggr` 只注入 SpringBoard，前台 App 的触摸它看不见，所以底边动作在 App 里其实不执行。现在 `Relay`（本来就注入所有 App）在 `sendEvent` 里认方向，认到后 `notify_post` 通知 SpringBoard 执行，五个触发器各一条通知。SpringBoard 侧同时把「哪几个底边触发器配了动作」写进 `relay-wanted` 状态位（bit 16–20），Relay 只在这些区里冻结与上报。
+
 ## 1.5.0+cn4.44
 
 重新对着 RemoteCompanion 的源码抄了一遍，找到之前漏掉的部分：它拦底部手势并不靠 `SBSystemGestureManager` 的 delegate，而是**直接按住执行手势的那个识别器**。
