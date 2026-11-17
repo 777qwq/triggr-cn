@@ -224,8 +224,8 @@ static const TGItem TGPluginCopyLog[] = {
 };
 // 手势：控制项是固定的，播放项在设置页按当前手势库动态列出（gesture:<name>）。
 static const TGItem TGGestureActions[] = {
-    {TGGestureRecordAction, "录制／停止录制手势"}, {TGGestureStopAction, "停止播放手势"},
-    {TGGestureLatestAction, "播放最近录制的手势"},
+    {"gesture.record", "录制／停止录制手势"}, {"gesture.stop", "停止播放手势"},
+    {"gesture.latest", "播放最近录制的手势"},
 };
 
 static const TGGroup TGActionGroups[] = {

@@ -4407,11 +4407,12 @@ static void TGResyncAfterLaunch(void) {
             else TGRunActions(actions);
         }
     });
+    int tapToken;
+    int airPlayListToken;
     int shortcutListToken;
     notify_register_dispatch(TGAirPlayListRequest, &airPlayListToken, dispatch_get_main_queue(), ^(int t) { TGWriteAirPlayList(); });
     notify_register_dispatch(TGShortcutListRequest, &shortcutListToken, dispatch_get_main_queue(), ^(int t) { TGWriteShortcutList(); });
     // 设置页的手势库页：试播/录制/停止/gesture 设置都走「写文件 + notify」这条路。
-    int tapToken;
     int gestureCommandToken;
     notify_register_dispatch(TGGestureCommandNotification, &gestureCommandToken, dispatch_get_main_queue(), ^(int t) {
         NSDictionary *request = [NSDictionary dictionaryWithContentsOfFile:TGGestureCommandPath];
