@@ -3091,11 +3091,14 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
         CGPoint p = [[touches anyObject] locationInView:nil];
         CGFloat ax = fabs(p.x - self.startPoint.x), ay = fabs(p.y - self.startPoint.y);
         if (ax > 4 || ay > 4) {
-            if (ay > ax && !(self.wantUp || self.wantDown)) {
-                self.state = UIGestureRecognizerStateFailed;
-                return;
-            }
-            if (ax >= ay && !self.wantInward) {
+            if (ay > ax) {
+                // 按实际方向判：只配了上滑时，下滑要留给应用，不能把列表冻住。
+                BOOL up = p.y < self.startPoint.y;
+                if (!(up ? self.wantUp : self.wantDown)) {
+                    self.state = UIGestureRecognizerStateFailed;
+                    return;
+                }
+            } else if (!self.wantInward) {
                 self.state = UIGestureRecognizerStateFailed;
                 return;
             }
