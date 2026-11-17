@@ -27,9 +27,13 @@ cn4.56 把 `UIPanGestureRecognizer` 直接挂到 SpringBoard 的窗口上。窗�
 
 配了「底部上滑」的动作，左右两侧滑动切换应用会失效。这是 `UIScreenEdgePanGestureRecognizer` 按族互斥的必然结果，2.1 与 RemoteCompanion 一样；不配底边上滑就照旧能切。小白条的三下不走这条路，配了不影响任何系统手势。
 
+### 底角动作执行时屏幕不许跟着上去
+
+`SBHomeGesturePanGestureRecognizer` 的 `touchesBegan:`：起手在底边 24pt、自己那 1/3、且该角当前模式里有动作时，把它置 Failed。这一层 cn4.55 验过有效（iOS 15+ 驱动回主屏的是它，不是 screen-edge 那一族），只是上次和「直挂窗口」的坏实现一起被删了，这次按原样接回来。
+
 ### 清理
 
-删掉 `TGBottomPanRecognizer`、宿主窗口挑选、2 秒重挂、`SBHomeGesturePanGestureRecognizer` 的 `touchesBegan:` 拒绝层，以及 `edge.bottom2`（双指底部上滑，这一版不含）。`bottom.log` 保留，只记注册与触发。
+删掉 `TGBottomPanRecognizer`、宿主窗口挑选、2 秒重挂、cn4.54 的 `UIScreenEdgePanGestureRecognizer` `_shouldReceiveTouch:` 层，以及 `edge.bottom2`（双指底部上滑，这一版不含）。`bottom.log` 保留，只记注册与触发。
 
 ---
 

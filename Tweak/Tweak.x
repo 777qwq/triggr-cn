@@ -3508,6 +3508,29 @@ static void TGUpdateEdgeGestures(void) {
 }
 %end
 
+// 2.1 的另一半：底角这一下不许系统同时「回主屏」。iOS 15+ 驱动这一步的是
+// SBHomeGesturePanGestureRecognizer（继承 UIPanGestureRecognizer，不属 screen-edge 那一族），
+// touchesBegan 时它还是 Possible，置 Failed 之后就不会 Began，屏幕也就不会上去。
+// 只按自己那 1/3、且该角当前模式里确实有动作时才按——否则整条 %orig，回主屏照旧。
+@interface SBHomeGesturePanGestureRecognizer : UIPanGestureRecognizer
+@end
+
+%hook SBHomeGesturePanGestureRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    CGPoint p = [[touches anyObject] locationInView:nil];
+    BOOL left = NO, right = NO;
+    if (TGBottomPointInBar(p, &left, &right) && (left || right) && !TGConditionLocked()) {
+        NSString *key = left ? @"edge.bottomleft" : @"edge.bottomright";
+        if (TGActionFor(key)) {
+            TGBottomLog(@"home gesture refused at (%.0f, %.0f)", p.x, p.y);
+            self.state = UIGestureRecognizerStateFailed;
+            return;
+        }
+    }
+    %orig;
+}
+%end
+
 #pragma mark - Notifications and calls
 
 // "Notification from <app>": only which app posted, never what it says. A
