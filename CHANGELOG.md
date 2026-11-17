@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.66
+
+- **手势行去除左滑删除**：`TGGesturesController` 的 `swipeTitleForSpecifier:` 改为始终返回 nil，已保存手势行不再有左滑删除；删除仍可从点按弹出的菜单操作。分组说明文案同步去掉「从右往左滑可删除」，只保留「点按可试播、重命名或删除」。
+
 ## 1.5.0+cn4.65
 
 - **手势库页 UI 按反馈调整**：

@@ -3020,7 +3020,7 @@ static NSURL *tgGestureExportURL;
         [specs addObject:tab];
 
         PSSpecifier *list = [PSSpecifier groupSpecifierWithName:@"已保存的手势"];
-        [list setProperty:library.count ? @"点按可试播、重命名或删除；从右往左滑可删除。" : @"还没有手势。先点上方「录制新手势」。" forKey:@"footerText"];
+        [list setProperty:library.count ? @"点按可试播、重命名或删除。" : @"还没有手势。先点上方「录制新手势」。" forKey:@"footerText"];
         [specs addObject:list];
         for (NSDictionary *g in library) {
             NSString *name = g[@"name"];
@@ -3156,9 +3156,9 @@ static NSURL *tgGestureExportURL;
     }
 }
 
-// 左滑删除已保存的手势；点按仍可试播/重命名/删除。
+// 手势行不提供左滑删除：删除统一从点按弹出的菜单里操作。
 - (NSString *)swipeTitleForSpecifier:(PSSpecifier *)spec {
-    return [spec propertyForKey:@"tgGestureName"] ? @"删除" : nil;
+    return nil;
 }
 
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
