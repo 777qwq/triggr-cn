@@ -3139,21 +3139,34 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 }
 @end
 
-// 底部横条（Triggr 2.1 的做法）：同样是往系统手势表里注册自己的识别器，只是换成
-// UIScreenEdgePanGestureRecognizer + edges = Bottom + 24pt 热区。用这个子类而不是 UIPan，
-// 是因为它被系统视为「屏幕边缘手势」，一旦 Began，iOS 自己的底部上滑（回主屏幕）就会让位；
-// UIPan 拿不到这个待遇，只能靠去按住系统识别器，那正是前十几版把左右切应用一起按死的原因。
-// 只认底边左 1/3 与右 1/3，中间那 1/3 一个字节都不碰，留给系统回主屏幕。
+// 底部横条（Triggr 2.1 的手势集，但不进系统手势表）。
+//
+// 为什么不用 addGestureRecognizer:withType:：UIKit 把 UIScreenEdgePanGestureRecognizer 按族互斥，
+// 同一个 window 上只要有一条，别的 screen-edge 识别器（含 SpringBoard 切应用那条
+// SBFluidSwitcherScreenEdgePanGestureRecognizer）就要等它先失败。我们注册的三条 edges=Bottom
+// 覆盖整条底边，从屏幕左右两侧起手时它们不会立刻失败，切应用就被无限期推迟——实测「配了底边动作，
+// 两侧就切不了应用」就是这么来的。2.1 与 RemoteCompanion 用的都是注册式，同样有这个代价。
+//
+// 所以这里回到最朴素的做法：一条 UIPanGestureRecognizer，直接挂到 SpringBoard 的窗口上，
+// 完全不进系统手势管理器。系统那边只留一处介入——SBHomeGesturePanGestureRecognizer 的
+// touchesBegan，在底角 24pt 的小方块里把它按掉（见下）。
 static const CGFloat TGBottomRegion = 24;   // 与 2.1 的 setEdgeRegionSize 一致
 
-@interface TGBottomEdgeRecognizer : UIScreenEdgePanGestureRecognizer
+@interface TGBottomPanRecognizer : UIPanGestureRecognizer
 @property (nonatomic) NSInteger third;   // 0 左，1 右，-1 全区（双指）
 @property (nonatomic) BOOL fired;
 @property (nonatomic, copy) NSString *trigger;
 @end
 
-@implementation TGBottomEdgeRecognizer
+static void TGBottomLog(NSString *format, ...);
+
+@implementation TGBottomPanRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    CGPoint p = [[touches anyObject] locationInView:nil];
+    CGSize size = [UIScreen mainScreen].bounds.size;
+    if (p.y >= size.height - 60)
+        TGBottomLog(@"pan began (%@) at (%.0f, %.0f) locked=%d action=%d",
+                    self.trigger, p.x, p.y, TGConditionLocked(), TGActionFor(self.trigger) != nil);
     // 锁屏上从底边往上滑是解锁，不是我们的动作区。
     if (TGConditionLocked()) {
         self.state = UIGestureRecognizerStateFailed;
@@ -3165,14 +3178,14 @@ static const CGFloat TGBottomRegion = 24;   // 与 2.1 的 setEdgeRegionSize 一
         self.state = UIGestureRecognizerStateFailed;
         return;
     }
-    if (self.third >= 0 && event.allTouches.count == self.minimumNumberOfTouches) {
-        CGRect screen = self.view.window ? self.view.window.bounds : [UIScreen mainScreen].bounds;
-        CGFloat x = [[touches anyObject] locationInView:nil].x;
-        BOOL inThird = self.third == 0 ? (x < screen.size.width / 3) : (x > screen.size.width * 2 / 3);
-        if (!inThird) {
-            self.state = UIGestureRecognizerStateFailed;
-            return;
-        }
+    // 起手点不在底边 24pt 带里，或不在自己那 1/3，就不认这一下。
+    // 这条判据是整套实现里唯一的几何约束，也是「不误伤两侧切应用」的全部依据。
+    BOOL inBottom = p.y >= size.height - TGBottomRegion;
+    BOOL inThird = self.third < 0 ? YES
+                 : (self.third == 0 ? p.x < size.width / 3.0 : p.x > size.width * 2.0 / 3.0);
+    if (!inBottom || !inThird) {
+        self.state = UIGestureRecognizerStateFailed;
+        return;
     }
     self.fired = NO;
     [super touchesBegan:touches withEvent:event];
@@ -3182,21 +3195,69 @@ static const CGFloat TGBottomRegion = 24;   // 与 2.1 的 setEdgeRegionSize 一
 @interface TGBottomTarget : NSObject
 @end
 @implementation TGBottomTarget
-- (void)slid:(TGBottomEdgeRecognizer *)recognizer {
+- (void)slid:(TGBottomPanRecognizer *)recognizer {
     if (recognizer.fired) return;
-    // edge pan 一旦 Began，系统那条底部上滑已经让位，这时执行动作不会再有「屏幕也上去了」。
     if (recognizer.state != UIGestureRecognizerStateBegan && recognizer.state != UIGestureRecognizerStateChanged) return;
+    // 只认竖直向上。横滑留给系统，这一条是「底边上沿横滑仍能切应用」的保证。
+    CGPoint t = [recognizer translationInView:nil];
+    if (t.y > -8 || fabs(t.y) < fabs(t.x) * 1.2) return;
     recognizer.fired = YES;
     TGFire(recognizer.trigger);
 }
 @end
 
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
-static NSMutableArray<TGBottomEdgeRecognizer *> *tgBottomRecognizers;
+static NSMutableArray<TGBottomPanRecognizer *> *tgBottomRecognizers;
 static BOOL tgGestureManagerReady;
+
+// SpringBoard 自己那个接收 App 区域触摸的窗口。App 的 window 在别的进程里，拿不到，
+// 也不需要——SpringBoard 是事件源，挂在自己窗口上的识别器照样能看到每一次触摸。
+static UIWindow *TGBottomHostWindow(void) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    Class homeClass = NSClassFromString(@"SBHomeGesturePanGestureRecognizer");
+    UIWindow *best = nil;
+    for (UIWindow *w in UIApplication.sharedApplication.windows) {
+        if (w.hidden || !w.isUserInteractionEnabled) continue;
+        CGSize size = w.bounds.size;
+        if (size.width < screen.width - 1 || size.height < screen.height - 1) continue;
+        // 系统自己的 home 手势挂在哪，底边的触摸就一定能到哪。优先用那个窗口，
+        // 省得猜 SpringBoard 这一堆 window 里哪个真的收得到 App 区域的触摸。
+        if (homeClass) {
+            for (UIGestureRecognizer *g in w.gestureRecognizers)
+                if ([g isKindOfClass:homeClass]) return w;
+        }
+        if (!best || w.windowLevel > best.windowLevel) best = w;
+    }
+    return best ?: UIApplication.sharedApplication.keyWindow;
+#pragma clang diagnostic pop
+}
+
+// 窗口会在 App 切换、锁屏这些时候重建，识别器跟着被摘掉，所以每次检查一遍再挂回去。
+static void TGBottomReattach(void) {
+    if (!tgBottomRecognizers.count) return;
+    UIWindow *host = TGBottomHostWindow();
+    if (!host) return;
+    for (TGBottomPanRecognizer *r in tgBottomRecognizers) {
+        if (r.view == host) continue;
+        [r.view removeGestureRecognizer:r];
+        [host addGestureRecognizer:r];
+    }
+}
 
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
 // init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
+
+// 窗口重建不会通知我们，所以每 2 秒摸一次：六次指针比较，没有别的开销。
+static void TGBottomWatchWindows(void) {
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:YES block:^(__unused NSTimer *timer) {
+            TGBottomReattach();
+        }];
+    });
+}
 
 static void TGUpdateEdgeGestures(void) {
     if (!tgGestureManagerReady) return; // -[SBMainDisplaySystemGestureManager _init] calls this again
@@ -3239,34 +3300,33 @@ static void TGUpdateEdgeGestures(void) {
     static TGBottomTarget *bottomTarget;
     if (!bottomTarget) bottomTarget = [TGBottomTarget new];
     if (!tgBottomRecognizers) tgBottomRecognizers = [NSMutableArray array];
-    struct { const char *trigger; NSInteger third; NSUInteger fingers; unsigned long long type; } bottoms[] = {
-        {"edge.bottomleft", 0, 1, TGEdgeGestureTypeBase + 4},
-        {"edge.bottomright", 1, 1, TGEdgeGestureTypeBase + 5},
-        {"edge.bottom2", -1, 2, TGEdgeGestureTypeBase + 6},
+    struct { const char *trigger; NSInteger third; NSUInteger fingers; } bottoms[] = {
+        {"edge.bottomleft", 0, 1},
+        {"edge.bottomright", 1, 1},
+        {"edge.bottom2", -1, 2},
     };
     for (int i = 0; i < 3; i++) {
-        TGBottomEdgeRecognizer *existing = nil;
-        for (TGBottomEdgeRecognizer *r in tgBottomRecognizers)
+        TGBottomPanRecognizer *existing = nil;
+        for (TGBottomPanRecognizer *r in tgBottomRecognizers)
             if ([r.trigger isEqualToString:@(bottoms[i].trigger)]) existing = r;
         BOOL want = [tgAssignedTriggers containsObject:@(bottoms[i].trigger)];
         if (want && !existing) {
-            TGBottomEdgeRecognizer *r = [[TGBottomEdgeRecognizer alloc] initWithTarget:bottomTarget action:@selector(slid:)];
+            TGBottomPanRecognizer *r = [[TGBottomPanRecognizer alloc] initWithTarget:bottomTarget action:@selector(slid:)];
             r.third = bottoms[i].third;
             r.trigger = @(bottoms[i].trigger);
-            r.edges = UIRectEdgeBottom;
-            [r setValue:@(TGBottomRegion) forKey:@"edgeRegionSize"];
             r.minimumNumberOfTouches = bottoms[i].fingers;
             r.maximumNumberOfTouches = bottoms[i].fingers;
             r.cancelsTouchesInView = NO;
             r.delaysTouchesBegan = NO;
             r.delaysTouchesEnded = NO;
-            [manager addGestureRecognizer:r withType:bottoms[i].type];
             [tgBottomRecognizers addObject:r];
         } else if (!want && existing) {
-            [manager removeGestureRecognizer:existing];
+            [existing.view removeGestureRecognizer:existing];
             [tgBottomRecognizers removeObject:existing];
         }
     }
+    TGBottomReattach();
+    TGBottomWatchWindows();
 }
 
 %hook SBMainDisplaySystemGestureManager
@@ -3282,11 +3342,11 @@ static void TGUpdateEdgeGestures(void) {
 
 %hook SBSystemGestureManager
 - (BOOL)_isGestureWithTypeAllowed:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 7) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
     return %orig;
 }
 - (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 7) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
     return %orig;
 }
 %end
@@ -3341,7 +3401,7 @@ static NSString *TGBottomCornerKey(UITouch *touch) {
                   : p.x > size.width * 2.0 / 3.0 ? @"edge.bottomright" : nil;
     if (!key || ![tgAssignedTriggers containsObject:key]) return nil;
     // 当前模式里这个 key 没动作时，我们自己的识别器会当场 Failed；此时再拒系统手势就是两头空
-    //（既不回主屏也没动作）。所以这一条必须和 TGBottomEdgeRecognizer 的判据保持一致。
+    //（既不回主屏也没动作）。所以这一条必须和 TGBottomPanRecognizer 的判据保持一致。
     if (!TGActionFor(key)) return nil;
     return key;
 }
@@ -3372,25 +3432,13 @@ static void TGBottomLog(NSString *format, ...) {
     [handle closeFile];
 }
 
-%hook UIScreenEdgePanGestureRecognizer
-- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
-    // 自己注册的那三条不能拦，否则动作根本收不到手。
-    // 另外照 RC 的做法只看 Bottom 边（edges == 0 视为没设边），屏幕左右两侧那条一概不碰。
-    if ([self isKindOfClass:[TGBottomEdgeRecognizer class]]) return %orig;
-    if ([self respondsToSelector:@selector(edges)]) {
-        UIRectEdge edges = [(UIScreenEdgePanGestureRecognizer *)self edges];
-        if (edges != 0 && !(edges & UIRectEdgeBottom)) return %orig;
-    }
-    NSString *key = TGBottomCornerKey(touch);
-    if (!key) return %orig;
-    CGPoint p = [touch locationInView:nil];
-    TGBottomLog(@"screen-edge refused (%@) at (%.0f, %.0f) type=%s", key, p.x, p.y, class_getName([self class]));
-    return NO;
-}
-%end
+// 早先这里还有一条 UIScreenEdgePanGestureRecognizer 的 _shouldReceiveTouch: 拒绝层（照 2.1 抄的）。
+// 实测它对「底边上滑回主屏」完全无用——那一下根本不由 screen-edge 识别器驱动——却覆盖了
+// SpringBoard 切应用那条（SBFluidSwitcher… 是它的子类），是个纯粹的干扰项，所以删掉了。
+// 我们自己也不再注册任何 screen-edge 识别器，这一段没有存在的理由。
 
 // iOS 15+ 上真正驱动「底边上滑回主屏」的是这一条，它继承 UIPanGestureRecognizer，
-// 不是 screen-edge 那一支——上面那个 hook 压根碰不到它，这就是拒绝层看起来无效的原因。
+// 跟 screen-edge 不是同一条链——这也是为什么照着 2.1 抄那一层没有效果。
 @interface SBHomeGesturePanGestureRecognizer : UIPanGestureRecognizer
 @end
 

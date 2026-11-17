@@ -3,6 +3,45 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.56
+
+底边识别器不再进系统手势表。这是换实现，不是调判据。
+
+### 前面为什么怎么调都不行
+
+`UIScreenEdgePanGestureRecognizer` 在 UIKit 里**按族互斥**：同一个窗口上只要有一条，别的 screen-edge 识别器就得等它先失败。SpringBoard 切应用那条（`SBFluidSwitcherScreenEdgePanGestureRecognizer`）也是这个族的。
+
+我们注册的三条 `edges = Bottom` 覆盖整条底边，从屏幕左右两侧起手时它们收不到手指、但也不是立刻失败，于是切应用一直等——等到它失败，手已经滑出去几十 pt 了。
+
+实测结论：**只要注册这三条，两侧就切不了应用**，跟判到多大、配的是哪个角无关。2.1 与 RemoteCompanion 用的都是 `addGestureRecognizer:withType:`，同样有这个代价。
+
+### 现在怎么做的
+
+- `TGBottomPanRecognizer : UIPanGestureRecognizer`，**直接挂到 SpringBoard 的窗口上**，不经过 `SBSystemGestureManager`
+- 宿主窗口优先选「系统自己的 home 手势所挂的那个」——那里底边触摸一定到得了，不用猜
+- 起手点在底边 24pt 带 + 自己那 1/3 才认；否则当场 Failed
+- 触发前再判方向：`dy < -8` 且 `|dy| > |dx| * 1.2` 才算上滑，横滑一律放行
+- 窗口重建（切 App、锁屏）会把识别器摘掉，每 2 秒检查一次挂回去
+
+### 系统那边只剩一处介入
+
+`SBHomeGesturePanGestureRecognizer` 的 `touchesBegan:`，判据与动作区完全重合。这一层 cn4.55 已验证有效（上滑不回主屏、横条横滑不受影响）。
+
+顺带删掉 cn4.54 加的 `UIScreenEdgePanGestureRecognizer` `_shouldReceiveTouch:` hook：实测对底边上滑无用，却覆盖了切应用那条识别器，是纯干扰项。
+
+### 风险
+
+`UIPanGestureRecognizer` 挂在 SpringBoard 窗口上，优先级低于系统手势，**可能收不到触摸**。若如此，动作不会触发——这是这一版最大的不确定。
+
+诊断日志（只在底边 60pt 内的起手写一行）：
+
+```
+/var/mobile/Library/Preferences/com.johndie.triggr/bottom.log
+```
+
+- 有 `pan began (edge.bottomleft) at (40, 831) locked=0 action=1` → 触摸收到了，看 `action` 和坐标查判据
+- 一条都没有 → 收不到触摸，这条路到头
+
 ## 1.5.0+cn4.55
 
 cn4.54 的拒绝层实测无效。原因找到了：**挂错了类**。
