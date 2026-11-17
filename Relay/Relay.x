@@ -275,45 +275,58 @@ static void TGRelayDoBack(void) {
 %end
 
 static void CNRelayAttachAll(void);
-// ---- 多指手势（cn2.75b，严格按 2.0 Relay 反汇编复刻）----
-// 12 槽位：0=2指tap 1=3指tap 2..5=2指上/下/左/右 6..9=3指四向 10/11=三指捏合/张开
-// 方向表 DAT_000076c8 实证：Up/Down/Left/Right，三指组复用同表；并发委托返回 YES；tap/swipe 到 Ended 派发
-// wanted 位：bit(idx+2)；pinch 特例 bit12/13。上报 notify_post("cn.triggr.inappidxN")
+// ---- 多指手势 ----
+// 14 槽位，顺序与 Shared/TGCatalog.h 的 TGInAppGestures 严格一一对应；改一处就必须改另一处。
+// 0..6  两指：点按、上、下、左、右、捏合、张开
+// 7..13 三指：同样七种
+// 并发委托返回 YES；tap/swipe 到 Ended 派发；wanted 位 bit(idx+2)。上报 notify_post("cn.triggr.inappidxN")
 
-// 三指捏合、张开。UIPinchGestureRecognizer 写死两指，而两指缩放几乎和每个应用的放大手势冲突；
-// 改成三指之后要自己量比例：三指到质心的平均半径，跟第三根手指落下时比。阈值仍是 0.7 / 1.4。
-@interface TGThreeFingerPinchRecognizer : UIGestureRecognizer
+typedef struct { uint8_t fingers; uint8_t kind; } TGGestureSlot;
+// kind: 0 点按, 1 上, 2 下, 3 左, 4 右, 5 捏合, 6 张开
+static const TGGestureSlot kTGSlots[] = {
+    {2, 0}, {2, 1}, {2, 2}, {2, 3}, {2, 4}, {2, 5}, {2, 6},
+    {3, 0}, {3, 1}, {3, 2}, {3, 3}, {3, 4}, {3, 5}, {3, 6},
+};
+#define TG_SLOT_COUNT ((int)(sizeof(kTGSlots) / sizeof(kTGSlots[0])))
+
+// 捏合、张开。UIPinchGestureRecognizer 写死两指，两指与三指都要时只能自己量：
+// 各指到质心的平均半径，跟手指全部落下时比；阈值仍是 0.7 / 1.4。
+@interface TGPinchRecognizer : UIGestureRecognizer
+@property (nonatomic) NSUInteger fingers;
 @property (nonatomic) NSInteger desiredDirection; // -1 只认捏合，+1 只认张开
 @property (nonatomic) NSInteger direction;
 @property (nonatomic) CGFloat scale;
 @property (nonatomic) CGFloat initialRadius;
 @end
 
-@implementation TGThreeFingerPinchRecognizer
+@implementation TGPinchRecognizer
 - (CGFloat)radiusForTouches:(NSSet<UITouch *> *)touches {
-    if (touches.count != 3) return 0;
+    NSUInteger n = touches.count;
+    if (n < 2 || n > 3) return 0;
     CGPoint pts[3];
-    int i = 0;
+    NSUInteger i = 0;
     for (UITouch *t in touches) pts[i++] = [t locationInView:self.view];
-    CGPoint c = CGPointMake((pts[0].x + pts[1].x + pts[2].x) / 3, (pts[0].y + pts[1].y + pts[2].y) / 3);
+    CGPoint c = CGPointZero;
+    for (NSUInteger k = 0; k < n; k++) { c.x += pts[k].x; c.y += pts[k].y; }
+    c.x /= n; c.y /= n;
     CGFloat sum = 0;
-    for (int k = 0; k < 3; k++) sum += hypot(pts[k].x - c.x, pts[k].y - c.y);
-    return sum / 3;
+    for (NSUInteger k = 0; k < n; k++) sum += hypot(pts[k].x - c.x, pts[k].y - c.y);
+    return sum / n;
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (event.allTouches.count > 3) {
+    if (event.allTouches.count > self.fingers) {
         self.state = UIGestureRecognizerStateFailed;
         return;
     }
-    if (event.allTouches.count == 3 && self.initialRadius <= 0) {
+    if (event.allTouches.count == self.fingers && self.initialRadius <= 0) {
         self.initialRadius = [self radiusForTouches:event.allTouches];
     }
 }
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (self.state != UIGestureRecognizerStatePossible) return;
-    if (event.allTouches.count != 3 || self.initialRadius <= 0) return;
+    if (event.allTouches.count != self.fingers || self.initialRadius <= 0) return;
     CGFloat r = [self radiusForTouches:event.allTouches];
     if (r <= 0) return;
     self.scale = r / self.initialRadius;
@@ -389,23 +402,24 @@ static const void *TGInAppIndexKey = &TGInAppIndexKey;
 
 - (UIGestureRecognizer *)recognizerFor:(int)idx {
     UIGestureRecognizer *g = nil;
-    if (idx >= 10) {
-        TGThreeFingerPinchRecognizer *p = [[TGThreeFingerPinchRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
-        p.desiredDirection = idx == 10 ? -1 : 1;
+    TGGestureSlot slot = kTGSlots[idx];
+    if (slot.kind >= 5) {
+        TGPinchRecognizer *p = [[TGPinchRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        p.fingers = slot.fingers;
+        p.desiredDirection = slot.kind == 5 ? -1 : 1;
         g = p;
-    } else if (idx < 2) {
+    } else if (slot.kind == 0) {
         UITapGestureRecognizer *t = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
-        t.numberOfTouchesRequired = idx == 0 ? 2 : 3;
+        t.numberOfTouchesRequired = slot.fingers;
         t.numberOfTapsRequired = 1;
         g = t;
     } else {
         UISwipeGestureRecognizer *s = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
-        s.numberOfTouchesRequired = idx < 6 ? 2 : 3;
-        int k = (idx - 2) % 4;
-        s.direction = (k == 0) ? UISwipeGestureRecognizerDirectionUp
-                   : (k == 1) ? UISwipeGestureRecognizerDirectionDown
-                   : (k == 2) ? UISwipeGestureRecognizerDirectionLeft
-                              : UISwipeGestureRecognizerDirectionRight;
+        s.numberOfTouchesRequired = slot.fingers;
+        s.direction = (slot.kind == 1) ? UISwipeGestureRecognizerDirectionUp
+                   : (slot.kind == 2) ? UISwipeGestureRecognizerDirectionDown
+                   : (slot.kind == 3) ? UISwipeGestureRecognizerDirectionLeft
+                                      : UISwipeGestureRecognizerDirectionRight;
         g = s;
     }
     g.delegate = self;
@@ -422,11 +436,11 @@ static const void *TGInAppIndexKey = &TGInAppIndexKey;
         NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
         if (!idxN) continue;
         int idx = idxN.intValue;
-        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+        uint64_t bit = 1ULL << (idx + 2);
         if (!(wanted & bit)) [window removeGestureRecognizer:g];
     }
-    for (int idx = 0; idx < 12; idx++) {
-        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+    for (int idx = 0; idx < TG_SLOT_COUNT; idx++) {
+        uint64_t bit = 1ULL << (idx + 2);
         if (!(wanted & bit)) continue;
         BOOL present = NO;
         for (UIGestureRecognizer *g in window.gestureRecognizers) {
@@ -440,25 +454,19 @@ static const void *TGInAppIndexKey = &TGInAppIndexKey;
 - (void)recognized:(UIGestureRecognizer *)g {
     NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
     int idx = idxN ? idxN.intValue : -1;
-    if (idx >= 0 && (idx & 0xfffffffe) == 10) {
-        if (g.state != UIGestureRecognizerStateEnded) return;
-        NSInteger d = [(TGThreeFingerPinchRecognizer *)g direction];
-        if (d == 0) return;
-        idx = d < 0 ? 10 : 11;
-    } else {
-        if (g.state != UIGestureRecognizerStateEnded) return;
-    }
-    if (idx >= 0 && idx <= 11) {
-        NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
-        notify_post(nm.UTF8String);
-    }
+    if (idx < 0 || idx >= TG_SLOT_COUNT) return;
+    if (g.state != UIGestureRecognizerStateEnded) return;
+    // 捏合、张开各自的识别器只在自己那个方向成功，所以这里不用再换算槽位。
+    if (kTGSlots[idx].kind >= 5 && [(TGPinchRecognizer *)g direction] == 0) return;
+    NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", idx];
+    notify_post(nm.UTF8String);
 }
 
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
     NSNumber *idxN = objc_getAssociatedObject(g, TGInAppIndexKey);
     if (!idxN) return NO;
     int idx = idxN.intValue;
-    uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
+    uint64_t bit = 1ULL << (idx + 2);
     return (CNRelayWanted() & bit) != 0;
 }
 

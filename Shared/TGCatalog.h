@@ -83,10 +83,13 @@ static const TGItem TGHomeGestures[] = {
     {"homescreen.doubletap", "双击空白处"},
 };
 
+// 顺序与 Relay/Relay.x 的 kTGSlots 一一对应：先两指七项，再三指七项。
 static const TGItem TGInAppGestures[] = {
-    {"inapp.twotap", "两指点按"}, {"inapp.threetap", "三指点按"},
+    {"inapp.twotap", "两指点按"},
     {"inapp.twoup", "两指上滑"}, {"inapp.twodown", "两指下滑"},
     {"inapp.twoleft", "两指左滑"}, {"inapp.tworight", "两指右滑"},
+    {"inapp.twopinchin", "两指捏合"}, {"inapp.twopinchout", "两指张开"},
+    {"inapp.threetap", "三指点按"},
     {"inapp.threeup", "三指上滑"}, {"inapp.threedown", "三指下滑"},
     {"inapp.threeleft", "三指左滑"}, {"inapp.threeright", "三指右滑"},
     {"inapp.pinchin", "三指捏合"}, {"inapp.pinchout", "三指张开"},
@@ -101,10 +104,16 @@ static const TGItem TGEdges[] = {
     {"edge.rightup", "沿右边缘上滑"}, {"edge.rightdown", "沿右边缘下滑"},
     {"edge.left2", "双指从左侧滑入"}, {"edge.right2", "双指从右侧滑入"},
 };
+// Bottom strip gestures, ported from RemoteCompanion 4.4: they start within ~50pt of the UI-bottom edge and
+// coexist with iOS's own Home swipe and app-switch swipes instead of replacing them.
+static const TGItem TGBottom[] = {
+    {"bottom.up.left", "从左下角上滑"}, {"bottom.up.center", "从底部中间上滑"},
+    {"bottom.up.right", "从右下角上滑"}, {"bottom.up.two", "双指从底部上滑"},
+    {"bottom.bar.left", "底部横条左滑"}, {"bottom.bar.right", "底部横条右滑"},
+};
 static const TGItem TGOther[] = {
     {"power.connected", "接入充电器"}, {"power.disconnected", "断开充电器"},
-    {"headphones.in", "接入耳机"}, {"headphones.out", "断开耳机"},
-};
+    {"headphones.in", "接入耳机"}, {"headphones.out", "断开耳机"},};
 
 // CarPlay：音频输出切到 CarAudio 端口。有线、无线都走这一条。
 static const TGItem TGCarPlay[] = {
@@ -146,8 +155,9 @@ static const TGGroup TGTriggerGroups[] = {
     {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
     {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。"},
     {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入或上下滑，应用内、主屏幕和锁屏均有效。单指「从左侧滑入」会取代多数应用的返回手势；双指版（同 Activator）不会。上下滑只认贴着边缘起步、以竖直为主的滑动。"},
+    {"底部手势", TGBottom, TG_COUNT(TGBottom), "在屏幕最底部约 50pt 内起步。上滑按起点位置分左、中、右三段，双指上滑不分区；横条左右滑是单指。系统自己的上滑（回主屏幕）和左右滑（切换应用）仍会发生，Triggr 只是在你做这个手势时额外执行一次动作。"},
     {"主屏幕手势", TGHomeGestures, TG_COUNT(TGHomeGestures), "在主屏幕页面上（而非图标上）。双指滑动和捏合不影响单指滚动、聚焦搜索和今天视图；双击只在空白处生效。编辑主屏幕或打开文件夹时忽略。"},
-    {"应用内手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "在应用内有效。原应用仍会收到同样的手势，所以挑它没占用的：两指/三指点按和滑动最安全。三指捏合、张开是缩放，会与照片、Safari、地图等放大手势冲突——每个手势只在有指派的应用里启用。"},
+    {"应用内手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "在应用内有效。先两指七项、再三指七项。原应用仍会收到同样的手势，所以挑它没占用的：点按和最不常用的方向最安全。两指捏合、张开就是应用自己的缩放，会和照片、Safari、地图等放大手势同时发生；三指基本没人占用。每个手势只在有指派的应用里启用。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},
     {"CarPlay", TGCarPlay, TG_COUNT(TGCarPlay), "靠音频输出端口判断，有线和无线 CarPlay 都算。连接在建立会话时触发，断开在端口切回扬声器时触发。"},

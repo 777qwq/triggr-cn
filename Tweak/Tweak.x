@@ -3141,9 +3141,184 @@ static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this m
 @end
 
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
+static BOOL tgGestureManagerReady;
+
+#pragma mark - 底部手势（搬运 RemoteCompanion 4.4）
+
+static const CGFloat TGBottomZone = 50;         // 起步必须在这条带子里
+static const CGFloat TGBottomUpDistance = 45;   // 上滑要走的距离
+static const CGFloat TGBottomBarDistance = 60;  // 横条左右滑要走的距离
+
+// UIKit 的 window 坐标不跟着界面旋转，所以「底部在哪条边」「哪个方向算上」都要按界面方向换算。
+static UIInterfaceOrientation TGBottomOrientation(UIView *view) {
+    if (@available(iOS 13.0, *)) {
+        UIWindowScene *scene = view.window.windowScene;
+        if (scene) return scene.interfaceOrientation;
+    }
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    return UIApplication.sharedApplication.statusBarOrientation;
+#pragma clang diagnostic pop
+}
+
+static BOOL TGBottomInZone(CGPoint p, CGSize size, UIInterfaceOrientation o) {
+    if (o == UIInterfaceOrientationPortraitUpsideDown) return p.y < TGBottomZone;
+    if (o == UIInterfaceOrientationLandscapeLeft) return p.x > size.width - TGBottomZone;
+    if (o == UIInterfaceOrientationLandscapeRight) return p.x < TGBottomZone;
+    return p.y > size.height - TGBottomZone;
+}
+
+// 沿底边从左到右的位置 0..1（按用户看到的左右）。
+static CGFloat TGBottomProgress(CGPoint p, CGSize size, UIInterfaceOrientation o) {
+    if (o == UIInterfaceOrientationPortraitUpsideDown) return size.width > 0 ? 1 - p.x / size.width : 0.5;
+    if (o == UIInterfaceOrientationLandscapeLeft) return size.height > 0 ? p.y / size.height : 0.5;
+    if (o == UIInterfaceOrientationLandscapeRight) return size.height > 0 ? 1 - p.y / size.height : 0.5;
+    return size.width > 0 ? p.x / size.width : 0.5;
+}
+
+// 物理位移 → 用户看到的位移（「上」永远是朝界面顶部）。
+static CGPoint TGBottomUserDelta(CGPoint d, UIInterfaceOrientation o) {
+    if (o == UIInterfaceOrientationPortraitUpsideDown) return CGPointMake(-d.x, -d.y);
+    if (o == UIInterfaceOrientationLandscapeLeft) return CGPointMake(-d.y, d.x);
+    if (o == UIInterfaceOrientationLandscapeRight) return CGPointMake(d.y, -d.x);
+    return d;
+}
+
+// 和边缘那套一样是普通 pan：起点在底部带子里才算，方向决定是上滑还是横条左右滑。
+// 它不设失败要求，所以 iOS 自己的 Home 手势、切换应用手势照常发生，两者并存（RC 的做法）。
+@interface TGBottomRecognizer : UIPanGestureRecognizer
+@property (nonatomic) NSUInteger fingers;
+@property (nonatomic) BOOL fired;
+@property (nonatomic) CGPoint startPoint;
+@property (nonatomic, copy) NSString *upTrigger;
+@property (nonatomic) BOOL wantBarLeft, wantBarRight;
+@end
+
+@implementation TGBottomRecognizer
+- (CGSize)screenSize {
+    return self.view.window ? self.view.window.bounds.size : UIScreen.mainScreen.bounds.size;
+}
+
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (event.allTouches.count == 1) {
+        CGPoint p = [[touches anyObject] locationInView:nil];
+        CGSize size = [self screenSize];
+        UIInterfaceOrientation o = TGBottomOrientation(self.view);
+        if (!TGBottomInZone(p, size, o)) {
+            self.state = UIGestureRecognizerStateFailed;
+            return;
+        }
+        self.startPoint = p;
+        self.fired = NO;
+        self.upTrigger = nil;
+        if (self.fingers == 1) {
+            CGFloat progress = TGBottomProgress(p, size, o);
+            NSString *t = progress < 0.33 ? @"bottom.up.left"
+                        : progress > 0.67 ? @"bottom.up.right" : @"bottom.up.center";
+            if ([tgAssignedTriggers containsObject:t]) self.upTrigger = t;
+        } else if ([tgAssignedTriggers containsObject:@"bottom.up.two"]) {
+            self.upTrigger = @"bottom.up.two";
+        }
+        // 横条左右滑只有单指（双指在系统那边是别的意思）。
+        self.wantBarLeft = self.fingers == 1 && [tgAssignedTriggers containsObject:@"bottom.bar.left"];
+        self.wantBarRight = self.fingers == 1 && [tgAssignedTriggers containsObject:@"bottom.bar.right"];
+        if (!self.upTrigger && !self.wantBarLeft && !self.wantBarRight) {
+            self.state = UIGestureRecognizerStateFailed;
+            return;
+        }
+    } else if (self.state == UIGestureRecognizerStateFailed) {
+        return;
+    }
+    [super touchesBegan:touches withEvent:event];
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    // 识别之前先看方向：这个方向没配动作就立刻失败，把手势还给系统。
+    if (self.state == UIGestureRecognizerStatePossible && self.numberOfTouches <= 1) {
+        CGPoint p = [[touches anyObject] locationInView:nil];
+        UIInterfaceOrientation o = TGBottomOrientation(self.view);
+        CGPoint d = TGBottomUserDelta(CGPointMake(p.x - self.startPoint.x, p.y - self.startPoint.y), o);
+        CGFloat ax = fabs(d.x), ay = fabs(d.y);
+        if (ax > 8 || ay > 8) {
+            if (ay >= ax) {
+                if (d.y > 0 || !self.upTrigger) { // 向下，或这个区没配
+                    self.state = UIGestureRecognizerStateFailed;
+                    return;
+                }
+            } else if (d.x > 0 ? !self.wantBarRight : !self.wantBarLeft) {
+                self.state = UIGestureRecognizerStateFailed;
+                return;
+            }
+        }
+    }
+    [super touchesMoved:touches withEvent:event];
+}
+@end
+
+@interface TGBottomTarget : NSObject
+@end
+@implementation TGBottomTarget
+- (void)slid:(TGBottomRecognizer *)recognizer {
+    if (recognizer.fired) return;
+    if (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded) return;
+    UIInterfaceOrientation o = TGBottomOrientation(recognizer.view);
+    CGPoint d = TGBottomUserDelta([recognizer translationInView:nil], o);
+    CGFloat ax = fabs(d.x), ay = fabs(d.y);
+    if (ay >= ax && d.y <= -TGBottomUpDistance && recognizer.upTrigger) {
+        recognizer.fired = YES;
+        TGFire(recognizer.upTrigger);
+        return;
+    }
+    if (ax > ay && ax >= TGBottomBarDistance) {
+        NSString *trigger = d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left";
+        if ([tgAssignedTriggers containsObject:trigger]) {
+            recognizer.fired = YES;
+            TGFire(trigger);
+        }
+    }
+}
+@end
+
+static NSMutableArray<UIGestureRecognizer *> *tgBottomRecognizers;
+
+static void TGUpdateBottomGestures(void) {
+    if (!tgGestureManagerReady) return;
+    SBSystemGestureManager *manager = [objc_getClass("SBSystemGestureManager") mainDisplayManager];
+    if (!manager) return;
+    static TGBottomTarget *target;
+    if (!target) target = [TGBottomTarget new];
+    if (!tgBottomRecognizers) tgBottomRecognizers = [NSMutableArray array];
+    for (int i = 0; i < 2; i++) {
+        NSUInteger fingers = i + 1;
+        TGBottomRecognizer *existing = nil;
+        for (UIGestureRecognizer *r in tgBottomRecognizers)
+            if ([r isKindOfClass:[TGBottomRecognizer class]] && ((TGBottomRecognizer *)r).fingers == fingers) existing = (TGBottomRecognizer *)r;
+        BOOL want = [tgAssignedTriggers containsObject:@"bottom.up.two"];
+        if (fingers == 1) {
+            want = [tgAssignedTriggers containsObject:@"bottom.up.left"]
+                || [tgAssignedTriggers containsObject:@"bottom.up.center"]
+                || [tgAssignedTriggers containsObject:@"bottom.up.right"]
+                || [tgAssignedTriggers containsObject:@"bottom.bar.left"]
+                || [tgAssignedTriggers containsObject:@"bottom.bar.right"];
+        }
+        if (want && !existing) {
+            TGBottomRecognizer *r = [[TGBottomRecognizer alloc] initWithTarget:target action:@selector(slid:)];
+            r.fingers = fingers;
+            r.minimumNumberOfTouches = fingers;
+            r.maximumNumberOfTouches = fingers;
+            r.cancelsTouchesInView = YES; // 识别后取消应用自己的触摸，和边滑一致
+            r.delaysTouchesBegan = NO;
+            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + 4 + i];
+            [tgBottomRecognizers addObject:r];
+        } else if (!want && existing) {
+            [manager removeGestureRecognizer:existing];
+            [tgBottomRecognizers removeObject:existing];
+        }
+    }
+}
+
 // Creating the gesture manager ourselves before SpringBoard does aborts (seen on iOS 17: -[_UISystemGestureManager
 // init] throws while SpringBoard is still starting), so edge gestures wait until SpringBoard has made its own.
-static BOOL tgGestureManagerReady;
 
 static void TGUpdateEdgeGestures(void) {
     if (!tgGestureManagerReady) return; // -[SBMainDisplaySystemGestureManager _init] calls this again
@@ -3188,18 +3363,21 @@ static void TGUpdateEdgeGestures(void) {
 - (id)_init {
     id manager = %orig;
     tgGestureManagerReady = YES;
-    dispatch_async(dispatch_get_main_queue(), ^{ TGUpdateEdgeGestures(); });
+    dispatch_async(dispatch_get_main_queue(), ^{
+        TGUpdateEdgeGestures();
+        TGUpdateBottomGestures();
+    });
     return manager;
 }
 %end
 
 %hook SBSystemGestureManager
 - (BOOL)_isGestureWithTypeAllowed:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 6) return YES;
     return %orig;
 }
 - (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 4) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 6) return YES;
     return %orig;
 }
 %end
@@ -3827,6 +4005,7 @@ static void TGUpdateOtherEvents(void) {
     TGUpdateIconFlicks(TGAssignedPrefix(@"icon.flick"));
     TGUpdateHomeGestures(TGAssignedPrefix(@"homescreen."));
     TGUpdateEdgeGestures();
+    TGUpdateBottomGestures();
     tgWatchNotifications = TGAssignedPrefix(@"notification.");
     TGUpdateProximity(TGAssignedPrefix(@"proximity."));
     TGUpdateMusic(TGAssignedPrefix(@"music."));
@@ -3834,35 +4013,23 @@ static void TGUpdateOtherEvents(void) {
     // Tell the in-app Relay which of its events anything is waiting for.
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    // cn2.74：多指手势位段 bit2..13（inapp.* 12 触发器）
+    // 多指手势位段 bit(idx+2)：名单只从 TGCatalog 取，别再手抄第三份。
     uint64_t mfBits = 0;
-    for (int idx = 0; idx < 12; idx++) {
-        static NSString *ids[] = {
-            @"inapp.twotap", @"inapp.threetap",
-            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
-            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
-            @"inapp.pinchin", @"inapp.pinchout",
-        };
-        uint64_t bit = idx == 10 ? (1ULL << 12) : idx == 11 ? (1ULL << 13) : (4ULL << idx);
-        if ([tgAssignedTriggers containsObject:ids[idx]]) mfBits |= bit;
+    for (int idx = 0; idx < TG_COUNT(TGInAppGestures); idx++) {
+        if ([tgAssignedTriggers containsObject:@(TGInAppGestures[idx].identifier)]) mfBits |= (1ULL << (idx + 2));
     }
     if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | mfBits);
     // cn2.77：多指手势分发（Relay 经 notify_post cn.triggr.inappidxN 上报，idx 与 TGCatalog 顺序一致）
     {
-        static int toks[12] = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1};
-        static NSString *nids[] = {
-            @"inapp.twotap", @"inapp.threetap",
-            @"inapp.twoup", @"inapp.twodown", @"inapp.twoleft", @"inapp.tworight",
-            @"inapp.threeup", @"inapp.threedown", @"inapp.threeleft", @"inapp.threeright",
-            @"inapp.pinchin", @"inapp.pinchout",
-        };
+        static int toks[TG_COUNT(TGInAppGestures)];
         // 只注册一次：TGUpdateOtherEvents 每次跑都会到这里，重复注册会叠加派发（一次手势多次执行动作）
         static BOOL registered = NO;
         if (!registered) {
             registered = YES;
-            for (int i = 0; i < 12; i++) {
+            for (int i = 0; i < TG_COUNT(TGInAppGestures); i++) {
+                toks[i] = -1;
                 NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", i];
-                NSString *idn = nids[i];
+                NSString *idn = @(TGInAppGestures[i].identifier);
                 notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
             }
         }
