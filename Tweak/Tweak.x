@@ -3151,24 +3151,32 @@ static BOOL tgGestureManagerReady;
 // 阈值统一在 Shared/TGBottomGeometry.h（Relay 那边用的是同一份），这里不再写第二遍。
 
 // UIKit 的 window 坐标不跟着界面旋转，所以「底部在哪条边」「哪个方向算上」都要按界面方向换算。
-// SpringBoard 自己知道前台界面转到了哪，它的 windowScene 常常还停在竖屏
-// （RemoteCompanion 的现场日志也是这个结论），所以先问它，问不到才退到场景。
+// 取朝向的顺序和 RemoteCompanion 一致：先问 windowScene（主屏那个 scene 的朝向是真的），
+// 再退到 activeInterfaceOrientation，最后 statusBarOrientation。
+// 反过来先问 activeInterfaceOrientation 会出事：它跟着「当前活动界面」走，可能是后台的横屏 App，
+// 竖屏下拿它当基准就把左右两侧算成了底边，横向滑动被换算成竖直位移。
 static UIInterfaceOrientation TGBottomOrientation(UIView *view) {
     UIApplication *app = UIApplication.sharedApplication;
-    if ([app respondsToSelector:@selector(activeInterfaceOrientation)])
-        return (UIInterfaceOrientation)((NSInteger (*)(id, SEL))objc_msgSend)(app, @selector(activeInterfaceOrientation));
-    if (@available(iOS 13.0, *)) {
-        UIWindowScene *scene = view.window.windowScene;
-        if (!scene) {
-            for (UIScene *s in UIApplication.sharedApplication.connectedScenes) {
-                if ([s isKindOfClass:UIWindowScene.class] && s.activationState == UISceneActivationStateForegroundActive) {
-                    scene = (UIWindowScene *)s;
-                    break;
+    UIWindowScene *scene = view.window.windowScene;
+    if (!scene) {
+        if (@available(iOS 13.0, *)) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            scene = app.keyWindow.windowScene;
+#pragma clang diagnostic pop
+            if (!scene) {
+                for (UIScene *s in app.connectedScenes) {
+                    if ([s isKindOfClass:UIWindowScene.class] && s.activationState == UISceneActivationStateForegroundActive) {
+                        scene = (UIWindowScene *)s;
+                        break;
+                    }
                 }
             }
         }
-        if (scene) return scene.interfaceOrientation;
     }
+    if (scene) return scene.interfaceOrientation;
+    if ([app respondsToSelector:@selector(activeInterfaceOrientation)])
+        return (UIInterfaceOrientation)((NSInteger (*)(id, SEL))objc_msgSend)(app, @selector(activeInterfaceOrientation));
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
     return UIApplication.sharedApplication.statusBarOrientation;
@@ -3260,6 +3268,11 @@ static void TGBottomTouchBegan(UITouch *touch, NSUInteger fingerCount) {
     UIInterfaceOrientation o = TGBottomOrientation(nil);
     CGPoint p = [touch locationInView:nil];
     if (!TGBottomInZone(p, o)) return;
+    CGFloat S = 0, L = 0;
+    TGBottomSL(&S, &L);
+    // 贴着左右边缘起手的一律不接管：那是系统「边缘横滑切应用」的地盘。
+    // 从底角横滑本来会被当成底边上滑（RC 在这里同样会误伤），这一条是我们比它多做的。
+    if (TGBottomNearSideEdge(p, o, S, L)) return;
     tgBottomActive = YES;
     tgBottomStart = p;
     tgBottomStartTime = CACurrentMediaTime();
@@ -3267,9 +3280,9 @@ static void TGBottomTouchBegan(UITouch *touch, NSUInteger fingerCount) {
     tgBottomLatchedValid = YES;
     tgBottomTouch = touch;
     tgBottomZone = TGCoverSheetShowing() ? nil : TGBottomZoneTrigger(p, o);
-    // 这一区配了动作就把画面钉住：不钉的话，45pt 里列表/图标页会跟着往上滚，
-    // 动作执行了、屏幕也上滑了——这两件事在用户眼里是一件事。
-    if (tgBottomZone) TGFreezeBegin();
+    // 落地不冻屏。冻屏放在放进来的第一帧、确认是朝上走之后（TGBottomTouchMoved）：
+    // 落地就冻会把主屏所有滚动识别器一起关掉，而系统边缘手势依赖它们先失败，
+    // 链一断，从底边带起手的左右横滑就再也切不了应用。
 }
 
 // 移动 / 抬手：位移按用户看到的方向换算，45pt 上滑即执行（RC 的阈值），
@@ -3284,6 +3297,10 @@ static void TGBottomTouchMoved(UITouch *touch, BOOL ended, NSUInteger remaining)
         CGFloat ax = fabs(d.x), ay = fabs(d.y);
         BOOL sideways = ax > ay * TGBottomSideRatio;
         BOOL up = d.y < -TGBottomUpMin && ay > ax * TGBottomUpRatio;
+
+        // 确认是朝上走才冻屏（TGFreezeBegin 自身幂等，只在第一帧真正干活）。
+        // 落手就冻会让主屏滚动识别器一起失效，系统边缘手势的失败依赖链随之断开。
+        if (tgBottomZone && d.y < -TGBottomFreezeIntent && ay > ax) TGFreezeBegin();
 
         if (!tgBottomDone && up && tgBottomZone && (ay > TGBottomUpFire || (ended && ay > TGBottomUpLift))) {
             tgBottomDone = YES;
@@ -3338,9 +3355,13 @@ static BOOL TGBottomShouldSuppressTouch(UITouch *touch) {
     // 抬手后 0.8 秒内仍按住：系统手势如果在这几帧里接手，动作就白做了（RC 的余温窗口）。
     if (CACurrentMediaTime() - tgBottomFiredTime < 0.8) return YES;
     // sendEvent 没覆盖到的场景（例如识别器直接问），用触点自己算一次。
+    // 贴边的不算底边手势——那是系统边缘手势的地盘。
     if (!touch) return NO;
     CGPoint p = [touch locationInView:nil];
     UIInterfaceOrientation o = TGBottomOrientation(nil);
+    CGFloat S = 0, L = 0;
+    TGBottomSL(&S, &L);
+    if (TGBottomNearSideEdge(p, o, S, L)) return NO;
     return TGBottomInZone(p, o) && TGBottomZoneTrigger(p, o) != nil;
 }
 
@@ -3394,8 +3415,15 @@ static BOOL TGBottomShouldSuppressMotion(CGPoint start, CGPoint delta, UIInterfa
     if (!TGBottomInZone(start, o)) return NO;
     CGPoint d = TGBottomUserDelta(delta, o);
     CGFloat ax = fabs(d.x), ay = fabs(d.y);
-    if (ax > ay * TGBottomSideRatio && ax >= TGBottomSideMin)
-        return [tgAssignedTriggers containsObject:(d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left")];
+    // 贴边起手、又是横着走：让给系统的边缘手势。即便起手落在底边带里，
+    // 这一下也不是底边手势——底边手势从不从屏幕最外侧开始。
+    if (ax > ay * TGBottomSideRatio) {
+        CGFloat S = 0, L = 0;
+        TGBottomSL(&S, &L);
+        if (TGBottomNearSideEdge(start, o, S, L)) return NO;
+        if (ax >= TGBottomSideMin)
+            return [tgAssignedTriggers containsObject:(d.x > 0 ? @"bottom.bar.right" : @"bottom.bar.left")];
+    }
     if (d.y < -TGBottomUpMin && ay > ax * TGBottomUpRatio)
         return TGBottomZoneTrigger(start, o) != nil;
     return NO;

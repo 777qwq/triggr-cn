@@ -15,6 +15,16 @@
 #define TGBottomSideMin 12.0      // 横滑至少要动的距离，避免轻抖就抢
 #define TGBottomUpRatio 1.5       // 上滑：纵向压过横向多少倍
 #define TGBottomUpMin 15.0        // 上滑认定意图的最小位移
+#define TGBottomFreezeIntent 6.0  // 位移超过这个、并且确实朝上，才冻屏
+#define TGBottomEdgeGuard 24.0    // 离左右屏幕边缘这么近起手，一律让给系统
+
+// 起手点是不是贴着屏幕左右边缘。贴边的那一下属于系统手势（切换应用、返回），
+// 底边手势不该从这儿开始——从底角横滑被当成底边上滑，就是这么来的。
+static inline BOOL TGBottomNearSideEdge(CGPoint p, UIInterfaceOrientation o, CGFloat S, CGFloat L) {
+    if (o == UIInterfaceOrientationLandscapeLeft || o == UIInterfaceOrientationLandscapeRight)
+        return p.y < TGBottomEdgeGuard || p.y > L - TGBottomEdgeGuard;
+    return p.x < TGBottomEdgeGuard || p.x > S - TGBottomEdgeGuard;
+}
 
 // 0 左 / 1 中 / 2 右
 static inline int TGBottomZoneIndex(CGFloat progress) {
