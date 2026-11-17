@@ -3328,9 +3328,6 @@ static void TGBottomLog(NSString *format, ...) {
     [handle closeFile];
 }
 
-// 第二条来源：2.1 走的就是这两条回调（横条被点一下 / 两下）。我们主要靠注册的识别器，
-// 这里只是备一条——系统手势表若不把点击喂给 UITapGestureRecognizer，这一条还能接住。
-// 判据同样要求位置在横条上，避免把任何地方的点击都当成横条。
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
 static NSMutableArray<TGBottomEdgeRecognizer *> *tgBottomEdgeRecognizers;
 static NSMutableArray<UIGestureRecognizer *> *tgHomeBarRecognizers;
@@ -3489,6 +3486,9 @@ static void TGUpdateEdgeGestures(void) {
 }
 %end
 
+// 第二条来源：2.1 走的就是这两条回调（横条被点一下 / 两下）。我们主要靠注册的识别器，
+// 这里只是备一条——系统手势表若不把点击喂给 UITapGestureRecognizer，这一条还能接住。
+// 判据同样要求位置在横条上，避免把任何地方的点击都当成横条。
 %hook SBHomeAffordanceInteractionManager
 - (void)_bounceTapRecognized:(UIGestureRecognizer *)recognizer {
     BOOL left = NO, right = NO;
