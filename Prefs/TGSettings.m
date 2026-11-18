@@ -3133,7 +3133,7 @@ static NSURL *tgGestureExportURL;
             [self runCommand:[NSString stringWithFormat:@"gesture play-soon \"%@\"", name]];
         }]];
         [sheet addAction:[UIAlertAction actionWithTitle:@"重命名…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) { [self renameGesture:name]; }]];
-        // 删除不在这里：录一条手势要花几十秒，误触一次就没了，所以放到右滑，且必须滑出按钮再点。
+        // 删除不在这里：录一条手势要花几十秒，误触一次就没了，所以放到从右往左的滑动里，且必须滑出按钮再点。
         [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
         sheet.popoverPresentationController.sourceView = self.view;
         [self presentViewController:sheet animated:YES completion:nil];
