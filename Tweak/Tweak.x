@@ -3362,9 +3362,26 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
 @property (nonatomic) BOOL fired;
 @property (nonatomic) CGPoint startPoint;
 @property (nonatomic) BOOL wantInward, wantUp, wantDown;
+@property (nonatomic) BOOL frozen;    // cn5.0.4: 这次滑动是否已冻结画面
 @end
 
 @implementation TGEdgeRecognizer
+
+// cn5.0.4：按 RemoteCompanion 2.1 的冻结方式，方向确认归 Triggr 接管后独占画面——
+// 走 cn4.70 那套 TGFreeze：SpringBoard 冻自己窗口，Relay 喊前台 App 冻它的滚动视图。
+// 这治的是「触发手指把图片拖走/缩小」，不是抑制识别器：返回手势不在 UIScrollView 里，
+// 冻结不碰它，回放的「左边缘右滑返回」照常生效。
+- (void)edgeFreezeBegin {
+    if (self.frozen) return;
+    self.frozen = YES;
+    TGMultiFreezeBegin();
+}
+- (void)edgeFreezeEnd {
+    if (!self.frozen) return;
+    self.frozen = NO;
+    TGMultiFreezeEnd();
+}
+
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
     // 只有第一根手指决定归属：第二根落在屏幕中间不影响双指版。
@@ -3409,13 +3426,31 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
                     self.state = UIGestureRecognizerStateFailed;
                     return;
                 }
+                [self edgeFreezeBegin]; // cn5.0.4：确认是接管的竖直方向，冻结画面
             } else if (!self.wantInward) {
                 self.state = UIGestureRecognizerStateFailed;
                 return;
+            } else {
+                [self edgeFreezeBegin]; // cn5.0.4：确认是接管的滑入方向，冻结画面
             }
         }
     }
     [super touchesMoved:touches withEvent:event];
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesEnded:touches withEvent:event];
+    if (TGMultiTouchesFinished(event)) [self edgeFreezeEnd];
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesCancelled:touches withEvent:event];
+    if (TGMultiTouchesFinished(event)) [self edgeFreezeEnd];
+}
+
+- (void)reset {
+    [super reset];
+    [self edgeFreezeEnd]; // 兜底：手势被系统重置也要解冻，避免永久冻住
 }
 @end
 

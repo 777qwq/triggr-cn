@@ -3,6 +3,14 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.0.4
+
+- **边缘手势改用冻结钉住画面（RemoteCompanion 2.1 方案）**：放弃 cn5.0.1–5.0.3 的"拒绝系统识别器"路线——iPhone 右边缘左滑本无系统返回手势，淘宝里图片被拖走是 `UIScrollView` 跟着触发手指动，拒绝层抓错了对象。本版回到 2.1 / RC4.4 验证过的思路：方向确认归 Triggr 接管后，立刻 `TGMultiFreezeBegin()`（SpringBoard 冻自己窗口 + Relay 喊前台 App 冻它的滚动视图，`TGFreeze` 同时还原 `contentOffset` 和 `zoomScale`），手指离开时 `TGMultiFreezeEnd()` 解冻。
+  - 治的是触发手指把图片拖走/缩小、列表滚动；不抑制识别器，回放的「左边缘右滑返回」照常生效。
+  - `frozen` 标志防重复冻结，`touchesEnded` / `touchesCancelled` / `reset` 三处兜底解冻，避免永久冻住。
+  - 触发时机保持 cn5.0 原样（Changed/Ended 达标即触发），不引入 cn5.1.2 的"只 Ended"改动。
+- 版本号升到 1.5.0+cn5.0.4。
+
 ## 1.5.0+cn5.0.3
 
 - **拒绝层边缘判定 20 → 40pt**：cn5.0.2 的拒绝层实测仍无效，先把右边缘触摸起点判定宽度从 20 加大到 40pt（`TGRightEdgeGuardMargin`），试更大范围能否拦住从右侧边缘起的滑动。仅调这个阈值，其余逻辑不变。
