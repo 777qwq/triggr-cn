@@ -2971,6 +2971,413 @@ static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString
 
 @end
 
+#pragma mark - Written gestures
+
+// 编写手势：选一个模板、填几个数，交给 SpringBoard 生成帧（gesture compose）。
+// 这一页只收集参数，不画路径——写出来的手势每次都完全一样，这正是它比录制强的地方：
+// 录制做不到「固定 0.4 秒、精确到这个位置、每次一致」。
+typedef NS_ENUM(NSInteger, TGComposeRow) {
+    TGComposeRowPosition, TGComposeRowDuration, TGComposeRowFingers, TGComposeRowTaps,
+    TGComposeRowDirection, TGComposeRowDistance, TGComposeRowFling,
+    TGComposeRowEdge, TGComposeRowAlongEdge, TGComposeRowFrom, TGComposeRowTo, TGComposeRowAngle,
+};
+
+static NSArray<NSString *> *TGComposeTemplateIDs(void) {
+    return @[@"swipe", @"press", @"tap", @"pinch", @"edge"];
+}
+static NSArray<NSString *> *TGComposeTemplateNames(void) {
+    return @[@"滑动", @"长按", @"点按", @"捏合", @"边缘滑入"];
+}
+
+// 每个模板要哪几行，按显示顺序。参数少的模板就该只问几个问题。
+static NSArray<NSNumber *> *TGComposeRowsFor(NSString *template) {
+    if ([template isEqualToString:@"swipe"]) return @[@(TGComposeRowPosition), @(TGComposeRowDirection), @(TGComposeRowDistance), @(TGComposeRowDuration), @(TGComposeRowFling)];
+    if ([template isEqualToString:@"press"]) return @[@(TGComposeRowPosition), @(TGComposeRowDuration)];
+    if ([template isEqualToString:@"tap"]) return @[@(TGComposeRowPosition), @(TGComposeRowFingers), @(TGComposeRowTaps)];
+    if ([template isEqualToString:@"pinch"]) return @[@(TGComposeRowPosition), @(TGComposeRowFrom), @(TGComposeRowTo), @(TGComposeRowAngle), @(TGComposeRowDuration)];
+    return @[@(TGComposeRowEdge), @(TGComposeRowAlongEdge), @(TGComposeRowDistance), @(TGComposeRowDuration)];
+}
+
+static NSString *TGComposeRowTitle(TGComposeRow row, NSString *template) {
+    switch (row) {
+        case TGComposeRowPosition: return [template isEqualToString:@"pinch"] ? @"中心" : @"位置";
+        case TGComposeRowDuration: return @"时长";
+        case TGComposeRowFingers: return @"手指数";
+        case TGComposeRowTaps: return @"次数";
+        case TGComposeRowDirection: return @"方向";
+        case TGComposeRowDistance: return @"距离";
+        case TGComposeRowFling: return @"抬手加速";
+        case TGComposeRowEdge: return @"从哪条边";
+        case TGComposeRowAlongEdge: return @"沿边位置";
+        case TGComposeRowFrom: return @"起始间距";
+        case TGComposeRowTo: return @"结束间距";
+        case TGComposeRowAngle: return @"排列方向";
+    }
+    return @"";
+}
+
+// 九宫格而不是让人填坐标：写数字容易写歪，也不可能记住屏幕有多高。
+static NSArray<NSString *> *TGComposeGridNames(void) {
+    return @[@"左上", @"上中", @"右上", @"左中", @"中心", @"右中", @"左下", @"下中", @"右下"];
+}
+
+// 屏幕按竖屏算：坐标是触摸屏自己的坐标系，和回放时用的同一个。
+static CGSize TGComposeScreen(void) {
+    return [UIScreen mainScreen].fixedCoordinateSpace.bounds.size;
+}
+
+static CGPoint TGComposeGridPoint(NSInteger index, CGSize screen) {
+    const CGFloat stops[3] = { 0.25, 0.5, 0.75 };
+    return CGPointMake(screen.width * stops[index % 3], screen.height * stops[(index / 3) % 3]);
+}
+
+// 下一个空闲的「手势 N」，和 SpringBoard 那边自动取名用的是同一套。
+static NSString *TGComposeSuggestedName(void) {
+    NSMutableSet<NSString *> *used = [NSMutableSet set];
+    for (NSDictionary *g in TGGestureLibrary())
+        if ([g[@"name"] isKindOfClass:NSString.class]) [used addObject:[g[@"name"] lowercaseString]];
+    for (NSInteger n = 1; ; n++) {
+        NSString *name = [NSString stringWithFormat:@"手势 %ld", (long)n];
+        if (![used containsObject:name.lowercaseString]) return name;
+    }
+}
+
+static NSArray<NSNumber *> *TGComposeDistanceRatios(void) { return @[@0.2, @0.35, @0.5, @0.7]; }
+static NSArray<NSNumber *> *TGComposeDurations(void) { return @[@0.15, @0.25, @0.4, @0.6, @0.9, @1.5]; }
+
+static NSString *TGComposePercentText(double ratio) {
+    return [NSString stringWithFormat:@"屏幕的 %ld%%", (long)lround(ratio * 100)];
+}
+
+@interface TGGestureComposeController : UITableViewController
+@end
+
+@implementation TGGestureComposeController {
+    NSString *_template;
+    NSInteger _grid;        // 九宫格位置，0-8
+    NSInteger _direction;   // 0 上, 1 下, 2 左, 3 右
+    NSInteger _edge;        // 8 左, 2 右, 1 底
+    NSInteger _along;       // 沿边位置 0.3 / 0.5 / 0.7，用 0-2
+    NSInteger _fingers;
+    NSInteger _taps;
+    NSInteger _fromGap;
+    NSInteger _toGap;
+    BOOL _horizontal;       // 捏合两指是左右排还是上下排
+    BOOL _fling;
+    double _ratio;
+    double _duration;
+    NSString *_name;
+}
+
+- (instancetype)init {
+    return [super initWithStyle:UITableViewStyleInsetGrouped];
+}
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.title = @"编写手势";
+    _template = @"swipe";
+    [self resetParameters];
+    _name = TGComposeSuggestedName();
+    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"保存" style:UIBarButtonItemStyleDone target:self action:@selector(save)];
+}
+
+// 换模板就把参数拨回这套模板说得通的值：捏合的间距对滑动没有意义。
+- (void)resetParameters {
+    _grid = 4;
+    _direction = 0;
+    _edge = 8;
+    _along = 1;
+    _fingers = 1;
+    _taps = 1;
+    _fromGap = 120;
+    _toGap = 320;
+    _horizontal = YES;
+    _fling = YES;
+    _ratio = [_template isEqualToString:@"edge"] ? 0.5 : 0.35;
+    _duration = [_template isEqualToString:@"press"] ? 0.9 : 0.4;
+    [self.tableView reloadData];
+}
+
+- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 3; }
+
+- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
+    if (section == 0) return TGComposeTemplateIDs().count;
+    if (section == 1) return TGComposeRowsFor(_template).count;
+    return 2; // 名称、保存
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
+    return section == 0 ? @"模板" : section == 1 ? @"参数" : @"保存";
+}
+
+- (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
+    if (section == 0) return @"写出来的手势由参数生成，每次回放都完全一样。它不会录制你此刻在屏幕上的动作。";
+    if (section == 1) {
+        if ([_template isEqualToString:@"swipe"]) return @"抬手加速：最后一段加快，抬手时速度最高。关掉后匀速滑完再松手，多数应用的轻扫会认不出来。";
+        if ([_template isEqualToString:@"edge"]) return @"边缘滑入会带上触摸屏的边缘位，系统才认得出它是从边缘开始的（回主屏、应用的侧滑返回）。";
+        if ([_template isEqualToString:@"pinch"]) return @"起始间距小于结束间距是张开，反之为捏合。两根手指始终围绕中心对称移动。";
+        if ([_template isEqualToString:@"tap"]) return @"两指、三指点按的手指按小圆周分开落下，和真手一样不会落在同一点。";
+        return @"长按期间手指保持不动。";
+    }
+    return nil;
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"row"];
+    if (!cell) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:@"row"];
+    cell.textLabel.textColor = UIColor.labelColor;
+    cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
+    cell.accessoryType = UITableViewCellAccessoryNone;
+    cell.selectionStyle = UITableViewCellSelectionStyleDefault;
+
+    if (indexPath.section == 0) {
+        cell.textLabel.text = TGComposeTemplateNames()[indexPath.row];
+        cell.detailTextLabel.text = nil;
+        // 选中的模板打勾，和系统里的单选一个样子
+        cell.accessoryType = [TGComposeTemplateIDs()[indexPath.row] isEqualToString:_template]
+            ? UITableViewCellAccessoryCheckmark : UITableViewCellAccessoryNone;
+        return cell;
+    }
+    if (indexPath.section == 2) {
+        if (indexPath.row == 0) {
+            cell.textLabel.text = @"名称";
+            cell.detailTextLabel.text = _name;
+        } else {
+            cell.textLabel.text = @"保存并加入手势库";
+            cell.textLabel.textColor = self.view.tintColor;
+            cell.detailTextLabel.text = nil;
+        }
+        return cell;
+    }
+
+    NSArray<NSNumber *> *rows = TGComposeRowsFor(_template);
+    TGComposeRow row = (TGComposeRow)rows[indexPath.row].integerValue;
+    cell.textLabel.text = TGComposeRowTitle(row, _template);
+    cell.detailTextLabel.text = [self detailForRow:row];
+    if (row == TGComposeRowFling) {
+        UISwitch *toggle = [[UISwitch alloc] init];
+        toggle.on = _fling;
+        [toggle addTarget:self action:@selector(flingChanged:) forControlEvents:UIControlEventValueChanged];
+        cell.accessoryView = toggle;
+        cell.detailTextLabel.text = nil;
+        cell.selectionStyle = UITableViewCellSelectionStyleNone;
+    } else {
+        cell.accessoryView = nil;
+        cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    }
+    return cell;
+}
+
+- (NSString *)detailForRow:(TGComposeRow)row {
+    switch (row) {
+        case TGComposeRowPosition: return TGComposeGridNames()[_grid];
+        case TGComposeRowDuration: return [NSString stringWithFormat:@"%.2f 秒", _duration];
+        case TGComposeRowFingers: return [NSString stringWithFormat:@"%ld 指", (long)_fingers];
+        case TGComposeRowTaps: return _taps == 2 ? @"双击" : @"单击";
+        case TGComposeRowDirection: return @[@"向上", @"向下", @"向左", @"向右"][_direction];
+        case TGComposeRowDistance: return TGComposePercentText(_ratio);
+        case TGComposeRowFling: return _fling ? @"开" : @"关";
+        case TGComposeRowEdge: return _edge == 8 ? @"左缘" : _edge == 2 ? @"右缘" : @"底缘";
+        case TGComposeRowAlongEdge: return _edge == 1
+            ? @[@"偏左", @"居中", @"偏右"][_along] : @[@"偏上", @"居中", @"偏下"][_along];
+        case TGComposeRowFrom: return [NSString stringWithFormat:@"%ld pt", (long)_fromGap];
+        case TGComposeRowTo: return [NSString stringWithFormat:@"%ld pt", (long)_toGap];
+        case TGComposeRowAngle: return _horizontal ? @"左右" : @"上下";
+        default: return nil;
+    }
+}
+
+- (void)flingChanged:(UISwitch *)sender {
+    _fling = sender.on;
+}
+
+#pragma mark Choosing
+
+// A short list of the values that make sense: a duration typed to the millisecond is not a choice
+// anyone needs to make on a phone, and a free text field invites values the frames can't use.
+- (void)choose:(NSString *)title options:(NSArray<NSString *> *)options selected:(NSInteger)selected handler:(void (^)(NSInteger index))handler {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    [options enumerateObjectsUsingBlock:^(NSString *option, NSUInteger index, BOOL *stop) {
+        // 当前值打个勾：面板没有单选控件，不标出来就不知道现在是什么。
+        NSString *label = (NSInteger)index == selected ? [NSString stringWithFormat:@"✓ %@", option] : option;
+        [sheet addAction:[UIAlertAction actionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            handler((NSInteger)index);
+            [self.tableView reloadData];
+        }]];
+    }];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = self.view;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)chooseDuration {
+    NSArray<NSNumber *> *values = TGComposeDurations();
+    NSMutableArray<NSString *> *options = [NSMutableArray array];
+    for (NSNumber *seconds in values) [options addObject:[NSString stringWithFormat:@"%.2f 秒", seconds.doubleValue]];
+    NSInteger selected = 0;
+    for (NSInteger i = 0; i < (NSInteger)values.count; i++)
+        if (fabs(values[i].doubleValue - _duration) < fabs(values[selected].doubleValue - _duration)) selected = i;
+    [self choose:@"时长" options:options selected:selected handler:^(NSInteger i) { self->_duration = values[i].doubleValue; }];
+}
+
+- (void)chooseDistance {
+    NSArray<NSNumber *> *values = TGComposeDistanceRatios();
+    NSMutableArray<NSString *> *options = [NSMutableArray array];
+    for (NSNumber *ratio in values) [options addObject:TGComposePercentText(ratio.doubleValue)];
+    NSInteger selected = 0;
+    for (NSInteger i = 0; i < (NSInteger)values.count; i++)
+        if (fabs(values[i].doubleValue - _ratio) < 1e-6) selected = i;
+    [self choose:@"距离" options:options selected:selected handler:^(NSInteger i) { self->_ratio = values[i].doubleValue; }];
+}
+
+// 捏合的两个间距：起始和结束用同一套档位，少一个选择就少一次出错。
+- (void)chooseGap:(BOOL)start {
+    NSArray<NSNumber *> *values = @[@60, @120, @180, @240, @360];
+    NSMutableArray<NSString *> *options = [NSMutableArray array];
+    for (NSNumber *gap in values) [options addObject:[NSString stringWithFormat:@"%@ pt", gap]];
+    NSInteger current = start ? _fromGap : _toGap;
+    NSInteger selected = [values indexOfObject:@(current)];
+    if (selected == NSNotFound) selected = 0;
+    [self choose:(start ? @"起始间距" : @"结束间距") options:options selected:selected handler:^(NSInteger i) {
+        if (start) self->_fromGap = values[i].integerValue;
+        else self->_toGap = values[i].integerValue;
+    }];
+}
+
+- (void)askName {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"手势名称" message:nil preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.text = _name;
+        field.clearButtonMode = UITextFieldViewModeAlways;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weak = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        NSString *text = [weak.textFields.firstObject.text stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (text.length) self->_name = text;
+        [self.tableView reloadData];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
+    [tableView deselectRowAtIndexPath:indexPath animated:YES];
+    if (indexPath.section == 0) {
+        NSString *picked = TGComposeTemplateIDs()[indexPath.row];
+        if (![picked isEqualToString:_template]) {
+            _template = picked;
+            [self resetParameters];
+        }
+        return;
+    }
+    if (indexPath.section == 2) {
+        if (indexPath.row == 0) [self askName];
+        else [self save];
+        return;
+    }
+
+    NSArray<NSNumber *> *rows = TGComposeRowsFor(_template);
+    TGComposeRow row = (TGComposeRow)rows[indexPath.row].integerValue;
+    // 一串 if 而不是 switch：每个分支里的 block 都强捕获 self，case 标签跳不过它的生命周期。
+    if (row == TGComposeRowPosition) {
+        [self choose:@"位置" options:TGComposeGridNames() selected:_grid handler:^(NSInteger i) { self->_grid = i; }];
+    } else if (row == TGComposeRowDuration) {
+        [self chooseDuration];
+    } else if (row == TGComposeRowFingers) {
+        [self choose:@"手指数" options:@[@"1 指", @"2 指", @"3 指"] selected:_fingers - 1 handler:^(NSInteger i) { self->_fingers = i + 1; }];
+    } else if (row == TGComposeRowTaps) {
+        [self choose:@"次数" options:@[@"单击", @"双击"] selected:_taps - 1 handler:^(NSInteger i) { self->_taps = i + 1; }];
+    } else if (row == TGComposeRowDirection) {
+        [self choose:@"方向" options:@[@"向上", @"向下", @"向左", @"向右"] selected:_direction handler:^(NSInteger i) { self->_direction = i; }];
+    } else if (row == TGComposeRowDistance) {
+        [self chooseDistance];
+    } else if (row == TGComposeRowEdge) {
+        [self choose:@"从哪条边" options:@[@"左缘", @"右缘", @"底缘"] selected:(_edge == 8 ? 0 : _edge == 2 ? 1 : 2) handler:^(NSInteger i) {
+            self->_edge = i == 0 ? 8 : i == 1 ? 2 : 1;
+        }];
+    } else if (row == TGComposeRowAlongEdge) {
+        [self choose:@"沿边位置" options:(_edge == 1 ? @[@"偏左", @"居中", @"偏右"] : @[@"偏上", @"居中", @"偏下"]) selected:_along handler:^(NSInteger i) { self->_along = i; }];
+    } else if (row == TGComposeRowFrom) {
+        [self chooseGap:YES];
+    } else if (row == TGComposeRowTo) {
+        [self chooseGap:NO];
+    } else if (row == TGComposeRowAngle) {
+        [self choose:@"排列方向" options:@[@"左右", @"上下"] selected:_horizontal ? 0 : 1 handler:^(NSInteger i) { self->_horizontal = i == 0; }];
+    }
+}
+
+#pragma mark Saving
+
+- (void)save {
+    CGSize screen = TGComposeScreen();
+    if (screen.width < 1 || screen.height < 1) return;
+    CGPoint point = TGComposeGridPoint(_grid, screen);
+    NSMutableDictionary *spec = [NSMutableDictionary dictionary];
+    spec[@"template"] = _template;
+    spec[@"name"] = _name.length ? _name : TGComposeSuggestedName();
+    spec[@"duration"] = @(_duration);
+
+    if ([_template isEqualToString:@"swipe"]) {
+        // 方向 + 屏占比换成位移：生成那边只认 dx/dy，方向和百分比是界面的事。
+        double distance = (_direction < 2 ? screen.height : screen.width) * _ratio;
+        double dx = _direction == 2 ? -distance : _direction == 3 ? distance : 0;
+        double dy = _direction == 0 ? -distance : _direction == 1 ? distance : 0;
+        spec[@"x"] = @(point.x);
+        spec[@"y"] = @(point.y);
+        spec[@"dx"] = @(dx);
+        spec[@"dy"] = @(dy);
+        spec[@"fling"] = @(_fling);
+    } else if ([_template isEqualToString:@"press"]) {
+        spec[@"x"] = @(point.x);
+        spec[@"y"] = @(point.y);
+    } else if ([_template isEqualToString:@"tap"]) {
+        spec[@"x"] = @(point.x);
+        spec[@"y"] = @(point.y);
+        spec[@"fingers"] = @(_fingers);
+        spec[@"taps"] = @(_taps);
+    } else if ([_template isEqualToString:@"pinch"]) {
+        if (_fromGap == _toGap) {
+            [self warn:@"起始间距和结束间距相同，捏合不会动。换一个间距再保存。"];
+            return;
+        }
+        spec[@"x"] = @(point.x);
+        spec[@"y"] = @(point.y);
+        spec[@"from"] = @(_fromGap);
+        spec[@"to"] = @(_toGap);
+        spec[@"angle"] = @(_horizontal ? 0 : 90);
+    } else {
+        // 底边用屏高量距离，左右边用屏宽；起点贴在边上，沿边位置只决定另一个方向。
+        const CGFloat stops[3] = { 0.3, 0.5, 0.7 };
+        double distance = (_edge == 1 ? screen.height : screen.width) * _ratio;
+        spec[@"edge"] = @(_edge);
+        spec[@"distance"] = @(distance);
+        spec[@"x"] = @(_edge == 1 ? screen.width * stops[_along] : point.x);
+        spec[@"y"] = @(_edge == 1 ? point.y : screen.height * stops[_along]);
+    }
+
+    // 参数走文件，命令只有一个词：十几项、还带小数，塞进一行命令迟早出错。
+    if (![spec writeToFile:TGGestureComposePath atomically:YES]) {
+        [self warn:@"参数没能写入。检查 /var/tmp 是否可写。"];
+        return;
+    }
+    TGSendGestureCommand(@"gesture compose");
+    // SpringBoard 收到通知后才生成并入库，等它写完再退回去，列表才是新的。
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [weakSelf.navigationController popViewControllerAnimated:YES];
+    });
+}
+
+- (void)warn:(NSString *)message {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"还不能保存" message:message preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+@end
+
 #pragma mark - Gesture library page
 
 @interface TGGesturesController : TGListController <UIDocumentPickerDelegate>
@@ -2987,6 +3394,12 @@ static NSURL *tgGestureExportURL;
     // 库有变动就重读。
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(reloadSpecifiers)
         name:UIApplicationDidBecomeActiveNotification object:nil];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // 从编写页回来时库里已经多了一条：重读一次，否则列表还是进来时那份。
+    [self reloadSpecifiers];
 }
 
 // 命令执行后 SpringBoard 改了库，稍等再重读，让列表反映最新录制/删除。
@@ -3028,6 +3441,10 @@ static NSURL *tgGestureExportURL;
         PSSpecifier *record = [PSSpecifier preferenceSpecifierNamed:@"录制新手势…" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
         [record setProperty:@"record" forKey:@"tgGestureCommand"];
         [specs addObject:record];
+
+        PSSpecifier *compose = [PSSpecifier preferenceSpecifierNamed:@"编写新手势…" target:self set:nil get:nil detail:nil cell:PSButtonCell edit:nil];
+        [compose setProperty:@"compose" forKey:@"tgGestureCommand"];
+        [specs addObject:compose];
 
         PSSpecifier *options = [PSSpecifier groupSpecifierWithName:@"设置"];
         [options setProperty:@"停止于触摸：手指碰到屏幕就停下回放。显示触点：回放时标出每根手指的位置。" forKey:@"footerText"];
@@ -3101,6 +3518,10 @@ static NSURL *tgGestureExportURL;
             [self runCommand:@"gesture record-toggle"];
         }]];
         [self presentViewController:alert animated:YES completion:nil];
+        return;
+    }
+    if ([command isEqualToString:@"compose"]) {
+        [self.navigationController pushViewController:[[TGGestureComposeController alloc] init] animated:YES];
         return;
     }
     if ([command isEqualToString:@"import"]) { [self importGestures]; return; }

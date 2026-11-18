@@ -640,6 +640,10 @@ static inline NSString *TGAssignmentKey(NSString *mode, NSString *trigger) {
 #define TGGestureCommandNotification "com.johndie.triggr/gesture-command"
 #define TGGestureCommandKey @"cmd"
 
+// 编写手势：参数比一行命令装得下的多，还有小数，所以单独走一个文件。
+// 设置页写它、再发上面那条命令的 "gesture compose"；SpringBoard 读完就删。
+#define TGGestureComposePath @"/var/tmp/com.johndie.triggr-gesture-compose.plist"
+
 // "2200" -> "22:00"。
 static inline NSString *TGClockString(int hhmm) {
     return [NSString stringWithFormat:@"%02d:%02d", hhmm / 100, hhmm % 100];
