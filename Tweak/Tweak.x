@@ -3526,28 +3526,6 @@ static void TGWritePluginManifest(void) {
 }
 %end
 
-// cn5.0.1：把 Triggr 2.1 用过的拒绝层从底部角落挪到右侧边缘。
-// 2.1 是在 UIScreenEdgePanGestureRecognizer 上 hook _shouldReceiveTouch:withEvent:，
-// 触摸投递之前就让系统识别器收不到——比 setState:Failed 更早、更干净。这里只把它
-// 限定在「右侧滑入」：系统那个 edges 含 Right 的识别器，起点又落在右边 20pt 条内，
-// 且 edge.right / edge.right2 确实指派了动作，就返回 NO 让它别接这次触摸。
-// 左侧、底部、顶部、edges==0 的一律 %orig——系统返回/切换器/通知中心照常。
-// 注意：拒绝层只让系统识别器收不到，不冻结画面，也不阻止触发手指把 App 内容拖动。
-%hook UIScreenEdgePanGestureRecognizer
-- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
-    if (touch && [self respondsToSelector:@selector(edges)] && ([self edges] & UIRectEdgeRight)) {
-        // 只在右边缘指派了滑入动作时才接管
-        if ([tgAssignedTriggers containsObject:@"edge.right"] ||
-            [tgAssignedTriggers containsObject:@"edge.right2"]) {
-            CGPoint p = [touch locationInView:nil];
-            CGRect screen = self.view.window ? self.view.window.bounds : [UIScreen mainScreen].bounds;
-            if (p.x >= screen.size.width - TGEdgeMargin) return NO;
-        }
-    }
-    return %orig;
-}
-%end
-
 #pragma mark - Notifications and calls
 
 // "Notification from <app>": only which app posted, never what it says. A
@@ -4180,7 +4158,8 @@ static void TGUpdateOtherEvents(void) {
     // 不再经 Relay，因此位段只需通知状态栏与摇动。
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0));
+    BOOL wantRightEdge = [tgAssignedTriggers containsObject:@"edge.right"] || [tgAssignedTriggers containsObject:@"edge.right2"];
+    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | (wantRightEdge ? TGRelayWantsRightEdge : 0));
     
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");

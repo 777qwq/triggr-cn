@@ -3,6 +3,14 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.0.2
+
+- **修复 cn5.0.1 拒绝层不生效**：cn5.0.1 把 `_shouldReceiveTouch` 拒绝层加在 `Tweak.x`（只注入 SpringBoard），而淘宝等 App 里的返回识别器在 App 进程，SpringBoard 的 hook 够不到，所以完全没效果。本版把拒绝层挪到 `Relay.x`（注入 `com.apple.UIKit`，即 App 进程）。
+  - SpringBoard 通过 `TGRelayWanted` 新增的 `TGRelayWantsRightEdge` 位告诉 Relay「`edge.right` / `edge.right2` 已指派」——Relay 读不到 SpringBoard 的 `tgAssignedTriggers`，只能靠这个状态位同步。
+  - Relay 里的 `RightEdgeGuard` 组 hook `UIScreenEdgePanGestureRecognizer`：仍走 2.1 的 `_shouldReceiveTouch:withEvent:` 前置拒绝（右边缘 20pt + `edges` 含 Right + 右侧已指派 → 返回 NO），并加 `touchesBegan → setState:Failed` 兜底（防私有 selector 在新 iOS 签名有变没被调用）。
+  - 只拒绝 App 内系统右边缘手势：左侧、底部、顶部、没配 `edge.right` 的一律放行。不冻结画面，也不阻止触发手指拖动 App 内容。
+- 版本号升到 1.5.0+cn5.0.2。
+
 ## 1.5.0+cn5.0.1
 
 - **右侧边缘滑入拒绝系统手势（试行）**：把 Triggr 2.1 用过、原先服务底部角落的拒绝层挪到右侧——在 `UIScreenEdgePanGestureRecognizer` 的 `_shouldReceiveTouch:withEvent:` 上判断：触摸起点落在右边 20pt 条内、系统识别器的 `edges` 含 Right、且 `edge.right` / `edge.right2` 已指派动作时返回 NO，让系统自己的侧向手势收不到这次触摸，不再和 Triggr 的回放各做一次。相比 cn5.1 的 `setState:Failed`，这是在触摸投递之前拒绝，更早也更干净。

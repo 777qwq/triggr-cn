@@ -16,3 +16,5 @@
 #define TGRelayFreezeEnd "com.johndie.triggr/freeze-end"
 #define TGRelayWantsStatusBar 1ULL
 #define TGRelayWantsShake 2ULL
+// cn5.0.2: SpringBoard 告诉 Relay「右侧边缘已指派滑入动作」，让 App 进程拒绝系统右边缘手势。
+#define TGRelayWantsRightEdge 4ULL

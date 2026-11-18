@@ -276,6 +276,52 @@ static void TGRelayDoBack(void) {
 %end
 
 
+// ---- cn5.0.2：右边缘拒绝层 ----
+// 2.1 的 _shouldReceiveTouch 拒绝层当年挂在 SpringBoard，只能拒 SpringBoard 自己的
+// 系统角落手势；App 里的返回识别器在 App 进程，SpringBoard 的 hook 够不到（cn5.0.1
+// 就是这么失效的）。所以这一版把拒绝层挪进 Relay——它注入 com.apple.UIKit，hook 的
+// 正是 App 进程里那个系统右边缘返回识别器。
+// Relay 读不到 SpringBoard 的 tgAssignedTriggers，改由 SpringBoard 通过
+// TGRelayWanted 的 TGRelayWantsRightEdge 位告诉本进程「edge.right/right2 已指派」。
+static BOOL TGRightEdgeWanted(void) {
+    static int token = -1;
+    if (token == -1 && notify_register_check(TGRelayWanted, &token) != NOTIFY_STATUS_OK) token = -1;
+    if (token == -1) return NO;
+    uint64_t wanted = 0;
+    if (notify_get_state(token, &wanted) != NOTIFY_STATUS_OK) return NO;
+    return (wanted & TGRelayWantsRightEdge) != 0;
+}
+
+// 判定：右侧已指派 + 识别器本身是右边缘 + 触摸起点落在右边 20pt 条内。
+// 左侧 / 底部 / 顶部 / 没配 edge.right 的一律放行——系统返回、切换器、通知中心不动。
+static BOOL TGRightEdgeTouch(UIScreenEdgePanGestureRecognizer *g, UITouch *touch) {
+    if (!TGRightEdgeWanted()) return NO;
+    if (![g respondsToSelector:@selector(edges)] || !((g.edges) & UIRectEdgeRight)) return NO;
+    if (!touch) return NO;
+    CGPoint p = [touch locationInView:nil];
+    if (p.x <= 0) return NO;
+    return p.x >= CGRectGetWidth([UIScreen mainScreen].bounds) - 20.0; // TGEdgeMargin
+}
+
+%group RightEdgeGuard
+%hook UIScreenEdgePanGestureRecognizer
+// 2.1 原版路径：触摸投递之前就让系统识别器收不到，最干净。
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (TGRightEdgeTouch((UIScreenEdgePanGestureRecognizer *)self, touch)) return NO;
+    return %orig;
+}
+// 兜底：私有 selector 在新 iOS 若签名有变、上一条没被调用，仍在 touchesBegan 置 Failed。
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    UITouch *t = [touches anyObject];
+    if (t && TGRightEdgeTouch((UIScreenEdgePanGestureRecognizer *)self, t)) {
+        self.state = UIGestureRecognizerStateFailed;
+    }
+}
+%end
+%end
+
+
 %ctor {
     // Apps and SpringBoard only: not extensions, daemons or other UIKit users.
     NSBundle *bundle = NSBundle.mainBundle;
@@ -285,6 +331,7 @@ static void TGRelayDoBack(void) {
     if (!springBoard) {
         %init(StatusBar);
         %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
+        %init(RightEdgeGuard); // cn5.0.2：右侧滑入吃掉系统右边缘手势（仅 App 进程）
         // cn4.68：多指手势已迁到 SpringBoard 系统手势层，Relay 不再注入识别器。
         // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
         static int backToken = -1;
