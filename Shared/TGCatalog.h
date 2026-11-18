@@ -101,15 +101,6 @@ static const TGItem TGEdges[] = {
     {"edge.rightup", "沿右边缘上滑"}, {"edge.rightdown", "沿右边缘下滑"},
     {"edge.left2", "双指从左侧滑入"}, {"edge.right2", "双指从右侧滑入"},
 };
-// The bottom edge, as Triggr 2.1 does it: recognizers registered under Triggr's own gesture
-// types, and only while an action is assigned. The two corner swipes are screen-edge recognizers
-// (edges = bottom, 24pt region); the tap and the long press are plain recognizers on the same bar.
-// The middle third's swipe-up-to-home is left to iOS, and the left and right screen edges are
-// never touched.
-static const TGItem TGBottom[] = {
-    {"homebar.single", "单击横条"}, {"homebar.doubletap", "双击横条"}, {"homebar.longpress", "长按横条"},
-    {"edge.bottomleft", "从左下角上滑"}, {"edge.bottomright", "从右下角上滑"},
-};
 static const TGItem TGOther[] = {
     {"power.connected", "接入充电器"}, {"power.disconnected", "断开充电器"},
     {"headphones.in", "接入耳机"}, {"headphones.out", "断开耳机"},};
@@ -154,7 +145,6 @@ static const TGGroup TGTriggerGroups[] = {
     {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
     {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。「双击空白处」在主屏幕空白区域生效，不在图标上。"},
     {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入或上下滑，应用内、主屏幕和锁屏均有效。单指「从左侧滑入」会取代多数应用的返回手势；双指版（同 Activator）不会。上下滑只认贴着边缘起步、以竖直为主的滑动。"},
-    {"底部手势", TGBottom, TG_COUNT(TGBottom), "底边上滑指派了动作，系统那套「左右两侧滑动切换应用」会被底边的屏幕边缘识别器挡住而失效。"},
     {"多指手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "两指/三指的点按、滑动和捏合，由系统手势层识别，应用内、主屏幕和锁屏均有效。原应用仍会收到同样的手势，所以挑它没占用的：点按和最不常用的方向最安全。两指捏合、张开就是应用自己的缩放，会和照片、Safari、地图等放大手势同时发生；三指基本没人占用。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},

@@ -3,6 +3,16 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.71
+
+- **删掉底部手势一整组，无残留**：五项触发器（`homebar.single` / `homebar.doubletap` / `homebar.longpress` / `edge.bottomleft` / `edge.bottomright`）连同实现全部移除。
+  - 删除的代码：`TGBottomEdgeRecognizer`（私有初始化器 `-initWithTarget:action:type:options:` + `_setEdgeRegionSize:`）、`TGBottomTarget`、`TGBottomTapRecognizer`、`TGBottomPressRecognizer`、`TGBottomHomeBarTarget`、`TGRegisterBottomGestures`、几何判定三件（`TGBottomRegion` / `TGBottomPortrait` / `TGBottomPointInBar` / `TGBottomPointInTapBar` / `TGBottomSafeInset` / `TGBottomTapRegion`）、`TGFireHomeBar` 与两个去重入口。
+  - 同时移除两处配套 hook：`SBHomeAffordanceInteractionManager` 的 `_bounceDoubleTapRecognized:`（拦 Reachability）、`SBHomeGesturePanGestureRecognizer` 的 `touchesBegan:withEvent:`（拦底角回主屏）。
+  - 触发器目录 `Shared/TGCatalog.h` 删掉「底部手势」分组；设置页的组图标映射、README 的组数（20 → 19）、`control` 的 Description 同步更新；TODO 里两条相关待验整段删除。
+  - 排查日志从 `TGBottomLog` 改为 `TGPluginLog`，落盘 `plugin.log`（原先只有插件通知在用，与底部无关）。
+  - 旧的配置键（`homebar.*` / `edge.bottom*`）不会被读取——`TGIsKnownTrigger` 只认目录里的触发器，这些键留在 plist 里也不执行；不主动改写用户配置。
+- 边缘手势、多指手势、主屏双击、图标轻扫均未改动，边缘八项触发器照旧。
+
 ## 1.5.0+cn4.70
 
 - **钉住画面改用 Triggr 2.1 的 TGFreeze，撤掉 cn4.69 那条走不通的路**：cn4.69 把多指识别器的 `cancelsTouchesInView` 设成 YES，实机照片照样缩小。原因在进程边界——识别器挂在 SpringBoard，`cancelsTouchesInView` 只取消同进程、同窗口视图树的触摸投递，独立进程的照片 App 根本收不到这个取消。
