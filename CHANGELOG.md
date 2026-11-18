@@ -3,6 +3,12 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.72
+
+- **清掉残留的老配置**：初始版不该带着已删除触发器的配置。`TGReadAssignments` 读到 `homebar.*` / `edge.bottom*` 的键（动作键与 `if:` 条件键都算）时跳过解析，并从偏好里 `CFPreferencesSetAppValue(key, NULL)` 删除、`CFPreferencesAppSynchronize` 落盘。清一次就够，之后读到的就是干净的配置。
+- **三个触发器分组改名**：「状态栏」→「状态栏手势」，「主屏幕图标」→「主屏幕手势」，「屏幕边缘」→「边缘手势」。主屏幕手势里四条轻扫条目补上「图标」二字（图标上滑 / 图标下滑 / 图标左滑 / 图标右滑），与「双击空白处」区分开。
+  - 设置页的组图标映射按新名字同步（否则图标会退回默认）；README 组名同步；TODO 里 cn4.68 那条按新名字重写。配置键不变，改名不影响已有指派。
+
 ## 1.5.0+cn4.71
 
 - **删掉底部手势一整组，无残留**：五项触发器（`homebar.single` / `homebar.doubletap` / `homebar.longpress` / `edge.bottomleft` / `edge.bottomright`）连同实现全部移除。
@@ -10,7 +16,6 @@
   - 同时移除两处配套 hook：`SBHomeAffordanceInteractionManager` 的 `_bounceDoubleTapRecognized:`（拦 Reachability）、`SBHomeGesturePanGestureRecognizer` 的 `touchesBegan:withEvent:`（拦底角回主屏）。
   - 触发器目录 `Shared/TGCatalog.h` 删掉「底部手势」分组；设置页的组图标映射、README 的组数（20 → 19）、`control` 的 Description 同步更新；TODO 里两条相关待验整段删除。
   - 排查日志从 `TGBottomLog` 改为 `TGPluginLog`，落盘 `plugin.log`（原先只有插件通知在用，与底部无关）。
-  - 旧的配置键（`homebar.*` / `edge.bottom*`）不会被读取——`TGIsKnownTrigger` 只认目录里的触发器，这些键留在 plist 里也不执行；不主动改写用户配置。
 - 边缘手势、多指手势、主屏双击、图标轻扫均未改动，边缘八项触发器照旧。
 
 ## 1.5.0+cn4.70

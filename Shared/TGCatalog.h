@@ -79,7 +79,7 @@ static const TGItem TGSeqConditions[] = {
 // 双击空白处（homescreen.doubletap）从主屏幕分组挪来这里归类；标识符与识别器不变，
 // 仍挂在 SBRootFolderView、只在空白处生效（cn4.68）。
 static const TGItem TGIcons[] = {
-    {"icon.flickup", "上滑"}, {"icon.flickdown", "下滑"}, {"icon.flickleft", "左滑"}, {"icon.flickright", "右滑"},
+    {"icon.flickup", "图标上滑"}, {"icon.flickdown", "图标下滑"}, {"icon.flickleft", "图标左滑"}, {"icon.flickright", "图标右滑"},
     {"homescreen.doubletap", "双击空白处"},
 };
 
@@ -142,9 +142,9 @@ static const TGGroup TGTriggerGroups[] = {
     {"音量键", TGVolume, TG_COUNT(TGVolume), "「音量加后音量减」（及反向）是两次快速连按；始终与系统并行执行，音量最终回到原位。"},
     {"锁键 + 音量键", TGSideCombos, TG_COUNT(TGSideCombos), "同时按住锁键与一个音量键。「长按音量加 / 长按音量减」指同时按住半秒；动作与 iOS 并行运行，继续按住仍会照常出现关机滑条和紧急 SOS。"},
     {"拨片开关", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。"},
-    {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
-    {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。「双击空白处」在主屏幕空白区域生效，不在图标上。"},
-    {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入或上下滑，应用内、主屏幕和锁屏均有效。单指「从左侧滑入」会取代多数应用的返回手势；双指版（同 Activator）不会。上下滑只认贴着边缘起步、以竖直为主的滑动。"},
+    {"状态栏手势", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
+    {"主屏幕手势", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。「双击空白处」在主屏幕空白区域生效，不在图标上。"},
+    {"边缘手势", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入或上下滑，应用内、主屏幕和锁屏均有效。单指「从左侧滑入」会取代多数应用的返回手势；双指版（同 Activator）不会。上下滑只认贴着边缘起步、以竖直为主的滑动。"},
     {"多指手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "两指/三指的点按、滑动和捏合，由系统手势层识别，应用内、主屏幕和锁屏均有效。原应用仍会收到同样的手势，所以挑它没占用的：点按和最不常用的方向最安全。两指捏合、张开就是应用自己的缩放，会和照片、Safari、地图等放大手势同时发生；三指基本没人占用。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},

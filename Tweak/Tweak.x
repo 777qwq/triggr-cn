@@ -114,9 +114,21 @@ static void TGSyncUnavailable(NSDictionary<NSString *, NSArray<NSString *> *> *a
     CFPreferencesAppSynchronize(domain);
 }
 
+static void TGPluginLog(NSString *format, ...);
+
+// 已移除的触发器（底部手势那一组）。老配置里留着这些键就是残留：读到就跳过，顺手清掉。
+static BOOL TGRetiredTrigger(NSString *trigger) {
+    static NSSet *retired;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        retired = [NSSet setWithArray:@[@"homebar.single", @"homebar.doubletap", @"homebar.longpress",
+                                        @"edge.bottomleft", @"edge.bottomright"]];
+    });
+    return trigger && [retired containsObject:trigger];
+}
+
 static void TGReadAssignments(void) {
-    CFStringRef domain = (__bridge CFStringRef)TGDomain;
-    CFPreferencesAppSynchronize(domain);
+    CFStringRef domain = (__bridge CFStringRef)TGDomain;    CFPreferencesAppSynchronize(domain);
     id requireUnlock = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)TGRequireUnlockKey, domain));
     tgRequireUnlock = ![requireUnlock respondsToSelector:@selector(boolValue)] || [requireUnlock boolValue];
     id blocked = CFBridgingRelease(CFPreferencesCopyAppValue((__bridge CFStringRef)TGBlockedAppsKey, domain));
@@ -147,7 +159,15 @@ static void TGReadAssignments(void) {
     NSDictionary *values = keys.count ? CFBridgingRelease(CFPreferencesCopyMultiple((__bridge CFArrayRef)keys, domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost)) : @{};
     NSMutableDictionary *assignments = [NSMutableDictionary dictionary];
     NSMutableDictionary *conditions = [NSMutableDictionary dictionary];
+    NSMutableArray<NSString *> *retiredKeys = [NSMutableArray array];
     [values enumerateKeysAndObjectsUsingBlock:^(NSString *key, id action, BOOL *stop) {
+        // 已移除的触发器：动作键和「仅当」键都算，记下来遍历结束后从偏好里删掉。
+        NSString *body = [key hasPrefix:TGOnlyKeyPrefix] ? [key substringFromIndex:TGOnlyKeyPrefix.length] : key;
+        NSRange bodySlash = [body rangeOfString:@"/"];
+        if (bodySlash.location != NSNotFound && TGRetiredTrigger([body substringFromIndex:bodySlash.location + 1])) {
+            [retiredKeys addObject:key];
+            return;
+        }
         // 仅当条件："if:<mode>/<trigger>"，和动作键同构但独立。
         // 不进 assignments——它不是动作，也不该让触发器算作「已指派」。
         if ([key hasPrefix:TGOnlyKeyPrefix]) {
@@ -166,6 +186,12 @@ static void TGReadAssignments(void) {
         NSArray *legacy = TGLegacyOnlyConditions(actions);
         if (legacy.count && !conditions[key]) conditions[key] = legacy;
     }];
+    // 清掉老配置：一次删完再同步，别让删除只留在内存里。
+    if (retiredKeys.count) {
+        for (NSString *key in retiredKeys) CFPreferencesSetAppValue((__bridge CFStringRef)key, NULL, domain);
+        CFPreferencesAppSynchronize(domain);
+        TGPluginLog(@"cleared %lu retired keys", (unsigned long)retiredKeys.count);
+    }
     tgAssignments = assignments;
     tgConditions = conditions;
     tgHasAppAssignments = NO;
