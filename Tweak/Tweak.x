@@ -179,7 +179,7 @@ static void TGReadAssignments(void) {
         // One action (string) or several, run in order (array of strings).
         NSMutableArray *actions = [NSMutableArray array];
         for (id item in [action isKindOfClass:NSArray.class] ? action : @[action])
-            if ([item isKindOfClass:NSString.class] && [item length]) [actions addObject:item];
+            if ([item isKindOfClass:NSString.class] && [item length] && !TGRetiredAction(item)) [actions addObject:item];
         if (actions.count) assignments[key] = actions;
         // cn4.15 之前仅当写在动作数组开头（"only:charging"）。读到就当成条件用，
         // 不写盘：用户打开一次设置页，迁移会把它落到独立的 if: 键上。
@@ -953,38 +953,6 @@ static NSMutableSet *TGShortcutLiveRunners(void) {
     return set;
 }
 
-// AutoTouch 没有命令行入口，唯一能用的是它注入进程的播放引擎。下面这三个调用
-// 来自 Powercuts 的 AutoTouchRunFileAction（已验证过的入口）：拿 PlayingManager
-// 单例 → makePlayingFor: 建一次播放 → start。全是私有 API，版本一换就可能改，
-// 所以整段 @try，失败静默——和别的动作一致，不弹窗、不崩 SpringBoard。
-static void TGRunAutoTouch(NSString *name) {
-    NSArray<NSString *> *dirs = TGAutoTouchScriptDirectories();
-    if (!dirs.count) return;
-    NSString *path = TGAutoTouchFindScript(dirs, name);
-    if (!path) return;
-    // roothide 下脚本落在 ".jbroot-<hex>/…" 里，播放引擎只认它自己那套 AppGroup
-    // 绝对路径，先归一化。rootless 的路径不含这一段，直接跳过。
-    NSRange marker = [path rangeOfString:@"/.jbroot-"];
-    if (marker.location != NSNotFound) {
-        NSRange slash = [path rangeOfString:@"/" options:0 range:NSMakeRange(marker.location + 1, path.length - marker.location - 1)];
-        if (slash.location != NSNotFound) {
-            NSString *jbrootName = [path substringWithRange:NSMakeRange(marker.location + 1, slash.location - marker.location - 1)];
-            path = [@"/var/mobile/Containers/Shared/AppGroup/" stringByAppendingPathComponent:
-                [jbrootName stringByAppendingString:[path substringFromIndex:slash.location]]];
-        }
-    }
-    @try {
-        Class cls = NSClassFromString(@"PlayingManager");
-        if (!cls || ![cls respondsToSelector:@selector(sharedInstance)]) return;
-        id shared = ((id (*)(id, SEL))objc_msgSend)(cls, @selector(sharedInstance));
-        if (!shared || ![shared respondsToSelector:@selector(makePlayingFor:)]) return;
-        id playing = ((id (*)(id, SEL, id))objc_msgSend)(shared, @selector(makePlayingFor:), path);
-        if (!playing || ![playing respondsToSelector:@selector(start)]) return;
-        ((void (*)(id, SEL))objc_msgSend)(playing, @selector(start));
-    } @catch (NSException *e) {
-    }
-}
-
 // Settings 里那条 XPC 走不通（沙盒），只能在这里取：名字写进文件，再通知设置页来读。
 // 写字典而不是数组，是为了把「调用失败」和「一条都没有」分开——前者要报错，后者是空表。
 static void TGWriteShortcutList(void) {
@@ -1586,9 +1554,6 @@ static BOOL TGCanPerform(NSString *action) {
         return [scheme isEqualToString:@"http"] || [scheme isEqualToString:@"https"];
     }
     if ([action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGURLPrefix] || [action hasPrefix:TGShellPrefix]) return YES;
-    // AutoTouch 的动作是否可用，全看它的播放引擎有没有注入进来。NSClassFromString
-    // 只查类表、不初始化类，放在这个会被启动早期遍历的函数里是安全的。
-    if ([action hasPrefix:TGAutotouchPrefix]) return NSClassFromString(@"PlayingManager") != nil;
     if ([action hasPrefix:TGExtensionPrefix]) return TGExtensionRunnable(action);
     if ([action hasPrefix:TGUnlockPrefix]) return YES;
     if ([action hasPrefix:TGAppPrefix]) return action.length > TGAppPrefix.length && TGOpenApp(nil, YES);
@@ -1608,8 +1573,6 @@ static void TGPerform(NSString *action) {
             if (cmd) TGGestureCommand(cmd);
         } else if ([action hasPrefix:TGShortcutPrefix]) {
             TGRunShortcut([action substringFromIndex:TGShortcutPrefix.length]);
-        } else if ([action hasPrefix:TGAutotouchPrefix]) {
-            TGRunAutoTouch([action substringFromIndex:TGAutotouchPrefix.length]);
         } else if ([action hasPrefix:TGUnlockPrefix]) {
             if (action.length > TGUnlockPrefix.length) TGUnlockDevice([action substringFromIndex:TGUnlockPrefix.length]);
         } else if ([action hasPrefix:TGURLPrefix]) {
@@ -1661,7 +1624,7 @@ static void TGNoteCausedStates(NSString *action) {
         families = @[@3, @4];
     } else if ([action hasPrefix:@"media."]) {
         families = @[@5];
-    } else if ([action hasPrefix:TGShellPrefix] || [action hasPrefix:TGShortcutPrefix] || [action hasPrefix:TGAutotouchPrefix]) {
+    } else if ([action hasPrefix:TGShellPrefix] || [action hasPrefix:TGShortcutPrefix]) {
         families = @[@0, @1, @2, @3, @4, @5]; // can change anything
     }
     for (NSNumber *family in families) tgCausedAt[family.intValue] = now;

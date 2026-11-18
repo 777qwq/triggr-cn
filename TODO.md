@@ -2,6 +2,13 @@
 
 按顺序做，做完一条删一条，并在 `CHANGELOG.md` 记一段。
 
+## cn4.75：移除 AutoTouch 与体检 —— 待真机复验
+
+- 添加动作：分类列表里没有「AutoTouch」，其余分类与条目数量不变。
+- 老配置带 `autotouch:xxx` 动作时：动作列表里看不到这一行；随便改一下该触发器的动作并保存，配置里那条应消失。
+- 该触发器如果只有这一个动作，触发时应恢复系统行为（不是「按了没反应」）。
+- 序列编辑器的「如果／否则／结束条件」仍能正常添加和执行（这次只删了选不到的 `if:custom`）。
+
 ## cn4.74：手势库删除改为从右往左滑 —— 待真机复验
 
 - 点按手势行：只出「试播」「重命名…」，没有删除。
@@ -136,38 +143,6 @@ message 带原因；输名字保存后值仍是 `shortcut:<名字>`。
 actionSheet 没有搜索，超过一屏靠滚动。与快捷指令 App 里数一遍对比条数；
 少了说明 `accessibilityWorkflowsWithError:` 只返回「辅助功能可用」的那部分，
 那就得改用 `WFDatabase` 取全量。
-
-## cn4.31：AutoTouch 脚本动作的真机验证
-
-代码从 `cn4.9` 分支移植，本地编译已过，包内符号也核过。剩下三件只有真机能定。
-
-### 1. 脚本能不能被列出来
-
-设置 → 任意触发器 → 添加动作 → 看有没有「AutoTouch」分类，展开后是否列出脚本。
-
-- 列出脚本 → 目录探测命中，继续第 2 条。
-- 分类整个不出现 → `TGAutoTouchScripts()` 返回空。用 Filza 看脚本真实路径，对照
-  `Shared/TGCatalog.h` 里 `TGAutoTouchScriptDirectories()` 探的那几处，缺哪条补哪条。
-
-### 2. 按下去脚本会不会跑
-
-把某个脚本配到音量加，回主屏幕长按。预期：脚本开始执行。
-
-- 动作显示「不可用」→ `PlayingManager` 类没进 SpringBoard。说明这一版 AutoTouch 的
-  dylib 没注入 SpringBoard，这条路不成立，整组撤掉。
-- 动作可用但按了没反应 → `makePlayingFor:` 或 `start` 的方法名变了（私有 API）。
-  用 `cycript`/`frida` 在 SpringBoard 里 `Object.keys(PlayingManager.prototype)` 看一眼
-  真实方法名，改 `TGRunAutoTouch`。
-
-### 3. 没装 AutoTouch 时不能误导
-
-停用 AutoTouch（或换一台没装的设备）后，该动作应显示「不可用」，分类应消失。
-
-### 已知上限
-
-只能播放脚本，不能录制、停止、调速——AutoTouch 没有这些对外入口。
-
----
 
 ## 暂缓
 

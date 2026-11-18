@@ -173,7 +173,7 @@ static void TGClearAssignment(PSListController *list, PSSpecifier *spec) {
 static NSArray<NSString *> *TGActionList(id value) {
     NSMutableArray *actions = [NSMutableArray array];
     for (id item in [value isKindOfClass:NSArray.class] ? value : (value ? @[value] : @[]))
-        if ([item isKindOfClass:NSString.class] && [item length]) [actions addObject:item];
+        if ([item isKindOfClass:NSString.class] && [item length] && !TGRetiredAction(item)) [actions addObject:item];
     return actions;
 }
 
@@ -982,7 +982,7 @@ static void TGPromptWait(UIViewController *host, NSString *encoded, void (^done)
 // finds any action.
 static NSArray<NSArray<NSString *> *> *TGCategories(void) {
     NSMutableArray *list = [@[@[@"system", @"系统"], @[@"power", @"电源"], @[@"switches", @"开关"], @[@"media", @"媒体"], @[@"levels", @"调节"],
-        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"gestures", @"手势"], @[@"autotouch", @"AutoTouch"]] mutableCopy];
+        @[@"open", @"打开"], @[@"text", @"文字与命令"], @[@"menus", @"菜单"], @[@"gestures", @"手势"]] mutableCopy];
     // cn4.59: 插件动作只在装了插件时出现——没装却列出「新建截图」，点了没反应。
     if (TGPluginInstalled(@"snapper3")) [list addObject:@[@"snapper", @"Snapper 3"]];
     if (TGPluginInstalled(@"copylog")) [list addObject:@[@"copylog", @"CopyLog"]];
@@ -1000,7 +1000,6 @@ static void TGSetCategoryIcon(PSSpecifier *spec, NSString *category) {
         @"text": @[@"text.bubble.fill", UIColor.systemTealColor],
         @"menus": @[@"list.bullet.rectangle.fill", UIColor.systemPurpleColor],
         @"gestures": @[@"hand.draw", UIColor.systemBrownColor],
-        @"autotouch": @[@"chevron.left.forwardslash.chevron.right", UIColor.systemMintColor],
         @"snapper": @[@"camera.viewfinder", UIColor.systemOrangeColor],
         @"copylog": @[@"doc.on.clipboard.fill", UIColor.systemTealColor],
     };
@@ -1011,7 +1010,6 @@ static NSString *TGCategoryOf(NSString *action) {
     if ([action isEqualToString:TGElseAction] || [action isEqualToString:TGEndIfAction] || [action hasPrefix:TGIfPrefix]) return @"conditions";
     if ([action hasPrefix:TGMenuPrefix]) return @"menus";
     if ([action hasPrefix:TGGesturePlayPrefix] || [action hasPrefix:TGGestureControlPrefix]) return @"gestures";
-    if ([action hasPrefix:TGAutotouchPrefix]) return @"autotouch";
     // 扩展动作的分类是 "ext:<扩展名>"：展开后要点到的那一行属于哪个扩展。
     if (TGExtensionAction(action)) return [TGExtensionPrefix stringByAppendingString:TGExtensionAction(action)[0]];
     for (NSString *prefix in @[TGBrightnessPrefix, TGBrightnessUpPrefix, TGBrightnessDownPrefix, TGMediaVolumePrefix, TGRingerVolumePrefix]) if ([action hasPrefix:prefix]) return @"levels";
@@ -1365,10 +1363,6 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
             if (![name isKindOfClass:NSString.class]) continue;
             [rows addObject:[self rowForAction:[TGGesturePlayPrefix stringByAppendingString:name] title:[@"播放 " stringByAppendingString:name]]];
         }
-    } else if ([category isEqualToString:@"autotouch"]) {
-        // 脚本名直接当标题：分类头已经写着 AutoTouch，再拼一遍只会更长。
-        for (NSString *script in TGAutoTouchScripts())
-            [rows addObject:[self rowForAction:[TGAutotouchPrefix stringByAppendingString:script] title:script]];
     }
     return rows;
 }
@@ -1385,7 +1379,7 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
         for (int i = 0; i < TGActionGroups[g].count; i++)
             [rows addObject:[self rowForAction:@(TGActionGroups[g].items[i].identifier) title:@(TGActionGroups[g].items[i].title)]];
     }
-    for (NSString *category in @[@"levels", @"open", @"text", @"menus", @"gestures", @"autotouch"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
+    for (NSString *category in @[@"levels", @"open", @"text", @"menus", @"gestures"]) [rows addObjectsFromArray:[self rowsForCategory:category]];
     // 扩展条目在搜索里带上分类名，否则「Bass Boost」孤零零的，不知道属于谁。
     for (NSString *name in TGExtensionNames())
         for (NSString *item in TGExtensionItems(TGExtension(name))) {

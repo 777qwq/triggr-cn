@@ -76,12 +76,12 @@ exec /var/jb/bin/sh "/var/mobile/Library/MyScripts/$1.sh"
 | 对方是什么 | 走哪条路 | 谁来做 |
 |---|---|---|
 | 有命令行入口 | `ext:` | 任何包，放个 plist |
-| 只有图形界面，但 dylib 注入在 SpringBoard 里 | 进程内调用（如 `autotouch:`） | 改 Triggr 本体 |
+| 只有图形界面，但 dylib 注入在 SpringBoard 里 | 进程内调用（如 `unlock:`、`gesture:`） | 改 Triggr 本体 |
 | 只有图形界面，也没有可复用的进程内入口 | 接不了 | — |
 
 
 ## 注意
 
 - `Program` 必须**可读**（不是可执行）。iOS 18 的 SpringBoard 会把脚本报成不可执行，所以 Triggr 判的是可读性。
-- 装了扩展但没配任何动作时，扩展分类不会出现在选择器里（条目为空）。`autotouch:` 同理，没有脚本就整类不出现。
+- 装了扩展但没配任何动作时，扩展分类不会出现在选择器里（条目为空）。
 - 删掉 plist 后，已经配好的 `ext:` 动作会变成「当前系统上不可用」，触发器退回系统行为，不会出现按键黑洞。

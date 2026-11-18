@@ -3,6 +3,22 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.75
+
+- **移除 AutoTouch 动作整组**：动作选择器里不再有这一分类，连同它背后的实现一起删掉——脚本目录探测（`TGAutoTouchScriptDirectories` / `TGAutoTouchFindScript` / `TGAutoTouchScripts`）、播放引擎调用（`TGRunAutoTouch`，走 `PlayingManager` 私有接口）、可用性判断（查 `PlayingManager` 在不在）、执行分支、动作标题。
+  - 这套东西依赖 AutoTouch 的私有播放引擎，版本一换就可能失效，且只读脚本、不能录不能停。初始版不带这层不确定的实现。
+  - 老配置里若还留着 `autotouch:<脚本名>` 动作，读到就被丢掉（`TGRetiredAction`）：它已经不在选择器里，留着只会在列表里显示成一行看不懂的标识符，而且删不掉。丢掉后该触发器若没有别的动作，就恢复系统行为。
+  - 文档同步：README 的动作清单、EXTENSIONS.md 里拿 `autotouch:` 举例的两处改成现有前缀，TODO 里 cn4.31 那段待验整段删除。
+- **清掉一处死目录项**：`{"if:custom", "自定义条件…"}` 与 `TGIfCustomAction` 宏。它既没有解析（`TGConditionParse` 不认 custom），也没有执行分支，而且「条件」组不进选择器，选不到也对不上——纯残留。
+- **全仓体检结果**（这一版没有改动，只确认）：
+  - 静态函数/全局变量：428 个定义，无一个是仅定义未被引用。
+  - 宏：102 个 `TG*` 宏，除上面那个 `TGIfCustomAction` 外全部有用。
+  - 头文件：本地 `#import` 全部能找到目标文件，没有无人引用的头文件。
+  - 目录：32 个数组全部被引用或直接被代码使用，165 个条目没有一个 id 重复出现在两个分组里。
+  - 动作覆盖：目录里列出的动作，除 `else` / `endif` / `gesture.*`（走序列引擎和宏）外，全部有对应处理分支；执行表里另有 9 个不在目录里的动作（`system.back`、三种震动强度、扫码/付款码），是有意的别名。
+  - 偏好键：没有只写不读或只读不写的键；`配置/ActiveProfile/RecentActions` 三个只在设置页用，是有意的。
+  - 空分类、死图标映射、`TODO/FIXME` 标记：均无。
+
 ## 1.5.0+cn4.74
 
 - **手势库的删除改成从右往左滑**：点按弹出的菜单现在只有「试播」和「重命名…」，删除挪到行上从右往左滑出来的按钮里。
