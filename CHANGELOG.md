@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.67
+
+- **修复手势库页行灰字、点不动**：cn4.65 为加箭头把手势行/标记大小行改回 `PSLinkListCell` + `detail:nil`，被 Preferences 框架当作无效链接而灰掉、禁用点击。换成 `PSListItemCell` + 自定义 `TGDetailCell`（照触发器 `TGSubtitleCell` 模式，value1 样式手动画右侧灰字摘要 + 箭头、标题黑字、可选），`detail` 保持 nil 不 push，点击仍进 `didSelect` 弹操作面板。外观与触发器行/主页手势库入口一致，交互仍是弹出而非进下一页。
+
 ## 1.5.0+cn4.66
 
 - **手势行去除左滑删除**：`TGGesturesController` 的 `swipeTitleForSpecifier:` 改为始终返回 nil，已保存手势行不再有左滑删除；删除仍可从点按弹出的菜单操作。分组说明文案同步去掉「从右往左滑可删除」，只保留「点按可试播、重命名或删除」。

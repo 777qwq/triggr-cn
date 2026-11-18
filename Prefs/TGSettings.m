@@ -2741,6 +2741,29 @@ static PSSpecifier *TGSubtitled(PSSpecifier *spec) {
     return spec;
 }
 
+// 可点击的普通行，但画出「右侧灰字摘要 + 箭头」的链接行外观。
+// 手势库的手势行 / 标记大小行用它：detail 为 nil，不会 push 新页面，
+// 点击仍进 didSelect 弹操作面板；字色显式设黑字，避免被当成无效链接而灰掉。
+@interface TGDetailCell : PSTableCell
+@end
+@implementation TGDetailCell
+
+- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier specifier:(PSSpecifier *)specifier {
+    return [super initWithStyle:UITableViewCellStyleValue1 reuseIdentifier:reuseIdentifier specifier:specifier];
+}
+
+- (void)refreshCellContentsWithSpecifier:(PSSpecifier *)specifier {
+    [super refreshCellContentsWithSpecifier:specifier];
+    id value = [specifier performGetter];
+    self.detailTextLabel.text = [value isKindOfClass:NSString.class] ? value : nil;
+    self.detailTextLabel.textColor = UIColor.secondaryLabelColor;
+    self.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    self.textLabel.textColor = UIColor.labelColor;
+    self.selectionStyle = UITableViewCellSelectionStyleDefault;
+}
+
+@end
+
 static PSSpecifier *TGTriggerRow(NSString *name, id target, SEL getter, NSString *mode, NSString *trigger) {
     PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:name target:target set:nil get:getter
         detail:TGActionPickerController.class cell:PSLinkListCell edit:nil];
@@ -3013,9 +3036,11 @@ static NSURL *tgGestureExportURL;
         [specs addObject:[self toggleSpec:@"停止于触摸" key:@"stopOnTouch"]];
         [specs addObject:[self toggleSpec:@"显示触点" key:@"showTouches"]];
 
-        // PSLinkListCell：显示右侧摘要 + 箭头。detail 为 nil 不会 push 新页面；
-        // didSelectRowAtIndexPath 里已拦截这两类行，弹出的菜单由 self.view 定位（不再用 self.tableView）。
-        PSSpecifier *tab = [PSSpecifier preferenceSpecifierNamed:@"录制标记大小" target:self set:nil get:@selector(readTabSize:) detail:nil cell:PSLinkListCell edit:nil];
+        // 外观照触发器行：右侧灰字摘要 + 箭头、标题黑字、可点击；但不进下一页。
+        // 用 PSListItemCell + 自定义 TGDetailCell 画出链接行外观，detail 为 nil 不会 push，
+        // didSelectRowAtIndexPath 拦截这两类行弹操作面板，菜单由 self.view 定位。
+        PSSpecifier *tab = [PSSpecifier preferenceSpecifierNamed:@"录制标记大小" target:self set:nil get:@selector(readTabSize:) detail:nil cell:PSListItemCell edit:nil];
+        [tab setProperty:TGDetailCell.class forKey:@"cellClass"];
         [tab setProperty:@YES forKey:@"tgGestureTabSize"];
         [specs addObject:tab];
 
@@ -3026,7 +3051,8 @@ static NSURL *tgGestureExportURL;
             NSString *name = g[@"name"];
             if (![name isKindOfClass:NSString.class]) continue;
             PSSpecifier *row = [PSSpecifier preferenceSpecifierNamed:name target:self set:nil get:@selector(gestureSummary:)
-                detail:nil cell:PSLinkListCell edit:nil];
+                detail:nil cell:PSListItemCell edit:nil];
+            [row setProperty:TGDetailCell.class forKey:@"cellClass"];
             [row setProperty:name forKey:@"tgGestureName"];
             [specs addObject:row];
         }
