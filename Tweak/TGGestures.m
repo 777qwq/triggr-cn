@@ -17,7 +17,6 @@
 #import <objc/message.h>
 #import <sys/sysctl.h>
 #import "TGGestures.h"
-#import "../Shared/TGCatalog.h" // TGGestureComposePath：编写手势的参数文件
 #import <sys/time.h>
 #import <sys/sysctl.h>
 #import <math.h>
@@ -812,7 +811,7 @@ static NSData *tg_gesture_without_stop_stroke(NSData *raw, double stopTime) {
 
 // Saves a recording under `name`, replacing one of the same name. A finger still down at the
 // end is lifted where it was.
-static BOOL tg_gesture_store_ex(NSString *name, NSData *raw, CGSize screen, BOOL chime) {
+static BOOL tg_gesture_store(NSString *name, NSData *raw) {
     NSUInteger count = raw.length / sizeof(TGGestureFrame);
     if (count == 0) return NO;
     NSMutableData *all = [raw mutableCopy];
@@ -837,210 +836,15 @@ static BOOL tg_gesture_store_ex(NSString *name, NSData *raw, CGSize screen, BOOL
         @"created": [NSDate date],
         @"duration": @(frames[count - 1].t),
         @"strokes": @(strokes),
-        @"screen": @[@(screen.width), @(screen.height)],
+        @"screen": @[@(g_recScreen.width), @(g_recScreen.height)],
         @"frames": tg_gesture_pack(frames, count),
     } mutableCopy]];
     BOOL ok = tg_gestures_save(list);
     g_recResult = ok ? [NSString stringWithFormat:@"saved\t%@", name] : @"failed";
     TGLogMin(@"[Gesture] saved '%@': %lu strokes, %.1f s, %lu frames%@", name, (unsigned long)strokes, frames[count - 1].t,
              (unsigned long)count, ok ? @"" : @" - WRITE FAILED");
-    if (chime) AudioServicesPlaySystemSound(1114); // end recording
+    AudioServicesPlaySystemSound(1114); // end recording
     return ok;
-}
-
-// A recording, by the way it has always been stored: the screen it was made on, and the end sound.
-static BOOL tg_gesture_store(NSString *name, NSData *raw) {
-    return tg_gesture_store_ex(name, raw, g_recScreen, YES);
-}
-
-#pragma mark - Composed gestures
-
-// A written gesture is frames like a recording's: the same struct, packed by the same code, so
-// playback, trimming, export and the action picker need to know nothing about it. What differs is
-// where the frames come from. A template is turned into a path, and the path is sampled at the
-// touchscreen's own rate. 60 a second is what a real finger sends; a sparser path reads as a dot
-// jumping rather than a finger moving, and the app underneath reads a jump as a much faster flick.
-static const double kTGComposeStep = 1.0 / 60.0;
-
-static void tg_compose_add(NSMutableData *out, double t, int count, const TGTouchFinger *fingers) {
-    TGGestureFrame frame = {0};
-    frame.t = t;
-    frame.count = count;
-    for (int i = 0; i < count && i < kTGGestureMaxFingers; i++) frame.fingers[i] = fingers[i];
-    [out appendBytes:&frame length:sizeof(frame)];
-}
-
-// A lift is a frame of its own: the fingers stay where they are and only `touching` goes to zero.
-static void tg_compose_lift(NSMutableData *out, double t, int count, const TGTouchFinger *fingers) {
-    TGTouchFinger up[kTGGestureMaxFingers];
-    for (int i = 0; i < count; i++) { up[i] = fingers[i]; up[i].touching = 0; }
-    tg_compose_add(out, t, count, up);
-}
-
-static double tg_compose_clamp(double v, double lo, double hi) {
-    return v < lo ? lo : v > hi ? hi : v;
-}
-
-// Fling: the last part of the path speeds up, so the finger is moving fastest when it lifts. A
-// path that slows to a stop before letting go is a drag that ends, not a flick: the app sees no
-// speed to carry on with, and its swipe recognizer may never reach its threshold.
-static double tg_compose_curve(double p, BOOL fling) {
-    return fling ? pow(p, 1.25) : p;
-}
-
-static void tg_compose_swipe(NSMutableData *out, CGPoint from, CGPoint to, double duration, BOOL fling) {
-    int steps = (int)lround(duration / kTGComposeStep);
-    if (steps < 2) steps = 2;
-    TGTouchFinger f = {0, 1, 0, 0, 0};
-    for (int i = 0; i <= steps; i++) {
-        double p = (double)i / steps;
-        double e = tg_compose_curve(p, fling);
-        f.x = from.x + (to.x - from.x) * e;
-        f.y = from.y + (to.y - from.y) * e;
-        tg_compose_add(out, duration * p, 1, &f);
-    }
-    f.x = to.x; f.y = to.y;
-    tg_compose_lift(out, duration + kTGComposeStep, 1, &f);
-}
-
-static void tg_compose_press(NSMutableData *out, CGPoint at, double duration) {
-    // Held still, frame after frame: the same thing playback does when it has to stop mid-stroke.
-    int steps = (int)lround(duration / kTGComposeStep);
-    if (steps < 2) steps = 2;
-    TGTouchFinger f = {0, 1, 0, at.x, at.y};
-    for (int i = 0; i <= steps; i++) tg_compose_add(out, duration * i / steps, 1, &f);
-    tg_compose_lift(out, duration + kTGComposeStep, 1, &f);
-}
-
-static void tg_compose_tap(NSMutableData *out, CGPoint at, int fingers, int taps, double gap) {
-    double t = 0;
-    for (int k = 0; k < taps; k++) {
-        TGTouchFinger f[kTGGestureMaxFingers] = {0};
-        // Fingers of one hand never land on the same point: spread them on a small circle, as a
-        // real two- or three-finger tap arrives.
-        for (int j = 0; j < fingers; j++) {
-            double a = 2 * M_PI * j / fingers + M_PI_2;
-            double r = fingers > 1 ? 16 : 0;
-            f[j] = (TGTouchFinger){ (uint8_t)j, 1, 0, at.x + cos(a) * r, at.y + sin(a) * r };
-        }
-        for (int i = 0; i <= 4; i++) tg_compose_add(out, t + i * kTGComposeStep, fingers, f);
-        tg_compose_lift(out, t + 5 * kTGComposeStep, fingers, f);
-        t += 5 * kTGComposeStep + MAX(0.05, gap);
-    }
-}
-
-// Two fingers, mirrored around a centre that doesn't move: how a pinch is actually made. Opening
-// and closing are the same path with the distances swapped.
-static void tg_compose_pinch(NSMutableData *out, CGPoint center, double from, double to, double angleDeg, double duration) {
-    int steps = (int)lround(duration / kTGComposeStep);
-    if (steps < 2) steps = 2;
-    double a = angleDeg * M_PI / 180.0;
-    TGTouchFinger f[2];
-    for (int i = 0; i <= steps; i++) {
-        double p = (double)i / steps;
-        double half = (from + (to - from) * p) / 2;
-        f[0] = (TGTouchFinger){ 0, 1, 0, center.x - cos(a) * half, center.y - sin(a) * half };
-        f[1] = (TGTouchFinger){ 1, 1, 0, center.x + cos(a) * half, center.y + sin(a) * half };
-        tg_compose_add(out, duration * p, 2, f);
-    }
-    double half = to / 2;
-    f[0] = (TGTouchFinger){ 0, 1, 0, center.x - cos(a) * half, center.y - sin(a) * half };
-    f[1] = (TGTouchFinger){ 1, 1, 0, center.x + cos(a) * half, center.y + sin(a) * half };
-    tg_compose_lift(out, duration + kTGComposeStep, 2, f);
-}
-
-// A touch starting on an edge carries the touchscreen's edge bits. Without them iOS never starts
-// the home bar gesture or an app's swipe back, however straight the line is.
-static uint8_t tg_compose_edge_bit(double x, double y, CGSize screen) {
-    const double near = 12;
-    if (y >= screen.height - near) return 1;  // bottom
-    if (y <= near) return 4;                  // top
-    if (x <= near) return 8;                  // left
-    if (x >= screen.width - near) return 2;   // right
-    return 0;
-}
-
-static void tg_compose_edge(NSMutableData *out, CGPoint from, CGPoint to, CGSize screen, double duration) {
-    int steps = (int)lround(duration / kTGComposeStep);
-    if (steps < 2) steps = 2;
-    TGTouchFinger f = {0, 1, 0, 0, 0};
-    for (int i = 0; i <= steps; i++) {
-        double p = (double)i / steps;
-        f.x = from.x + (to.x - from.x) * p;
-        f.y = from.y + (to.y - from.y) * p;
-        f.edge = tg_compose_edge_bit(f.x, f.y, screen); // only while still within reach of the edge
-        tg_compose_add(out, duration * p, 1, &f);
-    }
-    f.x = to.x; f.y = to.y; f.edge = 0;
-    tg_compose_lift(out, duration + kTGComposeStep, 1, &f);
-}
-
-// A template's numbers, made into frames. Returns nil and fills `error` when the numbers can't
-// describe a gesture at all (a swipe of no distance, a pinch that doesn't move).
-static NSData *tg_gesture_compose_frames(NSDictionary *spec, CGSize screen, NSString **error) {
-    if (screen.width < 1 || screen.height < 1) { *error = @"Screen size unknown"; return nil; }
-    NSString *template = [spec[@"template"] isKindOfClass:[NSString class]] ? spec[@"template"] : @"";
-    double duration = [spec[@"duration"] doubleValue];
-    if (!isfinite(duration)) duration = 0.5;
-    duration = tg_compose_clamp(duration, 0.08, 10);
-    double x = [spec[@"x"] doubleValue], y = [spec[@"y"] doubleValue];
-    if (!isfinite(x)) x = screen.width / 2;
-    if (!isfinite(y)) y = screen.height / 2;
-    x = tg_compose_clamp(x, 0, screen.width);
-    y = tg_compose_clamp(y, 0, screen.height);
-    NSMutableData *out = [NSMutableData data];
-
-    if ([template isEqualToString:@"swipe"]) {
-        double dx = [spec[@"dx"] doubleValue], dy = [spec[@"dy"] doubleValue];
-        if (!isfinite(dx) || !isfinite(dy) || (fabs(dx) < 8 && fabs(dy) < 8)) {
-            *error = @"A swipe needs a distance"; return nil;
-        }
-        CGPoint to = CGPointMake(tg_compose_clamp(x + dx, 0, screen.width), tg_compose_clamp(y + dy, 0, screen.height));
-        tg_compose_swipe(out, CGPointMake(x, y), to, duration, [spec[@"fling"] boolValue]);
-    } else if ([template isEqualToString:@"press"]) {
-        tg_compose_press(out, CGPointMake(x, y), MAX(duration, 0.3));
-    } else if ([template isEqualToString:@"tap"]) {
-        int fingers = (int)[spec[@"fingers"] integerValue];
-        if (fingers < 1 || fingers > 3) fingers = 1;
-        int taps = (int)[spec[@"taps"] integerValue] == 2 ? 2 : 1;
-        double gap = [spec[@"gap"] doubleValue];
-        if (!isfinite(gap) || gap < 0.05) gap = 0.18;
-        tg_compose_tap(out, CGPointMake(x, y), fingers, taps, gap);
-    } else if ([template isEqualToString:@"pinch"]) {
-        double from = [spec[@"from"] doubleValue], to = [spec[@"to"] doubleValue];
-        if (!isfinite(from) || from < 8) from = 120;
-        if (!isfinite(to) || to < 8) to = 320;
-        if (fabs(to - from) < 8) { *error = @"A pinch has to change the distance"; return nil; }
-        double angle = [spec[@"angle"] doubleValue];
-        if (!isfinite(angle)) angle = 0;
-        tg_compose_pinch(out, CGPointMake(x, y), from, to, angle, duration);
-    } else if ([template isEqualToString:@"edge"]) {
-        int edge = (int)[spec[@"edge"] integerValue];
-        if (edge != 1 && edge != 2 && edge != 8) edge = 8;
-        double distance = [spec[@"distance"] doubleValue];
-        if (!isfinite(distance) || distance < 20) distance = screen.width * 0.45;
-        CGPoint from, to;
-        // 起点贴着边，终点朝屏幕里侧走：边上的坐标由边本身决定，另一个方向才用位置
-        if (edge == 1) {
-            from = CGPointMake(x, screen.height - 1);
-            to = CGPointMake(x, screen.height - 1 - distance);
-        } else if (edge == 8) {
-            from = CGPointMake(1, y);
-            to = CGPointMake(1 + distance, y);
-        } else {
-            from = CGPointMake(screen.width - 1, y);
-            to = CGPointMake(screen.width - 1 - distance, y);
-        }
-        to.x = tg_compose_clamp(to.x, 0, screen.width);
-        to.y = tg_compose_clamp(to.y, 0, screen.height);
-        tg_compose_edge(out, from, to, screen, duration);
-    } else {
-        *error = @"Unknown template";
-        return nil;
-    }
-
-    if (out.length < sizeof(TGGestureFrame)) { *error = @"Nothing to save"; return nil; }
-    return out;
 }
 
 // 下一个空闲的「手势 N」
@@ -1632,24 +1436,6 @@ NSString *TGGestureCommand(NSString *cmd) {
         [list removeObject:g];
         tg_gestures_save(list);
         return [NSString stringWithFormat:@"Deleted '%@'\n", arg];
-    }
-    if ([verb isEqualToString:@"compose"]) {
-        // gesture compose: the numbers come from a file, not the command line. There are a dozen
-        // of them and they are fractions of a point; a command line is split on spaces and
-        // quoted by hand. The settings page writes the file, then sends this one word.
-        NSDictionary *spec = [NSDictionary dictionaryWithContentsOfFile:TGGestureComposePath];
-        [[NSFileManager defaultManager] removeItemAtPath:TGGestureComposePath error:NULL];
-        if (![spec isKindOfClass:[NSDictionary class]]) return @"Error: Nothing to write\n";
-        NSString *name = [spec[@"name"] isKindOfClass:[NSString class]]
-            ? [spec[@"name"] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
-        if (!name.length) name = tg_gesture_suggested_name();
-        __block CGSize screen = CGSizeZero;
-        tg_on_main_sync(^{ screen = [UIScreen mainScreen].fixedCoordinateSpace.bounds.size; });
-        NSString *error = nil;
-        NSData *frames = tg_gesture_compose_frames(spec, screen, &error);
-        if (!frames) return [NSString stringWithFormat:@"Error: %@\n", error ?: @"couldn't be written"];
-        if (!tg_gesture_store_ex(name, frames, screen, NO)) return @"Error: The gesture couldn't be saved\n";
-        return [NSString stringWithFormat:@"Written\t%@\n", name];
     }
     if ([verb isEqualToString:@"trim"]) {
         // gesture trim "Name" START END: keeps what happened between START and END (seconds) and
