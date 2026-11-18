@@ -3,6 +3,11 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.0.3
+
+- **拒绝层边缘判定 20 → 40pt**：cn5.0.2 的拒绝层实测仍无效，先把右边缘触摸起点判定宽度从 20 加大到 40pt（`TGRightEdgeGuardMargin`），试更大范围能否拦住从右侧边缘起的滑动。仅调这个阈值，其余逻辑不变。
+- 版本号升到 1.5.0+cn5.0.3。
+
 ## 1.5.0+cn5.0.2
 
 - **修复 cn5.0.1 拒绝层不生效**：cn5.0.1 把 `_shouldReceiveTouch` 拒绝层加在 `Tweak.x`（只注入 SpringBoard），而淘宝等 App 里的返回识别器在 App 进程，SpringBoard 的 hook 够不到，所以完全没效果。本版把拒绝层挪到 `Relay.x`（注入 `com.apple.UIKit`，即 App 进程）。

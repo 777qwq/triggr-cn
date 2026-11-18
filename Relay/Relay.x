@@ -294,13 +294,15 @@ static BOOL TGRightEdgeWanted(void) {
 
 // 判定：右侧已指派 + 识别器本身是右边缘 + 触摸起点落在右边 20pt 条内。
 // 左侧 / 底部 / 顶部 / 没配 edge.right 的一律放行——系统返回、切换器、通知中心不动。
+// cn5.0.3：拒绝层边缘判定宽度，从 20 加大到 40pt（试更大范围能否拦住从右边缘起的滑动）。
+static const CGFloat TGRightEdgeGuardMargin = 40.0;
 static BOOL TGRightEdgeTouch(UIScreenEdgePanGestureRecognizer *g, UITouch *touch) {
     if (!TGRightEdgeWanted()) return NO;
     if (![g respondsToSelector:@selector(edges)] || !((g.edges) & UIRectEdgeRight)) return NO;
     if (!touch) return NO;
     CGPoint p = [touch locationInView:nil];
     if (p.x <= 0) return NO;
-    return p.x >= CGRectGetWidth([UIScreen mainScreen].bounds) - 20.0; // TGEdgeMargin
+    return p.x >= CGRectGetWidth([UIScreen mainScreen].bounds) - TGRightEdgeGuardMargin;
 }
 
 %group RightEdgeGuard
