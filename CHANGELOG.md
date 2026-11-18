@@ -3,6 +3,14 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.0.1
+
+- **右侧边缘滑入拒绝系统手势（试行）**：把 Triggr 2.1 用过、原先服务底部角落的拒绝层挪到右侧——在 `UIScreenEdgePanGestureRecognizer` 的 `_shouldReceiveTouch:withEvent:` 上判断：触摸起点落在右边 20pt 条内、系统识别器的 `edges` 含 Right、且 `edge.right` / `edge.right2` 已指派动作时返回 NO，让系统自己的侧向手势收不到这次触摸，不再和 Triggr 的回放各做一次。相比 cn5.1 的 `setState:Failed`，这是在触摸投递之前拒绝，更早也更干净。
+  - 只动右侧：左侧、底部、顶部、`edges==0` 的识别器一律放行，系统返回、切换器、通知中心照常。
+  - 只拒绝系统识别器，不冻结画面，也不阻止触发手指拖动 App 内容——淘宝里图片被拖动那类问题本版不处理。
+  - 这是试探性改动，仅试右侧单类 hook；确认效果后再决定是否扩展到其他方向。
+- 版本号升到 1.5.0+cn5.0.1。
+
 ## 1.5.0+cn5.0
 
 - **修复配置导出闪退**：导出原来走分享面板，TriggrApp 里给「隔空投送」取应用图标时，IconServices 建 CIContext 在 GLContext 上空指针崩（iOS 16.3 实测）。改为系统文件选择器导出，与手势导出同一条路；临时文件在保存完成或取消后删除。
