@@ -3235,9 +3235,12 @@ static const void *TGMultiIndexKey = &TGMultiIndexKey;
         g = s;
     }
     g.delegate = self;
-    g.cancelsTouchesInView = NO;
-    g.delaysTouchesBegan = NO;
-    g.delaysTouchesEnded = NO;
+    // cn4.69：识别器只在手势已指派时才挂载（见 TGUpdateMultiTouchGestures 的 want），
+    // 因此这里一律独占触摸：判定期间暂缓下传、识别成功就吞掉，钉住 App 画面。
+    // 这样三指捏合指派截图时，照片不会被同时缩放。未指派的手势没有识别器，照旧穿透。
+    g.cancelsTouchesInView = YES;
+    g.delaysTouchesBegan = YES;
+    g.delaysTouchesEnded = YES;
     objc_setAssociatedObject(g, TGMultiIndexKey, @(idx), OBJC_ASSOCIATION_RETAIN);
     return g;
 }
