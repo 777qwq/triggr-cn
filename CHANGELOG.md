@@ -3,6 +3,13 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.0
+
+- **修复配置导出闪退**：导出原来走分享面板，TriggrApp 里给「隔空投送」取应用图标时，IconServices 建 CIContext 在 GLContext 上空指针崩（iOS 16.3 实测）。改为系统文件选择器导出，与手势导出同一条路；临时文件在保存完成或取消后删除。
+- **动作列表的「复制一份」改为「复制」**：右滑出来的按钮文字更短，行为不变——仍是在该动作下方插入相同的一条；「如果 / 否则 / 结束条件」与停顿不参与复制。
+- **插件详情改写**：`control` 的 Description 改为「基于 Triggr 1.5.0 汉化修改：给按键、手势和系统事件指派动作。」，不再在包描述里罗列功能清单。
+- 版本号升到 1.5.0+cn5.0。
+
 ## 1.5.0+cn4.75
 
 - **移除 AutoTouch 动作整组**：动作选择器里不再有这一分类，连同它背后的实现一起删掉——脚本目录探测（`TGAutoTouchScriptDirectories` / `TGAutoTouchFindScript` / `TGAutoTouchScripts`）、播放引擎调用（`TGRunAutoTouch`，走 `PlayingManager` 私有接口）、可用性判断（查 `PlayingManager` 在不在）、执行分支、动作标题。

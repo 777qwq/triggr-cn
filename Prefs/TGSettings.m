@@ -401,7 +401,7 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
     }];
     NSMutableArray<UIContextualAction *> *actions = [NSMutableArray arrayWithObject:remove];
     if ([self canDuplicateSpecifier:spec]) {
-        UIContextualAction *copy = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"复制一份" handler:^(UIContextualAction *a, UIView *view, void (^done)(BOOL)) {
+        UIContextualAction *copy = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleNormal title:@"复制" handler:^(UIContextualAction *a, UIView *view, void (^done)(BOOL)) {
             __strong typeof(self) strongSelf = weakSelf;
             [strongSelf duplicateSpecifier:spec];
             done(YES);
@@ -1189,7 +1189,7 @@ static NSString *TGShortcutFailure(NSDictionary *payload) {
 
     // What's picked, in run order, so it's visible without opening each category.
     PSSpecifier *picked = [PSSpecifier groupSpecifierWithName:_selection.count ? (_menuEditor ? @"本菜单包含" : _selection.count > 1 ? @"按此顺序执行" : @"已选择") : nil];
-    // 「移除」在最右，「复制一份」在它左边（全滑只执行最右那个）。
+    // 「移除」在最右，「复制」在它左边（全滑只执行最右那个）。
     if (_selection.count) [notes insertObject:@"从右往左滑可移除或复制动作。" atIndex:0];
     else if (!_menuEditor && TGDefaultActionTitle(_trigger))
         // 上游 2.1 的「Clearer button notes」：这里唯一要说清的是「原生功能还在」。
@@ -3313,8 +3313,9 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
 @interface TGProfilesController : TGListController <UIDocumentPickerDelegate>
 @end
 
-@implementation TGProfilesController
-
+@implementation TGProfilesController {
+    NSURL *_exportURL; // 导出中的临时文件：存好或取消后删掉
+}
 - (PSSpecifier *)storageForKey:(NSString *)key {
     PSSpecifier *spec = [PSSpecifier emptyGroupSpecifier];
     [spec setProperty:TGDomain forKey:@"defaults"];
@@ -3367,7 +3368,7 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         [specs addObject:[self button:@"将当前设置存为配置…" command:@"save"]];
 
         PSSpecifier *share = [PSSpecifier groupSpecifierWithName:@"共享"];
-        [share setProperty:@"导出生成一个文件，可用隔空投送、信息或「文件」发送。导入会先展示内容，再替换当前设置。" forKey:@"footerText"];
+        [share setProperty:@"导出生成一个文件，在「文件」里选个位置存下来。导入会先展示内容，再替换当前设置。" forKey:@"footerText"];
         [specs addObject:share];
         [specs addObject:[self button:@"导出当前设置…" command:@"export"]];
         [specs addObject:[self button:@"导入设置…" command:@"import"]];
@@ -3482,16 +3483,19 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
     NSMutableString *message = [summary mutableCopy];
     if (personal) [message appendString:@"\n\n其中包含你的事件所用的 Wi-Fi 网络和蓝牙设备名称。"];
     if (commands) [message appendString:@"\n\n其中包含你的 shell 命令；请确认不含隐私内容。"];
-    [self confirm:@"导出设置" message:message button:@"共享" destructive:NO then:^{
+    [self confirm:@"导出设置" message:message button:@"导出" destructive:NO then:^{
         NSDictionary *file = @{ @"Triggr": @1, @"setup": setup };
         NSData *data = [NSJSONSerialization dataWithJSONObject:file options:NSJSONWritingPrettyPrinted | NSJSONWritingSortedKeys error:nil];
         NSString *safeName = [[name componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@"/\\:"]] componentsJoinedByString:@"-"];
         NSURL *url = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:[safeName stringByAppendingString:@".json"]]];
         if (![data writeToURL:url atomically:YES]) return;
-        UIActivityViewController *share = [[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];
-        share.popoverPresentationController.sourceView = cell;
-        share.popoverPresentationController.sourceRect = cell.bounds;
-        [self presentViewController:share animated:YES completion:nil];
+        // 不再走分享面板：TriggrApp 里给「隔空投送」取应用图标时，IconServices 建
+        // CIContext 会在 GLContext 上空指针崩（iOS 16.3 实测）。改为系统文件选择器，
+        // 与手势导出同一条路，两个进程行为一致。
+        UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc] initForExportingURLs:@[url] asCopy:YES];
+        picker.delegate = self;
+        _exportURL = url;
+        [self presentViewController:picker animated:YES completion:nil];
     }];
 }
 
@@ -3502,6 +3506,11 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
 }
 
 - (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    if (_exportURL) { // 导出完成：系统已复制走，临时文件可以删了
+        [NSFileManager.defaultManager removeItemAtURL:_exportURL error:nil];
+        _exportURL = nil;
+        return;
+    }
     NSData *data = urls.firstObject ? [NSData dataWithContentsOfURL:urls.firstObject] : nil;
     id file = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
     if (![file isKindOfClass:NSDictionary.class] || ![file[@"Triggr"] isKindOfClass:NSNumber.class] || ![file[@"setup"] isKindOfClass:NSDictionary.class]) {
@@ -3518,6 +3527,12 @@ static NSString *TGSetupSummary(NSDictionary *setup, BOOL *hasCommands, BOOL *ha
         [self writeValue:@"" forKey:TGActiveProfileKey];
         [self reloadSpecifiers];
     }];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+    if (!_exportURL) return;
+    [NSFileManager.defaultManager removeItemAtURL:_exportURL error:nil];
+    _exportURL = nil;
 }
 
 @end
