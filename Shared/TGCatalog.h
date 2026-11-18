@@ -76,14 +76,14 @@ static const TGItem TGSeqConditions[] = {
     {"if:custom", "自定义条件…"}, {"else", "否则"}, {"endif", "结束条件"},
 };
 // A quick flick that starts on a Home Screen icon (see TGFlickRecognizer).
-// Gestures on the Home Screen pages themselves (not on an icon).
-static const TGItem TGHomeGestures[] = {
-    {"homescreen.pinchin", "捏合"}, {"homescreen.pinchout", "张开"},
-    {"homescreen.twoup", "双指上滑"}, {"homescreen.twodown", "双指下滑"},
+// 双击空白处（homescreen.doubletap）从主屏幕分组挪来这里归类；标识符与识别器不变，
+// 仍挂在 SBRootFolderView、只在空白处生效（cn4.68）。
+static const TGItem TGIcons[] = {
+    {"icon.flickup", "上滑"}, {"icon.flickdown", "下滑"}, {"icon.flickleft", "左滑"}, {"icon.flickright", "右滑"},
     {"homescreen.doubletap", "双击空白处"},
 };
 
-// 顺序与 Relay/Relay.x 的 kTGSlots 一一对应：先两指七项，再三指七项。
+// 顺序见 Tweak 里的 kTGSlots：先两指七项，再三指七项。
 static const TGItem TGInAppGestures[] = {
     {"inapp.twotap", "两指点按"},
     {"inapp.twoup", "两指上滑"}, {"inapp.twodown", "两指下滑"},
@@ -93,9 +93,6 @@ static const TGItem TGInAppGestures[] = {
     {"inapp.threeup", "三指上滑"}, {"inapp.threedown", "三指下滑"},
     {"inapp.threeleft", "三指左滑"}, {"inapp.threeright", "三指右滑"},
     {"inapp.pinchin", "三指捏合"}, {"inapp.pinchout", "三指张开"},
-};
-static const TGItem TGIcons[] = {
-    {"icon.flickup", "上滑"}, {"icon.flickdown", "下滑"}, {"icon.flickleft", "左滑"}, {"icon.flickright", "右滑"},
 };
 // Activator's slide-ins (GitHub #3), with its two-finger versions, as SpringBoard system gestures.
 static const TGItem TGEdges[] = {
@@ -155,11 +152,10 @@ static const TGGroup TGTriggerGroups[] = {
     {"锁键 + 音量键", TGSideCombos, TG_COUNT(TGSideCombos), "同时按住锁键与一个音量键。「长按音量加 / 长按音量减」指同时按住半秒；动作与 iOS 并行运行，继续按住仍会照常出现关机滑条和紧急 SOS。"},
     {"拨片开关", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。"},
     {"状态栏", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
-    {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。"},
+    {"主屏幕图标", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。「双击空白处」在主屏幕空白区域生效，不在图标上。"},
     {"屏幕边缘", TGEdges, TG_COUNT(TGEdges), "从屏幕最边缘滑入或上下滑，应用内、主屏幕和锁屏均有效。单指「从左侧滑入」会取代多数应用的返回手势；双指版（同 Activator）不会。上下滑只认贴着边缘起步、以竖直为主的滑动。"},
     {"底部手势", TGBottom, TG_COUNT(TGBottom), "底边上滑指派了动作，系统那套「左右两侧滑动切换应用」会被底边的屏幕边缘识别器挡住而失效。"},
-    {"主屏幕手势", TGHomeGestures, TG_COUNT(TGHomeGestures), "在主屏幕页面上（而非图标上）。双指滑动和捏合不影响单指滚动、聚焦搜索和今天视图；双击只在空白处生效。编辑主屏幕或打开文件夹时忽略。"},
-    {"应用内手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "在应用内有效。先两指七项、再三指七项。原应用仍会收到同样的手势，所以挑它没占用的：点按和最不常用的方向最安全。两指捏合、张开就是应用自己的缩放，会和照片、Safari、地图等放大手势同时发生；三指基本没人占用。每个手势只在有指派的应用里启用。"},
+    {"多指手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "两指/三指的点按、滑动和捏合，由系统手势层识别，应用内、主屏幕和锁屏均有效。原应用仍会收到同样的手势，所以挑它没占用的：点按和最不常用的方向最安全。两指捏合、张开就是应用自己的缩放，会和照片、Safari、地图等放大手势同时发生；三指基本没人占用。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},
     {"CarPlay", TGCarPlay, TG_COUNT(TGCarPlay), "靠音频输出端口判断，有线和无线 CarPlay 都算。连接在建立会话时触发，断开在端口切回扬声器时触发。"},
@@ -597,8 +593,11 @@ static inline NSString *TGTriggerTitle(NSString *trigger) {
             if ([trigger isEqualToString:@(TGTriggerGroups[g].items[i].identifier)]) {
                 // Events ("接入充电器") read fine alone; presses need their button.
                 BOOL event = TGTriggerGroups[g].items == TGOther || TGTriggerGroups[g].items == TGStateChanges || TGTriggerGroups[g].items == TGMotion || TGTriggerGroups[g].items == TGMusic || TGTriggerGroups[g].items == TGNotifications || TGTriggerGroups[g].items == TGCalls;
-                if (TGTriggerGroups[g].items == TGIcons) return [NSString stringWithFormat:@"图标%@", @(TGTriggerGroups[g].items[i].title)];
-                if (TGTriggerGroups[g].items == TGHomeGestures) return [NSString stringWithFormat:@"主屏幕%@", @(TGTriggerGroups[g].items[i].title)];
+                if (TGTriggerGroups[g].items == TGIcons) {
+                    // 双击空白处归类在图标组，但它是主屏幕手势，不是图标手势。
+                    if ([trigger isEqualToString:@"homescreen.doubletap"]) return @"主屏幕双击空白处";
+                    return [NSString stringWithFormat:@"图标%@", @(TGTriggerGroups[g].items[i].title)];
+                }
                 return event ? @(TGTriggerGroups[g].items[i].title) : [NSString stringWithFormat:@"%@ %@", @(TGTriggerGroups[g].title), @(TGTriggerGroups[g].items[i].title)];
             }
     return trigger;

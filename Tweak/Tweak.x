@@ -3031,8 +3031,8 @@ static void TGUpdateIconFlicks(BOOL want) {
 
 #pragma mark - Home Screen gestures
 // Pinches, two-finger swipes and a double tap on empty space, recognised on the
-// root folder view next to iOS's own gestures (never instead of them).
-
+// cn4.68：主屏幕分组删除后，这里只保留「双击空白处」。捏合/双指上下滑已并入
+// 多指手势组（挂 SBSystemGestureManager）；双击空白处归类到图标组但识别器不变。
 static BOOL tgWantHomeGestures;
 
 static BOOL TGHomeScreenBusy(void) {
@@ -3053,22 +3053,13 @@ static BOOL TGHomeScreenBusy(void) {
     return target;
 }
 
-- (NSString *)triggerFor:(UIGestureRecognizer *)recognizer {
-    if ([recognizer isKindOfClass:UIPinchGestureRecognizer.class]) return nil; // decided when it ends
-    if ([recognizer isKindOfClass:UITapGestureRecognizer.class]) return @"homescreen.doubletap";
-    return ((UISwipeGestureRecognizer *)recognizer).direction == UISwipeGestureRecognizerDirectionUp ? @"homescreen.twoup" : @"homescreen.twodown";
-}
-
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)recognizer {
     if (!tgWantHomeGestures || TGHomeScreenBusy()) return NO;
-    if ([recognizer isKindOfClass:UIPinchGestureRecognizer.class])
-        return [tgAssignedTriggers containsObject:@"homescreen.pinchin"] || [tgAssignedTriggers containsObject:@"homescreen.pinchout"];
-    return [tgAssignedTriggers containsObject:[self triggerFor:recognizer]];
+    return [tgAssignedTriggers containsObject:@"homescreen.doubletap"];
 }
 
 // A double tap only on empty space: not on icons, folders, widgets or the Dock.
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)recognizer shouldReceiveTouch:(UITouch *)touch {
-    if (![recognizer isKindOfClass:UITapGestureRecognizer.class]) return YES;
     for (UIView *view = touch.view; view && view != recognizer.view; view = view.superview) {
         NSString *name = NSStringFromClass(view.class);
         if ([name containsString:@"IconView"] || [name containsString:@"Widget"] || [name containsString:@"Dock"] || [view isKindOfClass:UIControl.class]) return NO;
@@ -3081,14 +3072,7 @@ static BOOL TGHomeScreenBusy(void) {
 }
 
 - (void)recognized:(UIGestureRecognizer *)recognizer {
-    if ([recognizer isKindOfClass:UIPinchGestureRecognizer.class]) {
-        if (recognizer.state != UIGestureRecognizerStateEnded) return;
-        CGFloat scale = ((UIPinchGestureRecognizer *)recognizer).scale;
-        if (scale < 0.7) TGFire(@"homescreen.pinchin");
-        else if (scale > 1.4) TGFire(@"homescreen.pinchout");
-        return;
-    }
-    if (recognizer.state == UIGestureRecognizerStateRecognized) TGFire([self triggerFor:recognizer]);
+    if (recognizer.state == UIGestureRecognizerStateRecognized) TGFire(@"homescreen.doubletap");
 }
 
 @end
@@ -3098,21 +3082,12 @@ static const void *TGHomeGesturesKey = &TGHomeGesturesKey;
 static void TGAttachHomeGestures(UIView *view) {
     if (objc_getAssociatedObject(view, TGHomeGesturesKey)) return;
     TGHomeGestureTarget *target = [TGHomeGestureTarget shared];
-    UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:target action:@selector(recognized:)];
-    UISwipeGestureRecognizer *up = [[UISwipeGestureRecognizer alloc] initWithTarget:target action:@selector(recognized:)];
-    up.direction = UISwipeGestureRecognizerDirectionUp;
-    up.numberOfTouchesRequired = 2;
-    UISwipeGestureRecognizer *down = [[UISwipeGestureRecognizer alloc] initWithTarget:target action:@selector(recognized:)];
-    down.direction = UISwipeGestureRecognizerDirectionDown;
-    down.numberOfTouchesRequired = 2;
     UITapGestureRecognizer *doubleTap = [[UITapGestureRecognizer alloc] initWithTarget:target action:@selector(recognized:)];
     doubleTap.numberOfTapsRequired = 2;
-    for (UIGestureRecognizer *recognizer in @[pinch, up, down, doubleTap]) {
-        recognizer.delegate = target;
-        recognizer.cancelsTouchesInView = NO; // icons, scrolling and taps work as before
-        recognizer.delaysTouchesEnded = NO;
-        [view addGestureRecognizer:recognizer];
-    }
+    doubleTap.delegate = target;
+    doubleTap.cancelsTouchesInView = NO; // icons, scrolling and taps work as before
+    doubleTap.delaysTouchesEnded = NO;
+    [view addGestureRecognizer:doubleTap];
     objc_setAssociatedObject(view, TGHomeGesturesKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
@@ -3153,6 +3128,160 @@ static const unsigned long long TGEdgeGestureTypeBase = 0x7467000; // far from i
 static const CGFloat TGEdgeMargin = 20;    // a slide has to start this close to its edge
 static const CGFloat TGEdgeDistance = 60;  // and travel this far away from it
 static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this much
+
+#pragma mark - Multi-touch gestures (cn4.68, moved here from the in-app Relay)
+// 14 槽位，顺序与 Shared/TGCatalog.h 的 TGInAppGestures 严格一一对应。
+// 0..6 两指：点按、上、下、左、右、捏合、张开；7..13 三指同样七种。
+// cn4.68 起这些识别器挂在 SBSystemGestureManager（系统手势层），因此在主屏幕、
+// 锁屏、所有 App 之上都能收到，直接 TGFire，不再经 Relay 的 notify 中转。
+typedef struct { uint8_t fingers; uint8_t kind; } TGGestureSlot;
+// kind: 0 点按, 1 上, 2 下, 3 左, 4 右, 5 捏合, 6 张开
+static const TGGestureSlot kTGSlots[] = {
+    {2, 0}, {2, 1}, {2, 2}, {2, 3}, {2, 4}, {2, 5}, {2, 6},
+    {3, 0}, {3, 1}, {3, 2}, {3, 3}, {3, 4}, {3, 5}, {3, 6},
+};
+#define TG_SLOT_COUNT ((int)(sizeof(kTGSlots) / sizeof(kTGSlots[0])))
+// 系统手势 type：边缘类占 +0..+8，多指接在 +9..+22（14 个）。
+static const unsigned long long TGMultiTypeBase = TGEdgeGestureTypeBase + 9;
+
+// 捏合/张开：UIPinchGestureRecognizer 写死两指，三指要自己量各指到质心的半径。
+@interface TGPinchRecognizer : UIGestureRecognizer
+@property (nonatomic) NSUInteger fingers;
+@property (nonatomic) NSInteger desiredDirection; // -1 只认捏合，+1 只认张开
+@property (nonatomic) NSInteger direction;
+@property (nonatomic) CGFloat scale;
+@property (nonatomic) CGFloat initialRadius;
+@end
+
+@implementation TGPinchRecognizer
+- (CGFloat)radiusForTouches:(NSSet<UITouch *> *)touches {
+    NSUInteger n = touches.count;
+    if (n < 2 || n > 3) return 0;
+    CGPoint pts[3];
+    NSUInteger i = 0;
+    for (UITouch *t in touches) pts[i++] = [t locationInView:self.view];
+    CGPoint c = CGPointZero;
+    for (NSUInteger k = 0; k < n; k++) { c.x += pts[k].x; c.y += pts[k].y; }
+    c.x /= n; c.y /= n;
+    CGFloat sum = 0;
+    for (NSUInteger k = 0; k < n; k++) sum += hypot(pts[k].x - c.x, pts[k].y - c.y);
+    return sum / n;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (event.allTouches.count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
+    if (event.allTouches.count == self.fingers && self.initialRadius <= 0)
+        self.initialRadius = [self radiusForTouches:event.allTouches];
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (self.state != UIGestureRecognizerStatePossible) return;
+    if (event.allTouches.count != self.fingers || self.initialRadius <= 0) return;
+    CGFloat r = [self radiusForTouches:event.allTouches];
+    if (r <= 0) return;
+    self.scale = r / self.initialRadius;
+    if (self.scale < 0.7 || self.scale > 1.4) {
+        NSInteger d = self.scale < 0.7 ? -1 : 1;
+        if (self.desiredDirection != d) { self.state = UIGestureRecognizerStateFailed; return; }
+        self.direction = d;
+        self.state = UIGestureRecognizerStateEnded;
+    }
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
+}
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
+}
+- (void)reset {
+    [super reset];
+    self.direction = 0; self.scale = 1; self.initialRadius = 0;
+}
+@end
+
+@interface TGMultiTouchTarget : NSObject <UIGestureRecognizerDelegate>
++ (instancetype)shared;
+- (UIGestureRecognizer *)recognizerFor:(int)idx;
+- (void)recognized:(UIGestureRecognizer *)g;
+@end
+
+static const void *TGMultiIndexKey = &TGMultiIndexKey;
+
+@implementation TGMultiTouchTarget
++ (instancetype)shared {
+    static TGMultiTouchTarget *s;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ s = [self new]; });
+    return s;
+}
+- (UIGestureRecognizer *)recognizerFor:(int)idx {
+    UIGestureRecognizer *g = nil;
+    TGGestureSlot slot = kTGSlots[idx];
+    if (slot.kind >= 5) {
+        TGPinchRecognizer *p = [[TGPinchRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        p.fingers = slot.fingers;
+        p.desiredDirection = slot.kind == 5 ? -1 : 1;
+        g = p;
+    } else if (slot.kind == 0) {
+        UITapGestureRecognizer *t = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        t.numberOfTouchesRequired = slot.fingers;
+        t.numberOfTapsRequired = 1;
+        g = t;
+    } else {
+        UISwipeGestureRecognizer *s = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        s.numberOfTouchesRequired = slot.fingers;
+        s.direction = (slot.kind == 1) ? UISwipeGestureRecognizerDirectionUp
+                   : (slot.kind == 2) ? UISwipeGestureRecognizerDirectionDown
+                   : (slot.kind == 3) ? UISwipeGestureRecognizerDirectionLeft
+                                      : UISwipeGestureRecognizerDirectionRight;
+        g = s;
+    }
+    g.delegate = self;
+    g.cancelsTouchesInView = NO;
+    g.delaysTouchesBegan = NO;
+    g.delaysTouchesEnded = NO;
+    objc_setAssociatedObject(g, TGMultiIndexKey, @(idx), OBJC_ASSOCIATION_RETAIN);
+    return g;
+}
+- (void)recognized:(UIGestureRecognizer *)g {
+    NSNumber *idxN = objc_getAssociatedObject(g, TGMultiIndexKey);
+    int idx = idxN ? idxN.intValue : -1;
+    if (idx < 0 || idx >= TG_SLOT_COUNT) return;
+    if (g.state != UIGestureRecognizerStateEnded) return;
+    if (kTGSlots[idx].kind >= 5 && [(TGPinchRecognizer *)g direction] == 0) return;
+    TGFire(@(TGInAppGestures[idx].identifier));
+}
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    NSNumber *idxN = objc_getAssociatedObject(g, TGMultiIndexKey);
+    if (!idxN) return NO;
+    int idx = idxN.intValue;
+    if (idx < 0 || idx >= TG_SLOT_COUNT) return NO;
+    return [tgAssignedTriggers containsObject:@(TGInAppGestures[idx].identifier)];
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return YES; // 方向识别器共存的关键
+}
+@end
+
+static NSMutableArray<UIGestureRecognizer *> *tgMultiRecognizers;
+static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
+    if (!manager) return;
+    if (!tgMultiRecognizers) tgMultiRecognizers = [NSMutableArray array];
+    TGMultiTouchTarget *target = [TGMultiTouchTarget shared];
+    for (int idx = 0; idx < TG_SLOT_COUNT; idx++) {
+        NSString *trigger = @(TGInAppGestures[idx].identifier);
+        BOOL want = [tgAssignedTriggers containsObject:trigger];
+        UIGestureRecognizer *existing = nil;
+        for (UIGestureRecognizer *r in tgMultiRecognizers)
+            if ([objc_getAssociatedObject(r, TGMultiIndexKey) intValue] == idx) { existing = r; break; }
+        if (want && !existing) {
+            UIGestureRecognizer *r = [target recognizerFor:idx];
+            [manager addGestureRecognizer:r withType:TGMultiTypeBase + idx];
+            [tgMultiRecognizers addObject:r];
+        } else if (!want && existing) {
+            [manager removeGestureRecognizer:existing];
+            [tgMultiRecognizers removeObject:existing];
+        }
+    }
+}
 
 // One edge, one pan recognizer (as RemoteCompanion does it): a plain UIPanGestureRecognizer that checks where the
 // first finger landed, instead of UIScreenEdgePanGestureRecognizer. The edge-pan subclass only reports sideways
@@ -3605,6 +3734,7 @@ static void TGUpdateEdgeGestures(void) {
     }
 
     TGRegisterBottomGestures(manager);
+    TGUpdateMultiTouchGestures(manager); // cn4.68：多指手势从 Relay 迁到系统手势层
 }
 
 // 设置页在沙盒里看不到 dylib 目录，所以在这边探一次、写进共享清单。
@@ -3630,11 +3760,11 @@ static void TGWritePluginManifest(void) {
 
 %hook SBSystemGestureManager
 - (BOOL)_isGestureWithTypeAllowed:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 9) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 23) return YES; // +0..+22: 边缘/底部/小白条/多指
     return %orig;
 }
 - (BOOL)_shouldEnableSystemGestureWithType:(unsigned long long)type {
-    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 9) return YES;
+    if (type >= TGEdgeGestureTypeBase && type < TGEdgeGestureTypeBase + 23) return YES; // +0..+22: 边缘/底部/小白条/多指
     return %orig;
 }
 %end
@@ -4297,36 +4427,18 @@ static void TGUpdateStateEvents(void) {
 static void TGUpdateOtherEvents(void) {
     TGUpdateStateEvents();
     TGUpdateIconFlicks(TGAssignedPrefix(@"icon.flick"));
-    TGUpdateHomeGestures(TGAssignedPrefix(@"homescreen."));
+    TGUpdateHomeGestures([tgAssignedTriggers containsObject:@"homescreen.doubletap"]);
     TGUpdateEdgeGestures();
     tgWatchNotifications = TGAssignedPrefix(@"notification.");
     TGUpdateProximity(TGAssignedPrefix(@"proximity."));
     TGUpdateMusic(TGAssignedPrefix(@"music."));
     TGUpdateCallWatcher(TGAssignedPrefix(@"call."));
     // Tell the in-app Relay which of its events anything is waiting for.
+    // cn4.68：多指手势已迁到本进程的系统手势层（TGUpdateMultiTouchGestures），
+    // 不再经 Relay，因此位段只需通知状态栏与摇动。
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    // 多指手势位段 bit(idx+2)：名单只从 TGCatalog 取，别再手抄第三份。
-    uint64_t mfBits = 0;
-    for (int idx = 0; idx < TG_COUNT(TGInAppGestures); idx++) {
-        if ([tgAssignedTriggers containsObject:@(TGInAppGestures[idx].identifier)]) mfBits |= (1ULL << (idx + 2));
-    }
-    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | mfBits);
-    // cn2.77：多指手势分发（Relay 经 notify_post cn.triggr.inappidxN 上报，idx 与 TGCatalog 顺序一致）
-    {
-        static int toks[TG_COUNT(TGInAppGestures)];
-        // 只注册一次：TGUpdateOtherEvents 每次跑都会到这里，重复注册会叠加派发（一次手势多次执行动作）
-        static BOOL registered = NO;
-        if (!registered) {
-            registered = YES;
-            for (int i = 0; i < TG_COUNT(TGInAppGestures); i++) {
-                toks[i] = -1;
-                NSString *nm = [NSString stringWithFormat:@"cn.triggr.inappidx%d", i];
-                NSString *idn = @(TGInAppGestures[i].identifier);
-                notify_register_dispatch(nm.UTF8String, &toks[i], dispatch_get_main_queue(), ^(int t){ TGFire(idn); });
-            }
-        }
-    }
+    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0));
     
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");

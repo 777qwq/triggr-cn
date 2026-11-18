@@ -3,6 +3,14 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.68
+
+- **手势分组重构：主屏幕组删除、多指手势升级为全局**：
+  - 「双击空白处」（`homescreen.doubletap`）归类到「主屏幕图标」分组，标识符与识别器不变（仍挂 `SBRootFolderView`、只在空白处生效）。
+  - 删除整个「主屏幕手势」分组及其捏合/张开/双指上下滑四项——这些手势的对应项已包含在多指手势组。
+  - 「应用内手势」改名「多指手势」，识别器从 Relay（各 App 的 UIWindow）迁到 SpringBoard 的 `SBSystemGestureManager` 系统手势层（type `+9..+22`，沿用 Triggr 已有放行 hook）。因此主屏幕、锁屏、所有 App 之上都能触发，识别后直接 `TGFire`，不再经 `cn.triggr.inappidxN` notify 中转。Relay 只保留状态栏点击、摇动、左滑返回与返回上级。
+  - 系统手势层无"贴边起步"那种独占区域，多指手势可能与 iOS 自带多指手势（主屏幕双指捏合进今天视图、App 内缩放等）同时发生——这是选择全局生效的代价。
+
 ## 1.5.0+cn4.67
 
 - **修复手势库页行灰字、点不动**：cn4.65 为加箭头把手势行/标记大小行改回 `PSLinkListCell` + `detail:nil`，被 Preferences 框架当作无效链接而灰掉、禁用点击。换成 `PSListItemCell` + 自定义 `TGDetailCell`（照触发器 `TGSubtitleCell` 模式，value1 样式手动画右侧灰字摘要 + 箭头、标题黑字、可选），`detail` 保持 nil 不 push，点击仍进 `didSelect` 弹操作面板。外观与触发器行/主页手势库入口一致，交互仍是弹出而非进下一页。
