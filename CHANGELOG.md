@@ -3,6 +3,15 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn4.70
+
+- **钉住画面改用 Triggr 2.1 的 TGFreeze，撤掉 cn4.69 那条走不通的路**：cn4.69 把多指识别器的 `cancelsTouchesInView` 设成 YES，实机照片照样缩小。原因在进程边界——识别器挂在 SpringBoard，`cancelsTouchesInView` 只取消同进程、同窗口视图树的触摸投递，独立进程的照片 App 根本收不到这个取消。
+  - 2.1 的做法（`Triggr.dylib` 的 `TGFreezeBegin` 0x318ac / `TGFreezeEnd` 0x32988）：不取消触摸，而是**各进程冻自己的界面**——把所有 `UIScrollView` 的 `contentOffset` 存下来、`scrollEnabled` 关掉、`gestureRecognizers` 逐个 `enabled = NO`，抬手还原。反汇编确认 2.1 四处 `setCancelsTouchesInView:` 全是 0，它从不指望这个属性。
+  - 本版新增 `Shared/TGFreeze.h`（2.1 同名函数与变量），SpringBoard 冻自己的窗口，App 经 Relay 收到 `freeze-begin` 通知后冻自己的。比 2.1 多存一样 `zoomScale`：照片缩小改的是它，而 2.1 只还原 `contentOffset`。
+  - 冻结时机：手指数一到齐就冻（两指的槽位在第二根落下时），赶在缩放发生之前。解冻：识别成功 0.35 秒后、或所有手指抬起、或 2 秒兜底，三者先到先算。
+  - 多指轻扫换成 `TGSwipeRecognizer` 子类，同样在触摸开始冻结，列表不再跟着滚。
+  - 未指派的手势不挂识别器、不冻结，穿透照旧。
+
 ## 1.5.0+cn4.69
 
 - **多指手势触发时钉住画面**：多指识别器（挂 `SBSystemGestureManager`）的 `cancelsTouchesInView` / `delaysTouchesBegan` / `delaysTouchesEnded` 从 NO 改为 YES——判定期间暂缓下传、识别成功就吞掉触摸，不再同时作用于 App。这样三指捏合指派截图时，照片不会被同时缩放，截图是原画面。

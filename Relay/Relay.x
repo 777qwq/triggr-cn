@@ -7,6 +7,7 @@
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import "../Shared/TGRelay.h"
+#import "../Shared/TGFreeze.h"
 
 
 static void TGRelay(const char *name, uint64_t wantedBit) {
@@ -289,6 +290,16 @@ static void TGRelayDoBack(void) {
         static int backToken = -1;
         notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
  TGRelayDoBack();
+        });
+        // cn4.70：多指手势触发时 SpringBoard 发这两条，本 App 冻/解自己的界面。
+        // 跨进程改不了对方的触摸投递，只能各冻各的（TGFreeze.h 顶部有说明）。
+        static int freezeBeginToken = -1;
+        notify_register_dispatch(TGRelayFreezeBegin, &freezeBeginToken, dispatch_get_main_queue(), ^(int t) {
+            TGFreezeBegin();
+        });
+        static int freezeEndToken = -1;
+        notify_register_dispatch(TGRelayFreezeEnd, &freezeEndToken, dispatch_get_main_queue(), ^(int t) {
+            TGFreezeEnd();
         });
     }
 }

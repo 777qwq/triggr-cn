@@ -33,6 +33,7 @@
 #import "../Shared/TGHardware.h"
 #import "../Shared/TGPaths.h"
 #import "../Shared/TGRelay.h"
+#import "../Shared/TGFreeze.h"
 #import "../Shared/TGSteps.h"
 #import "TGGestures.h"
 
@@ -3144,6 +3145,28 @@ static const TGGestureSlot kTGSlots[] = {
 // 系统手势 type：边缘类占 +0..+8，多指接在 +9..+22（14 个）。
 static const unsigned long long TGMultiTypeBase = TGEdgeGestureTypeBase + 9;
 
+// cn4.70：多指手势期间钉住画面，按 Triggr 2.1 的 TGFreeze 分工——
+// 本进程（SpringBoard）冻自己的窗口，再喊前台 App 冻它自己的。
+// cn4.69 试过 cancelsTouchesInView，但识别器在 SpringBoard 进程里，
+// 那个属性只管同进程的视图树，独立进程的照片 App 照收触摸、照缩。
+static void TGMultiFreezeBegin(void) {
+    TGFreezeBegin();
+    notify_post(TGRelayFreezeBegin);
+}
+
+static void TGMultiFreezeEnd(void) {
+    TGFreezeEnd();
+    notify_post(TGRelayFreezeEnd);
+}
+
+// 所有手指都抬起（或已被系统取消）才算这一轮结束。识别成功时手指往往还按着，
+// 这时候解冻，App 的识别器会立刻恢复、接着把照片缩下去。
+static BOOL TGMultiTouchesFinished(UIEvent *event) {
+    for (UITouch *touch in event.allTouches)
+        if (touch.phase != UITouchPhaseEnded && touch.phase != UITouchPhaseCancelled) return NO;
+    return YES;
+}
+
 // 捏合/张开：UIPinchGestureRecognizer 写死两指，三指要自己量各指到质心的半径。
 @interface TGPinchRecognizer : UIGestureRecognizer
 @property (nonatomic) NSUInteger fingers;
@@ -3169,8 +3192,12 @@ static const unsigned long long TGMultiTypeBase = TGEdgeGestureTypeBase + 9;
 }
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (event.allTouches.count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
-    if (event.allTouches.count == self.fingers && self.initialRadius <= 0)
+    if (event.allTouches.count == self.fingers && self.initialRadius <= 0) {
         self.initialRadius = [self radiusForTouches:event.allTouches];
+        // 手指数一到齐就冻，赶在缩放真正发生之前。等 scale 到 0.7 再冻已经晚了：
+        // 那时照片已经小了一圈，还原 zoomScale 也会先缩再弹回。
+        TGMultiFreezeBegin();
+    }
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (self.state != UIGestureRecognizerStatePossible) return;
@@ -3187,13 +3214,34 @@ static const unsigned long long TGMultiTypeBase = TGEdgeGestureTypeBase + 9;
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
+    if (TGMultiTouchesFinished(event)) TGMultiFreezeEnd();
 }
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
+    if (TGMultiTouchesFinished(event)) TGMultiFreezeEnd();
 }
 - (void)reset {
     [super reset];
     self.direction = 0; self.scale = 1; self.initialRadius = 0;
+}
+@end
+
+// 多指轻扫也要钉住：不冻的话列表会跟着手指滚一段，抬手时还回弹一下。
+@interface TGSwipeRecognizer : UISwipeGestureRecognizer
+@end
+
+@implementation TGSwipeRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (event.allTouches.count == self.numberOfTouchesRequired) TGMultiFreezeBegin();
+    [super touchesBegan:touches withEvent:event];
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesEnded:touches withEvent:event];
+    if (TGMultiTouchesFinished(event)) TGMultiFreezeEnd();
+}
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [super touchesCancelled:touches withEvent:event];
+    if (TGMultiTouchesFinished(event)) TGMultiFreezeEnd();
 }
 @end
 
@@ -3226,7 +3274,7 @@ static const void *TGMultiIndexKey = &TGMultiIndexKey;
         t.numberOfTapsRequired = 1;
         g = t;
     } else {
-        UISwipeGestureRecognizer *s = [[UISwipeGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        TGSwipeRecognizer *s = [[TGSwipeRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
         s.numberOfTouchesRequired = slot.fingers;
         s.direction = (slot.kind == 1) ? UISwipeGestureRecognizerDirectionUp
                    : (slot.kind == 2) ? UISwipeGestureRecognizerDirectionDown
@@ -3235,12 +3283,12 @@ static const void *TGMultiIndexKey = &TGMultiIndexKey;
         g = s;
     }
     g.delegate = self;
-    // cn4.69：识别器只在手势已指派时才挂载（见 TGUpdateMultiTouchGestures 的 want），
-    // 因此这里一律独占触摸：判定期间暂缓下传、识别成功就吞掉，钉住 App 画面。
-    // 这样三指捏合指派截图时，照片不会被同时缩放。未指派的手势没有识别器，照旧穿透。
-    g.cancelsTouchesInView = YES;
-    g.delaysTouchesBegan = YES;
-    g.delaysTouchesEnded = YES;
+    // cn4.70：改回穿透。cn4.69 试过 cancelsTouchesInView=YES 钉住画面，但这条路在照片上
+    // 必然无效：本识别器挂在 SpringBoard 的进程里，cancelsTouchesInView 只作用于同进程的
+    // 视图树，独立进程的 App 收不到这个取消。钉住改由 TGFreeze 在各自进程内完成。
+    g.cancelsTouchesInView = NO;
+    g.delaysTouchesBegan = NO;
+    g.delaysTouchesEnded = NO;
     objc_setAssociatedObject(g, TGMultiIndexKey, @(idx), OBJC_ASSOCIATION_RETAIN);
     return g;
 }
@@ -3251,6 +3299,11 @@ static const void *TGMultiIndexKey = &TGMultiIndexKey;
     if (g.state != UIGestureRecognizerStateEnded) return;
     if (kTGSlots[idx].kind >= 5 && [(TGPinchRecognizer *)g direction] == 0) return;
     TGFire(@(TGInAppGestures[idx].identifier));
+    // 识别成功后识别器停在 Ended，通常收不到 touchesEnded；不主动解冻就只能等 2 秒兜底，
+    // 那两秒里画面是死的。留 0.35 秒给动作（截图有动画），再放开。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.35 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        TGMultiFreezeEnd();
+    });
 }
 - (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
     NSNumber *idxN = objc_getAssociatedObject(g, TGMultiIndexKey);
