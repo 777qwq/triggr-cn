@@ -3,6 +3,14 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.0.5
+
+用户反馈 cn4.9 的右侧滑入不会触发原系统手势。核对 git 历史确认属实，并定位到退化点：cn4.39 为了做「沿边缘上下滑」，把边缘识别器从系统级 `UIScreenEdgePanGestureRecognizer` 换成了普通 `UIPanGestureRecognizer`，丢掉了「系统手势层识别时 iOS 从源头取消 App 触摸」的能力。cn5.0.1–5.0.4 的拒绝层/冻结全是绕着这个缺失补，均未治本。
+
+- **右侧滑入换回系统级识别器**：新增 `TGSystemEdgeRecognizer : UIScreenEdgePanGestureRecognizer`，复刻 cn4.9/cn4.38 配方（`initWithTarget:action:type:2 options:0` + `edges` + `_setEdgeRegionSize` + 注册进 `SBSystemGestureManager`，槽位 +5/+7）。识别成功时 iOS 从源头取消前台 App 触摸——既不触发系统/App 手势，也不点到内容。
+- **左右分离**：右侧滑入走系统级识别器；右侧上下滑仍走普通 pan（`handlesInward=NO`，横向时 Failed 让路给系统识别器，避免重复触发）。左侧完全不动，仍用原普通 pan 处理滑入+上下滑。
+- cn5.0.4 的边缘冻结保留在普通 pan 上（右侧上下滑、左侧各方向仍冻结）；系统级滑入路径不接冻结——系统层已取消 App 触摸，画面不会被拖走。
+
 ## 1.5.0+cn5.0.4
 
 - **边缘手势改用冻结钉住画面（RemoteCompanion 2.1 方案）**：放弃 cn5.0.1–5.0.3 的"拒绝系统识别器"路线——iPhone 右边缘左滑本无系统返回手势，淘宝里图片被拖走是 `UIScrollView` 跟着触发手指动，拒绝层抓错了对象。本版回到 2.1 / RC4.4 验证过的思路：方向确认归 Triggr 接管后，立刻 `TGMultiFreezeBegin()`（SpringBoard 冻自己窗口 + Relay 喊前台 App 冻它的滚动视图，`TGFreeze` 同时还原 `contentOffset` 和 `zoomScale`），手指离开时 `TGMultiFreezeEnd()` 解冻。
