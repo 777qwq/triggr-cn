@@ -3,6 +3,16 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2
+
+照 2.1 / cn4.39 第一版（`f931145`）的做法，把边缘手势并回**一条系统级识别器**：一条边（左/右 × 单指/双指）只建一个 `TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer`，滑入与沿边上下滑在同一个 `slid:` 里按位移方向分辨。cn5.1 的「普通 pan（左右上下滑）+ 系统级识别器（仅右侧滑入）」双识别器架构连同 `touchesMoved` 横向让路、`handlesInward` 触发门控一并去掉；什么都别的不改。
+
+- **合并为单条系统级识别器**：`TGEdgeRecognizer` 从 `UIPanGestureRecognizer` 改回 `UIScreenEdgePanGestureRecognizer`，删掉 `TGSystemEdgeRecognizer` 类、`systemSlid:`、`tgSystemEdgeRecognizers` 数组，以及 `handlesInward` / `startPoint` / `wantInward` / `wantUp` / `wantDown` / `vertical` 属性和 `touchesMoved` 让路逻辑。加回 `TGEdgeAssigned(edge, fingers)`：这条边这个手指数配了任一变体（单指 = 滑入/上/下，双指 = 双指滑入）就建识别器。注册恢复 4 条边各一个、`type:2 options:0` + `_setEdgeRegionSize:20`、槽位 `TGEdgeGestureTypeBase + 0..3`。
+- **触发判定**：`slid:` 单指竖向为主判 `edge.*up/down`、否则判滑入（`edge.left/right/left2/right2`）。阈值沿用 cn5.1 原值不动手感：滑入 `TGEdgeDistance=60`、上下滑 `TGEdgeVertical=30`；每条边 `fired` 一次一滑。保留 `TGGesturePlaybackBusy()` 回放门控、手指数校验、多指手势注册调用，均未改。
+- **动机**：2.1 用系统级识别器同时做了滑入和上下滑（反汇编证实），说明 cn4.39「系统级 edge pan 收不到竖向拖动」的翻案理由站不住脚；单条识别器还顺带消除了 cn5.0.5 起双识别器抢触摸的复杂性（cn5.1 删让路导致右侧滑入失效即源于此）。
+- **待真机验证**：系统级 edge recognizer 在当前 iOS 版本是否仍能收到纯竖向拖动（cn4.39 换普通 pan 的理由声称收不到，但无真机日志佐证；2.1 与 `f931145` 证明旧系统上可行）。若新系统上收不到，上下滑会失效，需回退此版。
+- 版本号升到 1.5.0+cn5.2。
+
 ## 1.5.0+cn5.1
 
 cn5.0.5 已经用系统级 `UIScreenEdgePanGestureRecognizer` 从源头解决「右侧滑入触发原系统手势/点到内容」，cn5.0.1–5.0.4 为这个问题加的补偿层全部失去意义。本版把它们清干净，回到最小实现，只保留 cn4.9 配方本身。多指手势的冻结（`TGMultiFreezeBegin/End`，服务捏合/多指触发）不受影响。

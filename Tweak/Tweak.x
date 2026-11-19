@@ -3142,10 +3142,8 @@ static const CGFloat TGEdgeMargin = 20;    // a slide has to start this close to
 static const CGFloat TGEdgeDistance = 60;  // and travel this far away from it
 static const CGFloat TGEdgeVertical = 30;  // up/down along an edge needs this much
 
-// cn5.0.5: 右侧滑入换回系统级识别器——复刻 cn4.9/cn4.38 的做法。真正的
-// UIScreenEdgePanGestureRecognizer 注册进 SBSystemGestureManager 后，识别时 iOS 会从源头取消
-// 前台 App 的触摸：既不会点到内容，也不会触发系统自己的边缘手势。这正是 cn4.39 为了做
-// 沿边缘上下滑而换成普通 pan 时丢掉的能力。它只报横向位移，故只负责滑入；上下滑仍走普通 pan。
+// UIScreenEdgePanGestureRecognizer 的私有初始化/边缘带设置，SpringBoard 造自己 edge pan 用。
+// cn5.2 起左右边缘的滑入与上下滑都建在这条系统级识别器上（见下方 TGEdgeRecognizer）。
 @interface UIScreenEdgePanGestureRecognizer (TGPrivate)
 - (instancetype)initWithTarget:(id)target action:(SEL)action type:(long long)type options:(unsigned long long)options;
 - (void)_setEdgeRegionSize:(double)size;
@@ -3360,92 +3358,39 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
     }
 }
 
-// One edge, one pan recognizer (as RemoteCompanion does it): a plain UIPanGestureRecognizer that checks where the
-// first finger landed, instead of UIScreenEdgePanGestureRecognizer. The edge-pan subclass only reports sideways
-// travel — it never delivers a mostly-vertical drag — so "slide up along the left edge" could not be built on it.
-// All three actions of a side (slide in, up, down) share that one recognizer and are told apart by direction.
-@interface TGEdgeRecognizer : UIPanGestureRecognizer
+// cn5.2: 照 2.1 / cn4.39 第一版（f931145），一条边只有一个识别器——系统级
+// UIScreenEdgePanGestureRecognizer（就是上面 TGPrivate 声明的 SpringBoard edge pan 同款），
+// 滑入与沿边上下滑在同一个 slid: 里按位移方向分辨。cn4.39 曾换成普通 UIPanGestureRecognizer，
+// cn5.0.5 又为右侧滑入补回系统级识别器，于是变成「普通 pan + 系统级」两套互相抢触摸、还要
+// touchesMoved 写「横向让路」的复杂结构（cn5.1 删让路就导致右侧滑入不触发）。这里按 2.1 并回一条。
+// 系统手势层识别时 iOS 从源头取消前台 App 触摸：不触达内容、不触发系统自己的边缘手势。
+@interface TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer
 @property (nonatomic) UIRectEdge edge;
 @property (nonatomic) NSUInteger fingers;
-@property (nonatomic) BOOL vertical;      // single-finger sides take up/down as well
 @property (nonatomic) BOOL fired;
-@property (nonatomic) CGPoint startPoint;
-@property (nonatomic) BOOL wantInward, wantUp, wantDown;
-@property (nonatomic) BOOL handlesInward; // cn5.0.5: 右侧的滑入交给系统级识别器，普通 pan 只管上下滑
 @end
+
+// 这条边、这个手指数上有没有配任何一个变体：双指只有滑入，单指还有上下滑。
+static BOOL TGEdgeAssigned(UIRectEdge edge, NSUInteger fingers) {
+    NSArray<NSString *> *ids;
+    if (fingers == 2) ids = edge == UIRectEdgeLeft ? @[@"edge.left2"] : @[@"edge.right2"];
+    else if (edge == UIRectEdgeLeft) ids = @[@"edge.left", @"edge.leftup", @"edge.leftdown"];
+    else if (edge == UIRectEdgeRight) ids = @[@"edge.right", @"edge.rightup", @"edge.rightdown"];
+    else return NO;
+    for (NSString *i in ids) if ([tgAssignedTriggers containsObject:i]) return YES;
+    return NO;
+}
 
 @implementation TGEdgeRecognizer
-
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
-    // 只有第一根手指决定归属：第二根落在屏幕中间不影响双指版。
-    if (event.allTouches.count == 1) {
-        UITouch *touch = [touches anyObject];
-        CGPoint p = [touch locationInView:nil];
-        CGRect screen = self.view.window ? self.view.window.bounds : [UIScreen mainScreen].bounds;
-        BOOL near = self.edge == UIRectEdgeLeft ? (p.x <= TGEdgeMargin)
-                                                : (p.x >= screen.size.width - TGEdgeMargin);
-        if (!near) {
-            self.state = UIGestureRecognizerStateFailed;
-            return;
-        }
-        self.startPoint = p;
-        self.fired = NO;
-        // 每次触摸都重算：配置可能在两次滑动之间改过。
-        NSString *side = self.edge == UIRectEdgeLeft ? @"left" : @"right";
-        // cn5.0.5: 右侧滑入交给系统级识别器，普通 pan 只认上下滑；左侧照旧。
-        self.wantInward = self.handlesInward && [tgAssignedTriggers containsObject:[@"edge." stringByAppendingString:side]];
-        self.wantUp = self.vertical && [tgAssignedTriggers containsObject:[NSString stringWithFormat:@"edge.%@up", side]];
-        self.wantDown = self.vertical && [tgAssignedTriggers containsObject:[NSString stringWithFormat:@"edge.%@down", side]];
-        if (!self.wantInward && !self.wantUp && !self.wantDown) {
-            self.state = UIGestureRecognizerStateFailed;
-            return;
-        }
-    } else if (self.state == UIGestureRecognizerStateFailed) {
-        return;
-    }
-    [super touchesBegan:touches withEvent:event];
-}
-
-// cn5.1.1：只保留横向让路——右侧普通 pan 在横向滑入时主动 Failed，把触摸让给系统级
-// UIScreenEdgePanGestureRecognizer。cn5.1 把这整段删掉后，右侧普通 pan 与系统识别器
-// 收到同一串触摸、在识别层把系统识别器挤掉，systemSlid: 没机会跑，滑入不再触发。
-// 竖直方向不做预判（没配的方向由 slid: 的 containsObject 门控挡住，不会触发动作）；
-// 不接冻结——cn4.9 系统级识别路径本就不冻画面。
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (self.state == UIGestureRecognizerStatePossible && !self.handlesInward && self.numberOfTouches <= 1) {
-        CGPoint p = [[touches anyObject] locationInView:nil];
-        CGFloat ax = fabs(p.x - self.startPoint.x), ay = fabs(p.y - self.startPoint.y);
-        if (ax > 4 && ax >= ay) { // 单指、横向为主：这是滑入，让给系统级识别器（同 cn5.0.5 判定）
-            self.state = UIGestureRecognizerStateFailed;
-            return;
-        }
-    }
-    [super touchesMoved:touches withEvent:event];
-}
-@end
-
-// cn5.0.5: 右侧「从右滑入」用回系统级识别器（cn4.9/cn4.38 配方）。复刻 SpringBoard 自己的
-// edge pan：initWithTarget:action:type:2 options:0 + edges 属性 + 注册进 SBSystemGestureManager。
-// 系统手势层识别成功时 iOS 从源头取消前台 App 触摸——这就是「不触发原系统手势、不点到内容」
-// 的能力来源，普通 UIPanGestureRecognizer 没有。只处理横向滑入，不碰上下滑（系统 edge pan 只报横向位移）。
-@interface TGSystemEdgeRecognizer : UIScreenEdgePanGestureRecognizer
-@property (nonatomic, copy) NSString *trigger;
-@property (nonatomic) UIRectEdge edge;
-@property (nonatomic) NSUInteger fingers;
-@property (nonatomic) BOOL fired;
-@end
-
-@implementation TGSystemEdgeRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
-    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
+    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; } // 回放的注入触摸不算
     if (event.allTouches.count > self.fingers) { // 单指滑入不被双指触摸误触
         self.state = UIGestureRecognizerStateFailed;
         return;
     }
     self.fired = NO;
-    if (![tgAssignedTriggers containsObject:self.trigger]) self.state = UIGestureRecognizerStateFailed;
+    if (!TGEdgeAssigned(self.edge, self.fingers)) self.state = UIGestureRecognizerStateFailed;
 }
 @end
 
@@ -3458,46 +3403,25 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
     CGPoint t = [recognizer translationInView:nil];
     BOOL left = recognizer.edge == UIRectEdgeLeft;
     CGFloat ax = fabs(t.x), ay = fabs(t.y);
-    // 竖直为主：贴着边缘上下滑
-    if (recognizer.vertical && ay > ax && ay >= TGEdgeVertical) {
-        NSString *trigger = [NSString stringWithFormat:@"edge.%@%@", left ? @"left" : @"right", t.y < 0 ? @"up" : @"down"];
-        if ([tgAssignedTriggers containsObject:trigger]) {
-            recognizer.fired = YES;
-            TGFire(trigger);
-        }
-        return;
+    NSString *trigger = nil;
+    // 单指且竖向为主 → 沿这条边上下滑；阈值沿用 cn5.1 的 TGEdgeVertical，不改手感。
+    if (recognizer.fingers == 1 && ay > ax) {
+        if (ay < TGEdgeVertical) return;
+        trigger = [NSString stringWithFormat:@"edge.%@%@", left ? @"left" : @"right", t.y < 0 ? @"up" : @"down"];
+    } else {
+        // 横向为主 → 从这条边滑入。
+        CGFloat inward = left ? t.x : -t.x;
+        if (inward < TGEdgeDistance || ax > inward) return;
+        trigger = [NSString stringWithFormat:@"edge.%@%@", left ? @"left" : @"right",
+                   recognizer.fingers == 2 ? @"2" : @""];
     }
-    // 离开边缘、水平为主：从边缘滑入。
-    // cn5.1：方向预判删除后，右侧普通 pan 靠这里的 handlesInward 门控把滑入让给系统级识别器，
-    // 否则横向滑入会被普通 pan 和系统级识别器各触发一次（handlesInward=NO 即滑入不归普通 pan 管）。
-    if (!recognizer.handlesInward) return;
-    CGFloat inward = left ? t.x : -t.x;
-    if (inward >= TGEdgeDistance && ax > ay) {
-        NSString *trigger = [NSString stringWithFormat:@"edge.%@%@", left ? @"left" : @"right",
-                             recognizer.fingers == 2 ? @"2" : @""];
-        if ([tgAssignedTriggers containsObject:trigger]) {
-            recognizer.fired = YES;
-            TGFire(trigger);
-        }
-    }
-}
-
-// cn5.0.5: 右侧系统级滑入识别器的触发——系统 edge pan 只报横向位移，判定同 cn4.9：
-// 往左离开边缘满 TGEdgeDistance、且横向为主就触发一次。冻结不接这里：系统手势层识别时
-// iOS 已从源头取消 App 触摸，画面本就不会被拖走。
-- (void)systemSlid:(TGSystemEdgeRecognizer *)recognizer {
-    if (recognizer.fired) return;
-    if (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded) return;
-    CGPoint t = [recognizer translationInView:nil];
-    CGFloat inward = -t.x; // 右边缘：手指往左滑 t.x 为负
-    if (inward < TGEdgeDistance || fabs(t.y) > inward) return;
+    if (![tgAssignedTriggers containsObject:trigger]) return; // 这个方向没配，继续等下一个方向
     recognizer.fired = YES;
-    TGFire(recognizer.trigger);
+    TGFire(trigger);
 }
 @end
 
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
-static NSMutableArray<TGSystemEdgeRecognizer *> *tgSystemEdgeRecognizers; // cn5.0.5: 右侧滑入
 static BOOL tgGestureManagerReady;
 
 static void TGUpdateEdgeGestures(void) {
@@ -3507,68 +3431,28 @@ static void TGUpdateEdgeGestures(void) {
     static TGEdgeTarget *target;
     if (!target) target = [TGEdgeTarget new];
     if (!tgEdgeRecognizers) tgEdgeRecognizers = [NSMutableArray array];
-    if (!tgSystemEdgeRecognizers) tgSystemEdgeRecognizers = [NSMutableArray array];
-    struct { const char *inward, *up, *down; UIRectEdge edge; NSUInteger fingers; } edges[] = {
-        {"edge.left", "edge.leftup", "edge.leftdown", UIRectEdgeLeft, 1},
-        {"edge.right", "edge.rightup", "edge.rightdown", UIRectEdgeRight, 1},
-        {"edge.left2", NULL, NULL, UIRectEdgeLeft, 2},
-        {"edge.right2", NULL, NULL, UIRectEdgeRight, 2},
+    struct { UIRectEdge edge; NSUInteger fingers; } edges[] = {
+        {UIRectEdgeLeft, 1}, {UIRectEdgeRight, 1},
+        {UIRectEdgeLeft, 2}, {UIRectEdgeRight, 2},
     };
     for (int i = 0; i < 4; i++) {
-        BOOL right = edges[i].edge == UIRectEdgeRight;
-        BOOL wantInward = [tgAssignedTriggers containsObject:@(edges[i].inward)];
-        BOOL wantUp = edges[i].up && [tgAssignedTriggers containsObject:@(edges[i].up)];
-        BOOL wantDown = edges[i].down && [tgAssignedTriggers containsObject:@(edges[i].down)];
-
-        // cn5.0.5: 右侧滑入走系统级 UIScreenEdgePanGestureRecognizer（+4/+5 槽位），
-        // 左侧滑入仍走普通 pan（+0..+3 原样）。右侧即使同时配了上下滑，也只在这里建一个系统
-        // 滑入识别器；上下滑另由下面的普通 pan 处理。
-        if (right && wantInward) {
-            TGSystemEdgeRecognizer *existing = nil;
-            for (TGSystemEdgeRecognizer *s in tgSystemEdgeRecognizers)
-                if (s.edge == edges[i].edge && s.fingers == edges[i].fingers) existing = s;
-            if (!existing) {
-                TGSystemEdgeRecognizer *s = [[TGSystemEdgeRecognizer alloc]
-                    initWithTarget:target action:@selector(systemSlid:) type:2 options:0];
-                s.trigger = @(edges[i].inward);
-                s.edge = edges[i].edge;
-                s.fingers = edges[i].fingers;
-                s.edges = edges[i].edge;
-                s.minimumNumberOfTouches = edges[i].fingers;
-                s.maximumNumberOfTouches = edges[i].fingers;
-                if ([s respondsToSelector:@selector(_setEdgeRegionSize:)]) [s _setEdgeRegionSize:TGEdgeMargin];
-                [manager addGestureRecognizer:s withType:TGEdgeGestureTypeBase + 4 + i]; // right=+5, right2=+7
-                [tgSystemEdgeRecognizers addObject:s];
-            }
-        } else if (right) {
-            for (TGSystemEdgeRecognizer *s in [tgSystemEdgeRecognizers copy])
-                if (s.edge == edges[i].edge && s.fingers == edges[i].fingers) {
-                    [manager removeGestureRecognizer:s];
-                    [tgSystemEdgeRecognizers removeObject:s];
-                }
-        }
-
-        // 普通 pan：左侧负责滑入+上下滑；右侧只负责上下滑（handlesInward=NO 让系统识别器接管滑入）。
-        BOOL wantPan;
-        if (right) wantPan = wantUp || wantDown;             // 右侧：只上下滑
-        else       wantPan = wantInward || wantUp || wantDown; // 左侧：照旧三项
         TGEdgeRecognizer *existing = nil;
         for (TGEdgeRecognizer *r in tgEdgeRecognizers)
             if (r.edge == edges[i].edge && r.fingers == edges[i].fingers) existing = r;
-        if (wantPan && !existing) {
-            TGEdgeRecognizer *r = [[TGEdgeRecognizer alloc] initWithTarget:target action:@selector(slid:)];
+        BOOL want = TGEdgeAssigned(edges[i].edge, edges[i].fingers);
+        if (want && !existing) {
+            // type 2 与 SpringBoard 自己的边缘手势同款：系统级识别时 iOS 从源头取消前台 App 触摸。
+            TGEdgeRecognizer *r = [[TGEdgeRecognizer alloc]
+                initWithTarget:target action:@selector(slid:) type:2 options:0];
+            r.edges = edges[i].edge;
             r.edge = edges[i].edge;
             r.fingers = edges[i].fingers;
-            r.vertical = edges[i].fingers == 1;
-            r.handlesInward = !right;
-            r.minimumNumberOfTouches = r.fingers;
-            r.maximumNumberOfTouches = r.fingers;
-            r.cancelsTouchesInView = NO;
-            r.delaysTouchesBegan = NO;
-            r.delaysTouchesEnded = NO;
-            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + i]; // 左侧 +0/+2，右侧上下滑 +1/+3
+            r.minimumNumberOfTouches = edges[i].fingers;
+            r.maximumNumberOfTouches = edges[i].fingers;
+            if ([r respondsToSelector:@selector(_setEdgeRegionSize:)]) [r _setEdgeRegionSize:TGEdgeMargin];
+            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + i]; // +0..+3
             [tgEdgeRecognizers addObject:r];
-        } else if (!wantPan && existing) {
+        } else if (!want && existing) {
             [manager removeGestureRecognizer:existing];
             [tgEdgeRecognizers removeObject:existing];
         }
