@@ -3,6 +3,15 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.3
+
+- **补上 2.1 的角拒绝层**，修复底角上滑「有时候会滑回主屏」。cn5.2 只做了几何避让，漏了 2.1 真正拦住系统手势的那一层：
+  - 2.1 把 `- [UIScreenEdgePanGestureRecognizer _shouldReceiveTouch:withEvent:]` 整条换掉（`0x6704` 装 hook，IMP `0xa928`）：只要某条边的角已指派（底 = `0x579`，顶 = `0x588`），任何屏幕边缘 pan 在角里都收不到触摸，只有自己的 `TGEdgeRecognizer` 例外（`0xa980` 的 `isKindOfClass`）。
+  - 「上滑回主屏」的 `SBHomeGesturePanGestureRecognizer` 继承 `SBScreenEdgePanGestureRecognizer` → `UIScreenEdgePanGestureRecognizer`，正好落在这层拒绝范围内。cn5.2 没有这层，底角手势和 home 手势抢同一次触摸，谁先进入 Began 谁吃掉，于是时灵时不灵。
+  - 角判定统一成 `TGEdgeCornerTrigger()`（照 `0x167dc` / `0x168ac`），识别器和拒绝层共用一套几何，避免两处漂移。
+- **行为取舍**（与 2.1 一致）：四角指派后，那个角里不再触发系统手势——底角不再「上滑回主屏」，顶角不再「下拉通知中心」；在角里滑不够 60pt 就什么也不发生。底部中间 1/3 与屏幕其他区域不受影响，回主屏照常。
+- 设置页边缘分组说明补一句四角接管系统手势的后果。
+
 ## 1.5.0+cn5.2
 
 - **补齐 2.1 的全部 14 路边缘手势**。cn5.1 只铺了 left/right 两条边的 4 路，缺顶边、底边和四角：

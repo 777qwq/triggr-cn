@@ -3401,6 +3401,23 @@ static BOOL TGEdgeAnyAssigned(NSArray<NSString *> *ids) {
     return NO;
 }
 
+// 2.1 的角判定：0x167dc 管底边、0x168ac 管顶边（两者只差 y 的方向），拿起点坐标回一个 trigger id。
+// 起点要在顶/底边 24pt 内，再按屏宽 1/3 分左右角；那个角没指派就回 nil。
+// cn5.2 只在识别器里用了这套几何，cn5.3 起拒绝层也走同一个函数，避免两处判定漂移。
+static NSString *TGEdgeCornerTrigger(CGPoint p, UIRectEdge edge) {
+    if (edge != UIRectEdgeTop && edge != UIRectEdgeBottom) return nil;
+    NSArray<NSString *> *ids = TGEdgeCandidates(edge, 1);
+    if (!TGEdgeAnyAssigned(ids)) return nil;
+    CGSize screen = [UIScreen mainScreen].bounds.size;
+    BOOL nearEdge = edge == UIRectEdgeTop ? (p.y <= TGEdgeCornerDepth)
+                                          : (p.y >= screen.height - TGEdgeCornerDepth);
+    if (!nearEdge) return nil;
+    NSString *picked = nil;
+    if (p.x < screen.width / TGEdgeCornerThird) picked = ids.firstObject;            // 左角
+    else if (p.x > screen.width * 2.0 / TGEdgeCornerThird) picked = ids.lastObject;  // 右角
+    return (picked && [tgAssignedTriggers containsObject:picked]) ? picked : nil;
+}
+
 @implementation TGEdgeRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
@@ -3418,16 +3435,8 @@ static BOOL TGEdgeAnyAssigned(NSArray<NSString *> *ids) {
         // 2.1 的四角细分（0x167dc / 0x168ac）：起点在顶/底边 24pt 内，再按屏宽 1/3 分左右角。
         UITouch *touch = [touches anyObject];
         if (!touch) { self.state = UIGestureRecognizerStateFailed; return; }
-        CGPoint p = [touch locationInView:nil];
-        CGSize screen = [UIScreen mainScreen].bounds.size;
-        BOOL nearEdge = self.edge == UIRectEdgeTop ? (p.y <= TGEdgeCornerDepth)
-                                                   : (p.y >= screen.height - TGEdgeCornerDepth);
-        NSString *picked = nil;
-        if (nearEdge) {
-            if (p.x < screen.width / TGEdgeCornerThird) picked = ids.firstObject;       // 左角
-            else if (p.x > screen.width * 2.0 / TGEdgeCornerThird) picked = ids.lastObject; // 右角
-        }
-        if (!picked || ![tgAssignedTriggers containsObject:picked]) {
+        NSString *picked = TGEdgeCornerTrigger([touch locationInView:nil], self.edge);
+        if (!picked) {
             self.state = UIGestureRecognizerStateFailed;
             return;
         }
@@ -3585,6 +3594,29 @@ static void TGEdgeVerticalEvent(UIEvent *event) {
 - (void)sendEvent:(UIEvent *)event {
     TGEdgeVerticalEvent(event);
     %orig;
+}
+%end
+
+// cn5.3：2.1 的角拒绝层。之前只找到「几何避让」，漏了这一层——它不在 sendEvent，也不在
+// SBSystemGestureManager 上，而是装在所有屏幕边缘 pan 的收触摸入口：
+//   -[UIScreenEdgePanGestureRecognizer _shouldReceiveTouch:withEvent:]（2.1 在 0x6704 装 hook，IMP 0xa928）。
+// 逻辑照 2.1：只要某条边的角已指派（底=0x579，顶=0x588），任何 UIScreenEdgePanGestureRecognizer
+// 在角里的触摸都不收；唯独自己的 TGEdgeRecognizer 例外（0xa980 的 isKindOfClass 判断）。
+// 「上滑回主屏」的 SBHomeGesturePanGestureRecognizer 继承 SBScreenEdgePanGestureRecognizer，
+// 再继承 UIScreenEdgePanGestureRecognizer，所以底角一旦指派，它根本收不到那一下触摸——
+// 这正是 2.1 文案说的「划给 Triggr 的那段边不再做 iOS 手势」，也是底角上滑时灵时不灵的根因：
+// cn5.2 少了这层，我们的识别器和 home 手势抢同一次触摸，谁先 Begin 谁吃掉。
+@interface UIScreenEdgePanGestureRecognizer (TGRejectTouch)
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event;
+@end
+
+%hook UIScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if ([self isKindOfClass:[TGEdgeRecognizer class]]) return %orig; // 自己人照收
+    if (!touch) return %orig;
+    CGPoint p = [touch locationInView:nil];
+    if (TGEdgeCornerTrigger(p, UIRectEdgeBottom) || TGEdgeCornerTrigger(p, UIRectEdgeTop)) return NO;
+    return %orig;
 }
 %end
 
