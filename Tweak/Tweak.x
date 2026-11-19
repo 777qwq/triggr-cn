@@ -3138,6 +3138,7 @@ static void TGUpdateHomeGestures(BOOL want) {
 @end
 
 static const unsigned long long TGEdgeGestureTypeBase = 0x7467000; // far from iOS's own type numbers
+static const CGFloat TGEdgeMargin = 20;    // 普通 pan 版左侧滑入：起点要落在这个贴边宽度内
 static const CGFloat TGEdgeDistance = 60;  // a slide has to travel this far away from the edge
 
 // cn5.2：2.1 的四角细分。顶/底边单指手势要求起点落在角落 24pt 内，
@@ -3447,9 +3448,48 @@ static NSString *TGEdgeCornerTrigger(CGPoint p, UIRectEdge edge) {
 }
 @end
 
+// cn5.3.1：「从左侧滑入」从系统级 screen-edge pan 改为普通 UIPanGestureRecognizer。
+// 系统级 UIScreenEdgePanGestureRecognizer 会被 iOS 纳入返回手势仲裁并取代系统原生左滑返回；
+// 普通 pan 不参与那套仲裁，cancelsTouchesInView=NO 让触摸继续传给 App，原生返回保留。
+// 代价（与沿边竖滑同理）：滑入时 App 内容仍可能跟着动，这正是换成普通 pan 的固有取舍。
+@interface TGPlainPanRecognizer : UIPanGestureRecognizer
+@property (nonatomic) UIRectEdge edge;
+@property (nonatomic) NSUInteger fingers;
+@property (nonatomic) BOOL fired;
+@property (nonatomic, copy) NSString *trigger;
+@end
+
+@implementation TGPlainPanRecognizer
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
+    if (event.allTouches.count != self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
+    self.fired = NO;
+    UITouch *touch = [touches anyObject];
+    CGPoint p = [touch locationInView:nil];
+    BOOL near = self.edge == UIRectEdgeLeft ? (p.x <= TGEdgeMargin) : NO;
+    if (!near || ![tgAssignedTriggers containsObject:self.trigger]) {
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+    }
+    [super touchesBegan:touches withEvent:event];
+}
+@end
+
 @interface TGEdgeTarget : NSObject
 @end
 @implementation TGEdgeTarget
+// cn5.3.1：普通 pan 版左侧滑入。只认离开左边缘 ≥ TGEdgeDistance、且横向为主的滑动。
+- (void)slidPlain:(TGPlainPanRecognizer *)recognizer {
+    if (recognizer.fired) return;
+    if (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded) return;
+    CGPoint t = [recognizer translationInView:nil];
+    CGFloat inward = recognizer.edge == UIRectEdgeLeft ? t.x : -t.x;
+    if (inward < TGEdgeDistance || fabs(t.y) > inward) return;
+    if (![tgAssignedTriggers containsObject:recognizer.trigger]) return;
+    recognizer.fired = YES;
+    TGFire(recognizer.trigger);
+}
+
 - (void)slid:(TGEdgeRecognizer *)recognizer {
     if (recognizer.fired) return;
     if (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded) return;
@@ -3473,6 +3513,7 @@ static NSString *TGEdgeCornerTrigger(CGPoint p, UIRectEdge edge) {
 @end
 
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
+static TGPlainPanRecognizer *tgPlainLeftPan; // cn5.3.1：从左侧滑入走普通 pan（保留系统原生返回）
 static BOOL tgGestureManagerReady;
 
 static void TGUpdateEdgeGestures(void) {
@@ -3499,6 +3540,30 @@ static void TGUpdateEdgeGestures(void) {
         for (TGEdgeRecognizer *r in tgEdgeRecognizers)
             if (r.edge == edges[i].edge && r.fingers == edges[i].fingers) existing = r;
         BOOL want = TGEdgeAnyAssigned(TGEdgeCandidates(edges[i].edge, edges[i].fingers));
+
+        // cn5.3.1：「从左侧滑入」（left 单指）改普通 pan。系统级 screen-edge pan 会被
+        // iOS 纳入返回手势仲裁、取代系统原生左滑返回；普通 pan 不参与那套仲裁，且
+        // cancelsTouchesInView=NO，原生返回照常拿到触摸。其余七路仍是系统级，不动。
+        if (i == 0) {
+            if (want && !tgPlainLeftPan) {
+                TGPlainPanRecognizer *p = [[TGPlainPanRecognizer alloc] initWithTarget:target action:@selector(slidPlain:)];
+                p.edge = UIRectEdgeLeft;
+                p.fingers = 1;
+                p.trigger = @"edge.left";
+                p.minimumNumberOfTouches = 1;
+                p.maximumNumberOfTouches = 1;
+                p.cancelsTouchesInView = NO; // 关键：不吞 App 触摸，系统原生左滑返回保留
+                p.delaysTouchesBegan = NO;
+                p.delaysTouchesEnded = NO;
+                [manager addGestureRecognizer:p withType:TGEdgeGestureTypeBase + i];
+                tgPlainLeftPan = p;
+            } else if (!want && tgPlainLeftPan) {
+                [manager removeGestureRecognizer:tgPlainLeftPan];
+                tgPlainLeftPan = nil;
+            }
+            continue;
+        }
+
         if (want && !existing) {
             TGEdgeRecognizer *r = [[TGEdgeRecognizer alloc] initWithTarget:target action:@selector(slid:)];
             r.edge = edges[i].edge;
@@ -3616,6 +3681,40 @@ static void TGEdgeVerticalEvent(UIEvent *event) {
     if (!touch) return %orig;
     CGPoint p = [touch locationInView:nil];
     if (TGEdgeCornerTrigger(p, UIRectEdgeBottom) || TGEdgeCornerTrigger(p, UIRectEdgeTop)) return NO;
+    return %orig;
+}
+%end
+
+// cn5.3.1：补 2.1 缺失的第二层拒绝。2.1 只在 screen-edge pan 的 _shouldReceiveTouch: 拦了一层，
+// 但 SpringBoard 的「上滑回主屏」不只靠 screen-edge pan——SBHomeGestureInteraction 还管理
+// indirectPanGestureRecognizer / scrunchGestureRecognizer 两条普通 pan，它们不经过
+// _shouldReceiveTouch:，这正是底角上滑「有时候」仍能回主屏的漏网之鱼。
+// 这里以 home 手势 delegate 的身份，在起点落进已指派角落时：
+//   - gestureRecognizerShouldBegin: 直接否决；
+//   - shouldBeRequiredToFailByGestureRecognizer: 让 home 手势给我们的角识别器让路。
+// 只在「起点在已指派角落」时干预，其余一律 %orig，底部中间 1/3 与正常回主屏不受影响。
+@interface SBHomeGestureInteraction : NSObject
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)other;
+@end
+
+static BOOL TGGestureInAssignedCorner(UIGestureRecognizer *g) {
+    if (!g) return NO;
+    CGPoint p = [g locationInView:nil];
+    return TGEdgeCornerTrigger(p, UIRectEdgeBottom) ? YES : NO;
+}
+
+static BOOL TGIsOurCornerEdge(UIGestureRecognizer *g) {
+    return [g isKindOfClass:[TGEdgeRecognizer class]] && ((TGEdgeRecognizer *)g).corner;
+}
+
+%hook SBHomeGestureInteraction
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
+    if (TGGestureInAssignedCorner(g)) return NO;
+    return %orig;
+}
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)other {
+    if (TGIsOurCornerEdge(other) && TGGestureInAssignedCorner(g)) return YES;
     return %orig;
 }
 %end

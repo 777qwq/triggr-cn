@@ -3,6 +3,11 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.3.1
+
+- **补上第二层 home 手势仲裁**，进一步压住底角上滑「有时候还是滑回主屏」。cn5.3 照 2.1 只拦了 `UIScreenEdgePanGestureRecognizer`，但 SpringBoard 的「上滑回主屏」不止那一条路：`SBHomeGestureInteraction` 还管理着 `indirectPanGestureRecognizer` / `scrunchGestureRecognizer` 两条普通 pan，不经过 `_shouldReceiveTouch:`。这次以 home 手势 delegate 的身份在起点落进已指派角落时直接否决其 `gestureRecognizerShouldBegin:`，并让它在仲裁中让位给 `TGEdgeRecognizer`。只在已指派角落干预，底部中间 1/3 与正常回主屏不受影响。
+- **「从左侧滑入」改普通 pan**。此前它是系统级 `UIScreenEdgePanGestureRecognizer`，会被 iOS 纳入返回手势仲裁、取代系统原生左滑返回。现在换成普通 `UIPanGestureRecognizer`（`cancelsTouchesInView=NO`），不再参与那套仲裁，系统原生返回保留。**取舍**：滑入时应用内容可能跟着动（与沿边上下滑类似）；其余 13 路边缘手势仍是系统级，能力不变。设置页边缘分组说明已同步。
+
 ## 1.5.0+cn5.3
 
 - **补上 2.1 的角拒绝层**，修复底角上滑「有时候会滑回主屏」。cn5.2 只做了几何避让，漏了 2.1 真正拦住系统手势的那一层：
