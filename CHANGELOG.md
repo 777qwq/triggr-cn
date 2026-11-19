@@ -3,6 +3,16 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.1
+
+cn5.2 把沿边上下滑硬塞进系统级 `UIScreenEdgePanGestureRecognizer`，结果竖向完全不触发。深挖 Triggr 2.1 发布版真实 dylib（`Triggr.dylib` arm64 slice 反汇编 + `__const` 常量解析）后确认：2.1 的门槛判定根本不在 recognizer 里，而是 override touch 方法用**原始屏幕坐标**自算；而 `UIScreenEdgePanGestureRecognizer` 本身轴向受限、看不见竖向。本版按 2.1 的真实架构拆成两层，恢复上下滑。
+
+- **根因（反汇编实证）**：2.1 的沿边上下滑由一段 handler 完成（`0x9608–0x9990`）——`[[event allTouches] anyObject] locationInView:nil` 取原始坐标，按 `UITouchPhase` 记起点、算 Δx/Δy 自判方向，全程不读 recognizer 的 state、不调 `translationInView:`。阈值来自 `__TEXT,__const` 实读：起点贴边带 = 屏宽 ×0.04；纵向位移 ≥125pt（`0x405e000000000000`）；横向 ≤ 纵向 ×0.4（`0x22968`）；速度 = 纵向 ÷ min(时长,0.03) ≥500pt/s（`0x22978` / `0x22980`）；时长 >0.9s（`0x22970`）否决。方向字符串由 `0x1ecdc` 拼：x 贴左边 → `edge.left…`、贴右边 → `edge.right…`，再按 dy 正负接 `up`/`down`。
+- **拆成两层**：横向滑入（`edge.left/right/left2/right2`）继续用系统级 `UIScreenEdgePanGestureRecognizer`（`TGEdgeRecognizer`，`slid:` 只剩横向判定）——它在系统手势层识别、iOS 从源头取消前台 App 触摸；沿边上下滑（`edge.leftup/leftdown/rightup/rightdown`）改由新的 `TGVerticalEdgeRecognizer : UIGestureRecognizer` 独立负责。
+- **`TGVerticalEdgeRecognizer`**：override `touchesBegan/Moved/Ended/Cancelled`，用 `locationInView:nil` 原始坐标按 phase 自算位移，完全不依赖 `translationInView:` / recognizer state；三重门槛（距离/直线度/速度）与时长封顶按 2.1 常量；仍挂 `SBSystemGestureManager`（槽位 `+4/+5`），保留系统级取消 App 触摸的能力，`cancelsTouchesInView=YES`。
+- **注册调整**：`TGEdgeAssigned` 单指只查滑入（`edge.left` / `edge.right`，上下滑已拆出）；新增 `TGVerticalEdgeAssigned` 按边查 up/down 任一方向，决定是否建竖向识别器；`TGUpdateEdgeGestures` 除原 4 条 edge 外，再加左右两条 `TGVerticalEdgeRecognizer`。
+- 版本号升到 1.5.0+cn5.2.1。
+
 ## 1.5.0+cn5.2
 
 照 2.1 / cn4.39 第一版（`f931145`）的做法，把边缘手势并回**一条系统级识别器**：一条边（左/右 × 单指/双指）只建一个 `TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer`，滑入与沿边上下滑在同一个 `slid:` 里按位移方向分辨。cn5.1 的「普通 pan（左右上下滑）+ 系统级识别器（仅右侧滑入）」双识别器架构连同 `touchesMoved` 横向让路、`handlesInward` 触发门控一并去掉；什么都别的不改。
