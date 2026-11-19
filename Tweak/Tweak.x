@@ -3169,7 +3169,7 @@ static const TGGestureSlot kTGSlots[] = {
     {3, 0}, {3, 1}, {3, 2}, {3, 3}, {3, 4}, {3, 5}, {3, 6},
 };
 #define TG_SLOT_COUNT ((int)(sizeof(kTGSlots) / sizeof(kTGSlots[0])))
-// 系统手势 type：边缘类占 +0..+9（10 个实例），多指接在 +10..+23（14 个）。
+// 系统手势 type：边缘类占 +0..+7（8 个实例，覆盖 2.1 的 10 个边缘 trigger），多指接在 +10..+23。
 static const unsigned long long TGMultiTypeBase = TGEdgeGestureTypeBase + 10;
 
 // cn4.70：多指手势期间钉住画面，按 Triggr 2.1 的 TGFreeze 分工——
