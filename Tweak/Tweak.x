@@ -3138,24 +3138,17 @@ static void TGUpdateHomeGestures(BOOL want) {
 @end
 
 static const unsigned long long TGEdgeGestureTypeBase = 0x7467000; // far from iOS's own type numbers
-static const CGFloat TGEdgeMargin = 20;    // a slide has to start this close to its edge
-static const CGFloat TGEdgeDistance = 60;  // and travel this far away from it
-// cn5.2.1: 沿边上下滑按 Triggr 2.1 的量纲（反汇编 0x9834 handler 与 0x1ecdc 方向函数的实测常量）：
-// 起点落在屏宽 4% / 96% 内算贴边；纵向位移 ≥125pt；横向漂移 ≤ 纵向×0.4（直线度）；
-// 速度 = 纵向位移 ÷ min(时长,0.03) ≥500pt/s（快划，不是慢慢拖）；时长 >0.9s 否决（那就是滚动）。
-static const CGFloat TGVerticalEdgeBand = 0.04;    // 4% of screen width counts as "at the edge"
-static const CGFloat TGVerticalDistance = 125;     // travel this far along the edge
-static const CGFloat TGVerticalStraight = 0.4;     // cross drift <= 40% of the travel
-static const CGFloat TGVerticalSpeed = 500;        // pt/s: quick stroke, not a slow drag
-static const CGFloat TGVerticalSpeedWindow = 0.03; // speed is measured over at most 30ms
-static const CGFloat TGVerticalMaxDuration = 0.9;  // anything slower is scrolling
+static const CGFloat TGEdgeDistance = 60;  // a slide has to travel this far away from the edge
 
-// UIScreenEdgePanGestureRecognizer 的私有初始化/边缘带设置，SpringBoard 造自己 edge pan 用。
-// cn5.2 起左右边缘的滑入与上下滑都建在这条系统级识别器上（见下方 TGEdgeRecognizer）。
-@interface UIScreenEdgePanGestureRecognizer (TGPrivate)
-- (instancetype)initWithTarget:(id)target action:(SEL)action type:(long long)type options:(unsigned long long)options;
-- (void)_setEdgeRegionSize:(double)size;
-@end
+// cn5.1：沿边上下滑走 2.1 的 sendEvent 路径。下面这组数就是 2.1 dylib 里的常量，
+// 一个都没改：贴边带 = 屏宽的 4%，纵向位移 125pt，横向漂移不得超过纵向的 0.4（直线度），
+// 速度按 min(时长, 0.03s) 折算后要 ≥ 500pt/s，时长 ≥ 0.9s 直接否决。
+static const CGFloat TGVertEdgeBand = 0.04;      // 0x1ecdc: x ≤ 屏宽×0.04 / ≥ 屏宽×0.96
+static const CGFloat TGVertDistance = 125;       // 0x9850: 0x405f400000000000
+static const CGFloat TGVertStraightness = 0.4;   // 0x22968
+static const CGFloat TGVertSpeed = 500;          // 0x22980
+static const CGFloat TGVertSpeedWindow = 0.03;   // 0x22978
+static const CGFloat TGVertMaxDuration = 0.9;    // 0x22970
 
 #pragma mark - Multi-touch gestures (cn4.68, moved here from the in-app Relay)
 // 14 槽位，顺序与 Shared/TGCatalog.h 的 TGInAppGestures 严格一一对应。
@@ -3366,39 +3359,25 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
     }
 }
 
-// cn5.2.1: 回到 Triggr 2.1 的双层分工（反汇编实证）——
-//   横向滑入（edge.left/right/left2/right2）：系统级 UIScreenEdgePanGestureRecognizer，
-//     它在系统手势层识别、iOS 从源头取消前台 App 触摸；用 translationInView 判「滑入」天经地义。
-//   沿边上下滑（edge.leftup/leftdown/rightup/rightdown）：一个独立的普通 UIGestureRecognizer，
-//     override touch 方法、用 locationInView:nil 的原始屏幕坐标按 phase 自算位移判 up/down。
-// 为什么必须分开：UIScreenEdgePanGestureRecognizer 是轴向受限的——左右边缘只认垂直于边的水平
-// 位移，贴边纯竖向滑时它停在 Possible→Failed，slid: 里 state!=Changed/Ended 直接把事件吞掉。
-// cn5.2 把竖向硬塞进这条识别器，所以竖向怎么都不触发。竖向改用普通识别器后，它没有轴向限制，
-// 自己看 Δy 即可；同时仍挂在 SBSystemGestureManager 上，保持系统级取消 App 触摸的能力。
+// cn5.1：照 2.1 拆成两层，不是一条识别器全包。
+//
+// 横向滑入（edge.left / right / left2 / right2）用系统级 UIScreenEdgePanGestureRecognizer。
+// iOS 认它是真正的系统边缘手势，识别到就从事件路由层把触摸从 App 撤走，所以不会点到内容。
+//
+// 沿边上下滑（edge.leftup / leftdown / rightup / rightdown）不在这条识别器里做：它轴向受限，
+// 左右边缘只认垂直于边的水平位移，纯贴边竖滑它停在 Possible→Failed。2.1 的做法是另起一条
+// -[SpringBoard sendEvent:] 的 hook，拿原始坐标按 phase 自算（见下面的 TGEdgeVerticalEvent）。
 @interface TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer
 @property (nonatomic) UIRectEdge edge;
 @property (nonatomic) NSUInteger fingers;
 @property (nonatomic) BOOL fired;
 @end
 
-// 这条边、这个手指数上有没有配任何一个变体：双指只有滑入，单指只有滑入（上下滑已独立出去）。
+// 这条边、这个手指数上有没有配滑入。上下滑由 TGEdgeVerticalEvent 单独判断。
 static BOOL TGEdgeAssigned(UIRectEdge edge, NSUInteger fingers) {
-    NSArray<NSString *> *ids;
-    if (fingers == 2) ids = edge == UIRectEdgeLeft ? @[@"edge.left2"] : @[@"edge.right2"];
-    else if (edge == UIRectEdgeLeft) ids = @[@"edge.left"];
-    else if (edge == UIRectEdgeRight) ids = @[@"edge.right"];
-    else return NO;
-    for (NSString *i in ids) if ([tgAssignedTriggers containsObject:i]) return YES;
-    return NO;
-}
-
-// 这条边的沿边上下滑有没有配（单指）。两个方向任意一个配了就建竖向识别器。
-static BOOL TGVerticalEdgeAssigned(UIRectEdge edge) {
-    NSArray<NSString *> *ids = edge == UIRectEdgeLeft
-        ? @[@"edge.leftup", @"edge.leftdown"]
-        : @[@"edge.rightup", @"edge.rightdown"];
-    for (NSString *i in ids) if ([tgAssignedTriggers containsObject:i]) return YES;
-    return NO;
+    NSString *trigger = fingers == 2 ? (edge == UIRectEdgeLeft ? @"edge.left2" : @"edge.right2")
+                                     : (edge == UIRectEdgeLeft ? @"edge.left" : @"edge.right");
+    return [tgAssignedTriggers containsObject:trigger];
 }
 
 @implementation TGEdgeRecognizer
@@ -3417,107 +3396,23 @@ static BOOL TGVerticalEdgeAssigned(UIRectEdge edge) {
 @interface TGEdgeTarget : NSObject
 @end
 @implementation TGEdgeTarget
-// 只处理横向滑入。竖向由 TGVerticalEdgeRecognizer 独立负责。
 - (void)slid:(TGEdgeRecognizer *)recognizer {
     if (recognizer.fired) return;
     if (recognizer.state != UIGestureRecognizerStateChanged && recognizer.state != UIGestureRecognizerStateEnded) return;
     CGPoint t = [recognizer translationInView:nil];
     BOOL left = recognizer.edge == UIRectEdgeLeft;
-    CGFloat ax = fabs(t.x);
+    CGFloat ax = fabs(t.x), ay = fabs(t.y);
     CGFloat inward = left ? t.x : -t.x;
-    if (inward < TGEdgeDistance || ax > inward) return; // 够远，且主要朝里
+    if (inward < TGEdgeDistance || ax <= ay) return; // 横向为主、向内够远才算滑入
     NSString *trigger = [NSString stringWithFormat:@"edge.%@%@", left ? @"left" : @"right",
-               recognizer.fingers == 2 ? @"2" : @""];
+                         recognizer.fingers == 2 ? @"2" : @""];
     if (![tgAssignedTriggers containsObject:trigger]) return;
     recognizer.fired = YES;
     TGFire(trigger);
 }
 @end
 
-// cn5.2.1: 沿边上下滑。一个独立的普通 UIGestureRecognizer（不是 UIScreenEdgePan——
-// 那条轴向受限、看不见竖向）。override touch 方法，用 locationInView:nil 的原始屏幕坐标
-// 按 phase 记起点、算 Δx/Δy，自己判方向与距离；完全不依赖 recognized state / translationInView。
-// 这正是 Triggr 2.1 的做法（反汇编 handler 0x9834：allTouches→anyObject→locationInView:nil，
-// phase 状态机自算，速度/直线度/时长三重门槛）。挂到 SBSystemGestureManager，保住系统级取消。
-@interface TGVerticalEdgeRecognizer : UIGestureRecognizer
-@property (nonatomic) UIRectEdge edge;            // 左或右
-@property (nonatomic) BOOL fired;
-@property (nonatomic) CGPoint startPoint;         // began 时的原始屏幕坐标
-@property (nonatomic) CFTimeInterval startTime;   // began 时刻
-@end
-
-@implementation TGVerticalEdgeRecognizer
-- (BOOL)atEdge:(CGPoint)p {
-    // 起点必须落在屏幕对应边缘的 4% 带内（2.1 方向函数 0x1ecdc 用 bounds.width*0.04 / 0.96）。
-    CGRect screen = [UIScreen mainScreen].bounds;
-    CGFloat band = screen.size.width * TGVerticalEdgeBand;
-    return self.edge == UIRectEdgeLeft ? (p.x <= band) : (p.x >= screen.size.width - band);
-}
-
-- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
-    if (event.allTouches.count > 1) { self.state = UIGestureRecognizerStateFailed; return; } // 只认单指
-    if (!TGVerticalEdgeAssigned(self.edge)) { self.state = UIGestureRecognizerStateFailed; return; }
-    UITouch *touch = event.allTouches.anyObject;
-    CGPoint p = [touch locationInView:nil]; // 原始屏幕坐标，绕开任何视图坐标变换
-    if (![self atEdge:p]) { self.state = UIGestureRecognizerStateFailed; return; } // 不是贴边起步
-    self.startPoint = p;
-    self.startTime = CACurrentMediaTime();
-    self.fired = NO;
-}
-
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [self evaluate:touches withEvent:event];
-}
-
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [self evaluate:touches withEvent:event];
-    if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
-}
-
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
-}
-
-// 2.1 判定：纵向位移≥125、横向≤纵向×0.4、速度=纵向÷min(时长,0.03)≥500、时长>0.9 否决。
-- (void)evaluate:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (self.fired || self.state != UIGestureRecognizerStatePossible) return;
-    if (event.allTouches.count > 1) { self.state = UIGestureRecognizerStateFailed; return; }
-    UITouch *touch = event.allTouches.anyObject;
-    CGPoint p = [touch locationInView:nil];
-    CGFloat dy = p.y - self.startPoint.y;
-    CGFloat dx = p.x - self.startPoint.x;
-    CGFloat along = fabs(dy), across = fabs(dx);
-    CFTimeInterval elapsed = CACurrentMediaTime() - self.startTime;
-    if (elapsed > TGVerticalMaxDuration) { self.state = UIGestureRecognizerStateFailed; return; } // 太慢=滚动
-    if (along < TGVerticalDistance) return;                 // 还没滑够，继续等
-    if (across > along * TGVerticalStraight) {              // 歪了，不是沿边直线
-        self.state = UIGestureRecognizerStateFailed;
-        return;
-    }
-    CGFloat speed = along / MIN(elapsed, TGVerticalSpeedWindow);
-    if (speed < TGVerticalSpeed) return;                    // 慢拖不算，继续等（可能后面加速）
-    NSString *trigger = [NSString stringWithFormat:@"edge.%@%@",
-                         self.edge == UIRectEdgeLeft ? @"left" : @"right", dy < 0 ? @"up" : @"down"];
-    if (![tgAssignedTriggers containsObject:trigger]) {     // 这个方向没配，别拦着另一半
-        self.state = UIGestureRecognizerStateFailed;
-        return;
-    }
-    self.fired = YES;
-    self.state = UIGestureRecognizerStateEnded;
-    TGFire(trigger);
-}
-
-- (void)reset {
-    [super reset];
-    self.fired = NO;
-    self.startPoint = CGPointZero;
-    self.startTime = 0;
-}
-@end
-
 static NSMutableArray<TGEdgeRecognizer *> *tgEdgeRecognizers;
-static NSMutableArray<TGVerticalEdgeRecognizer *> *tgVerticalRecognizers;
 static BOOL tgGestureManagerReady;
 
 static void TGUpdateEdgeGestures(void) {
@@ -3527,26 +3422,28 @@ static void TGUpdateEdgeGestures(void) {
     static TGEdgeTarget *target;
     if (!target) target = [TGEdgeTarget new];
     if (!tgEdgeRecognizers) tgEdgeRecognizers = [NSMutableArray array];
-    struct { UIRectEdge edge; NSUInteger fingers; } edges[] = {
-        {UIRectEdgeLeft, 1}, {UIRectEdgeRight, 1},
-        {UIRectEdgeLeft, 2}, {UIRectEdgeRight, 2},
+    struct { const char *inward; UIRectEdge edge; NSUInteger fingers; } edges[] = {
+        {"edge.left", UIRectEdgeLeft, 1},
+        {"edge.right", UIRectEdgeRight, 1},
+        {"edge.left2", UIRectEdgeLeft, 2},
+        {"edge.right2", UIRectEdgeRight, 2},
     };
     for (int i = 0; i < 4; i++) {
         TGEdgeRecognizer *existing = nil;
         for (TGEdgeRecognizer *r in tgEdgeRecognizers)
             if (r.edge == edges[i].edge && r.fingers == edges[i].fingers) existing = r;
-        BOOL want = TGEdgeAssigned(edges[i].edge, edges[i].fingers);
+        BOOL want = [tgAssignedTriggers containsObject:@(edges[i].inward)];
         if (want && !existing) {
-            // type 2 与 SpringBoard 自己的边缘手势同款：系统级识别时 iOS 从源头取消前台 App 触摸。
-            TGEdgeRecognizer *r = [[TGEdgeRecognizer alloc]
-                initWithTarget:target action:@selector(slid:) type:2 options:0];
-            r.edges = edges[i].edge;
+            TGEdgeRecognizer *r = [[TGEdgeRecognizer alloc] initWithTarget:target action:@selector(slid:)];
             r.edge = edges[i].edge;
+            r.edges = edges[i].edge; // 系统级：告诉 iOS 这是哪条边的边缘手势
             r.fingers = edges[i].fingers;
-            r.minimumNumberOfTouches = edges[i].fingers;
-            r.maximumNumberOfTouches = edges[i].fingers;
-            if ([r respondsToSelector:@selector(_setEdgeRegionSize:)]) [r _setEdgeRegionSize:TGEdgeMargin];
-            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + i]; // +0..+3
+            r.minimumNumberOfTouches = r.fingers;
+            r.maximumNumberOfTouches = r.fingers;
+            r.cancelsTouchesInView = YES; // 系统边缘手势：识别到就从源头取消 App 触摸
+            r.delaysTouchesBegan = NO;
+            r.delaysTouchesEnded = NO;
+            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + i];
             [tgEdgeRecognizers addObject:r];
         } else if (!want && existing) {
             [manager removeGestureRecognizer:existing];
@@ -3554,35 +3451,82 @@ static void TGUpdateEdgeGestures(void) {
         }
     }
 
-    // cn5.2.1: 沿边上下滑的独立识别器（左右各一条）。type 用 +4/+5，与横向的 +0..+3、
-    // 多指的 +9..+22 错开。条件只是「这条边配了 up 或 down 任一方向」。
-    if (!tgVerticalRecognizers) tgVerticalRecognizers = [NSMutableArray array];
-    UIRectEdge vedges[] = {UIRectEdgeLeft, UIRectEdgeRight};
-    for (int i = 0; i < 2; i++) {
-        TGVerticalEdgeRecognizer *existing = nil;
-        for (TGVerticalEdgeRecognizer *r in tgVerticalRecognizers)
-            if (r.edge == vedges[i]) existing = r;
-        BOOL want = TGVerticalEdgeAssigned(vedges[i]);
-        if (want && !existing) {
-            TGVerticalEdgeRecognizer *r = [[TGVerticalEdgeRecognizer alloc] initWithTarget:nil action:nil];
-            r.edge = vedges[i];
-            // 系统手势层识别。注意：cancelsTouchesInView 只管同进程视图树，对独立 App 无效
-            // （cn4.69 已验证）。所以主屏/锁屏上不会点到内容；独立 App 内可能有轻微误触——
-            // 与 Triggr 2.1 一致（其 PatchNotes 明说「a fast flick from the edge can, so pick
-            // actions that are fine to run by accident」）。横向滑入那条系统级 edge pan 不受此限。
-            r.cancelsTouchesInView = YES;
-            r.delaysTouchesBegan = NO;
-            r.delaysTouchesEnded = NO;
-            [manager addGestureRecognizer:r withType:TGEdgeGestureTypeBase + 4 + i]; // +4/+5
-            [tgVerticalRecognizers addObject:r];
-        } else if (!want && existing) {
-            [manager removeGestureRecognizer:existing];
-            [tgVerticalRecognizers removeObject:existing];
-        }
-    }
-
     TGUpdateMultiTouchGestures(manager); // cn4.68：多指手势从 Relay 迁到系统手势层
 }
+
+#pragma mark - Slide along an edge (2.1 path)
+
+// 2.1 的沿边上下滑不在识别器里做，而是 hook 在 SpringBoard 的 sendEvent: 上。
+// SpringBoard 是系统 shell，backboardd 会把前台触摸的一份拷贝投给它，所以 App 内的触摸也看得到；
+// 2.1 正是在这里拿 [[event allTouches] anyObject] 的原始坐标、按 phase 自算位移。
+//
+// 它只读事件、最后照常调 orig，触摸继续分发给 App——所以列表会跟着动。这是 2.1 的固有权衡，
+// 不是这里的 bug：真正能拦住 App 触摸的是横向滑入那条系统级 edge pan。
+static BOOL tgVertTracking;
+static BOOL tgVertFired;
+static int tgVertSide;              // 0 = left, 1 = right, -1 = none
+static CGPoint tgVertStart;
+static CFTimeInterval tgVertStartTime;
+
+static void TGEdgeVerticalReset(void) {
+    tgVertTracking = NO;
+    tgVertFired = NO;
+    tgVertSide = -1;
+}
+
+static void TGEdgeVerticalEvent(UIEvent *event) {
+    if (event.type != UIEventTypeTouches) return;
+    NSSet<UITouch *> *touches = event.allTouches;
+    if (touches.count >= 2) { TGEdgeVerticalReset(); return; } // 2.1：多指直接清状态
+    if (touches.count == 0) { TGEdgeVerticalReset(); return; }
+    UITouch *touch = touches.anyObject;
+    CGPoint p = [touch locationInView:nil];
+    CGFloat width = [UIScreen mainScreen].bounds.size.width;
+
+    if (touch.phase == UITouchPhaseBegan) {
+        TGEdgeVerticalReset();
+        if (p.x <= width * TGVertEdgeBand) tgVertSide = 0;
+        else if (p.x >= width * (1.0 - TGVertEdgeBand)) tgVertSide = 1;
+        else return; // 起点不在左右 4% 带内，不归边缘手势
+        NSString *side = tgVertSide == 0 ? @"left" : @"right";
+        BOOL wantUp = [tgAssignedTriggers containsObject:[NSString stringWithFormat:@"edge.%@up", side]];
+        BOOL wantDown = [tgAssignedTriggers containsObject:[NSString stringWithFormat:@"edge.%@down", side]];
+        if (!wantUp && !wantDown) { tgVertSide = -1; return; }
+        tgVertTracking = YES;
+        tgVertStart = p;
+        tgVertStartTime = CACurrentMediaTime();
+        return;
+    }
+
+    if (!tgVertTracking) return;
+
+    if (touch.phase == UITouchPhaseMoved) {
+        if (tgVertFired) return; // 一次触摸只触发一次
+        CGFloat dx = p.x - tgVertStart.x, dy = p.y - tgVertStart.y;
+        CGFloat adx = fabs(dx), ady = fabs(dy);
+        if (ady < TGVertDistance) return;                                // 纵向 ≥ 125pt
+        if (adx > ady * TGVertStraightness) return;                      // 横向漂移 ≤ 纵向×0.4
+        CFTimeInterval elapsed = CACurrentMediaTime() - tgVertStartTime;
+        if (elapsed >= TGVertMaxDuration) return;                        // 时长 ≥ 0.9s 否决
+        if (ady / MAX(elapsed, TGVertSpeedWindow) < TGVertSpeed) return; // 速度 ≥ 500pt/s
+        NSString *side = tgVertSide == 0 ? @"left" : @"right";
+        NSString *trigger = [NSString stringWithFormat:@"edge.%@%@", side, dy < 0 ? @"up" : @"down"];
+        if (![tgAssignedTriggers containsObject:trigger]) return;
+        tgVertFired = YES;
+        TGFire(trigger);
+        return;
+    }
+
+    if (touch.phase == UITouchPhaseEnded || touch.phase == UITouchPhaseCancelled)
+        TGEdgeVerticalReset();
+}
+
+%hook SpringBoard
+- (void)sendEvent:(UIEvent *)event {
+    TGEdgeVerticalEvent(event);
+    %orig;
+}
+%end
 
 // 设置页在沙盒里看不到 dylib 目录，所以在这边探一次、写进共享清单。
 static void TGWritePluginManifest(void) {

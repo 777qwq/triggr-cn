@@ -3,73 +3,14 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
-## 1.5.0+cn5.2.1
-
-cn5.2 把沿边上下滑硬塞进系统级 `UIScreenEdgePanGestureRecognizer`，结果竖向完全不触发。深挖 Triggr 2.1 发布版真实 dylib（`Triggr.dylib` arm64 slice 反汇编 + `__const` 常量解析）后确认：2.1 的门槛判定根本不在 recognizer 里，而是 override touch 方法用**原始屏幕坐标**自算；而 `UIScreenEdgePanGestureRecognizer` 本身轴向受限、看不见竖向。本版按 2.1 的真实架构拆成两层，恢复上下滑。
-
-- **根因（反汇编实证）**：2.1 的沿边上下滑由一段 handler 完成（`0x9608–0x9990`）——`[[event allTouches] anyObject] locationInView:nil` 取原始坐标，按 `UITouchPhase` 记起点、算 Δx/Δy 自判方向，全程不读 recognizer 的 state、不调 `translationInView:`。阈值来自 `__TEXT,__const` 实读：起点贴边带 = 屏宽 ×0.04；纵向位移 ≥125pt（`0x405e000000000000`）；横向 ≤ 纵向 ×0.4（`0x22968`）；速度 = 纵向 ÷ min(时长,0.03) ≥500pt/s（`0x22978` / `0x22980`）；时长 >0.9s（`0x22970`）否决。方向字符串由 `0x1ecdc` 拼：x 贴左边 → `edge.left…`、贴右边 → `edge.right…`，再按 dy 正负接 `up`/`down`。
-- **拆成两层**：横向滑入（`edge.left/right/left2/right2`）继续用系统级 `UIScreenEdgePanGestureRecognizer`（`TGEdgeRecognizer`，`slid:` 只剩横向判定）——它在系统手势层识别、iOS 从源头取消前台 App 触摸；沿边上下滑（`edge.leftup/leftdown/rightup/rightdown`）改由新的 `TGVerticalEdgeRecognizer : UIGestureRecognizer` 独立负责。
-- **`TGVerticalEdgeRecognizer`**：override `touchesBegan/Moved/Ended/Cancelled`，用 `locationInView:nil` 原始坐标按 phase 自算位移，完全不依赖 `translationInView:` / recognizer state；三重门槛（距离/直线度/速度）与时长封顶按 2.1 常量；仍挂 `SBSystemGestureManager`（槽位 `+4/+5`），保留系统级取消 App 触摸的能力，`cancelsTouchesInView=YES`。
-- **注册调整**：`TGEdgeAssigned` 单指只查滑入（`edge.left` / `edge.right`，上下滑已拆出）；新增 `TGVerticalEdgeAssigned` 按边查 up/down 任一方向，决定是否建竖向识别器；`TGUpdateEdgeGestures` 除原 4 条 edge 外，再加左右两条 `TGVerticalEdgeRecognizer`。
-- 版本号升到 1.5.0+cn5.2.1。
-
-## 1.5.0+cn5.2
-
-照 2.1 / cn4.39 第一版（`f931145`）的做法，把边缘手势并回**一条系统级识别器**：一条边（左/右 × 单指/双指）只建一个 `TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer`，滑入与沿边上下滑在同一个 `slid:` 里按位移方向分辨。cn5.1 的「普通 pan（左右上下滑）+ 系统级识别器（仅右侧滑入）」双识别器架构连同 `touchesMoved` 横向让路、`handlesInward` 触发门控一并去掉；什么都别的不改。
-
-- **合并为单条系统级识别器**：`TGEdgeRecognizer` 从 `UIPanGestureRecognizer` 改回 `UIScreenEdgePanGestureRecognizer`，删掉 `TGSystemEdgeRecognizer` 类、`systemSlid:`、`tgSystemEdgeRecognizers` 数组，以及 `handlesInward` / `startPoint` / `wantInward` / `wantUp` / `wantDown` / `vertical` 属性和 `touchesMoved` 让路逻辑。加回 `TGEdgeAssigned(edge, fingers)`：这条边这个手指数配了任一变体（单指 = 滑入/上/下，双指 = 双指滑入）就建识别器。注册恢复 4 条边各一个、`type:2 options:0` + `_setEdgeRegionSize:20`、槽位 `TGEdgeGestureTypeBase + 0..3`。
-- **触发判定**：`slid:` 单指竖向为主判 `edge.*up/down`、否则判滑入（`edge.left/right/left2/right2`）。阈值沿用 cn5.1 原值不动手感：滑入 `TGEdgeDistance=60`、上下滑 `TGEdgeVertical=30`；每条边 `fired` 一次一滑。保留 `TGGesturePlaybackBusy()` 回放门控、手指数校验、多指手势注册调用，均未改。
-- **动机**：2.1 用系统级识别器同时做了滑入和上下滑（反汇编证实），说明 cn4.39「系统级 edge pan 收不到竖向拖动」的翻案理由站不住脚；单条识别器还顺带消除了 cn5.0.5 起双识别器抢触摸的复杂性（cn5.1 删让路导致右侧滑入失效即源于此）。
-- **待真机验证**：系统级 edge recognizer 在当前 iOS 版本是否仍能收到纯竖向拖动（cn4.39 换普通 pan 的理由声称收不到，但无真机日志佐证；2.1 与 `f931145` 证明旧系统上可行）。若新系统上收不到，上下滑会失效，需回退此版。
-- 版本号升到 1.5.0+cn5.2。
-
 ## 1.5.0+cn5.1
 
-cn5.0.5 已经用系统级 `UIScreenEdgePanGestureRecognizer` 从源头解决「右侧滑入触发原系统手势/点到内容」，cn5.0.1–5.0.4 为这个问题加的补偿层全部失去意义。本版把它们清干净，回到最小实现，只保留 cn4.9 配方本身。多指手势的冻结（`TGMultiFreezeBegin/End`，服务捏合/多指触发）不受影响。
-
-- **删掉右边缘拒绝层（cn5.0.1–5.0.3）**：移除 `Relay.x` 的 `RightEdgeGuard` 组（`UIScreenEdgePanGestureRecognizer` 的 `_shouldReceiveTouch:withEvent:` 前置拒绝 + `touchesBegan → Failed` 兜底）、`TGRightEdgeWanted` / `TGRightEdgeTouch` / `TGRightEdgeGuardMargin`（40pt）及 `%init(RightEdgeGuard)`；同步移除 `TGRelay.h` 的 `TGRelayWantsRightEdge` 状态位和 SpringBoard 端 `wantRightEdge` 的 `notify_set_state` 写入。系统级识别器识别时 iOS 已从源头取消 App 触摸，不需要在 App 进程再拒一次。
-- **删掉边缘冻结（cn5.0.4）**：移除 `TGEdgeRecognizer` 的 `frozen` 属性、`edgeFreezeBegin/End` 方法、`touchesMoved` 里的冻结调用与 `touchesEnded` / `touchesCancelled` / `reset` 三处解冻兜底。边缘触发回归 cn5.0 原样：只 `TGFire`，不冻画面。
-- **删掉竖直方向预判（一直挂着的约定）**：移除 `TGEdgeRecognizer.touchesMoved` 里按位移方向提前 `Failed` 的**竖直**预判——它在 Possible 阶段用 4pt 阈值判断上/下滑，没配就 Failed 让 App 自己滚动。理由：`slid:` 里已用 `containsObject` 门控触发，方向没配本就不会触发；识别器 `cancelsTouchesInView=NO` 且在 SpringBoard 进程，"让 App 处理"没有实际效果；cn5.0 边缘路径本就不冻结；且 4pt 预判太早、起步偏一点就会把本该识别的上滑误判为水平而丢掉。
-  - **保留横向让路（关键）**：`touchesMoved` 没有整段删除——单指、`ax>=ay` 且 `ax>4` 的横向滑入仍主动 `Failed`（判定同 cn5.0.5，`startPoint` 保留供其算位移）。右侧同时配滑入 + 上下滑时，系统级识别器（`systemSlid:`）和普通 pan（`slid:`）会收到同一串触摸；这条让路让普通 pan 在**识别层**主动退出，系统识别器才能干净识别、跑到触发判定。初版曾把整段 `touchesMoved` 删掉，结果普通 pan 在识别层挤掉系统识别器，右侧滑入不再触发；恢复横向让路后修复。`slid:` 水平分支另有 `handlesInward` 门控（右侧普通 pan 直接返回）作触发层双保险；左侧照旧。
-  - 不接冻结——cn4.9 系统级识别路径本就不冻画面。
-- 版本号升到 1.5.0+cn5.1。
-
-## 1.5.0+cn5.0.5
-
-用户反馈 cn4.9 的右侧滑入不会触发原系统手势。核对 git 历史确认属实，并定位到退化点：cn4.39 为了做「沿边缘上下滑」，把边缘识别器从系统级 `UIScreenEdgePanGestureRecognizer` 换成了普通 `UIPanGestureRecognizer`，丢掉了「系统手势层识别时 iOS 从源头取消 App 触摸」的能力。cn5.0.1–5.0.4 的拒绝层/冻结全是绕着这个缺失补，均未治本。
-
-- **右侧滑入换回系统级识别器**：新增 `TGSystemEdgeRecognizer : UIScreenEdgePanGestureRecognizer`，复刻 cn4.9/cn4.38 配方（`initWithTarget:action:type:2 options:0` + `edges` + `_setEdgeRegionSize` + 注册进 `SBSystemGestureManager`，槽位 +5/+7）。识别成功时 iOS 从源头取消前台 App 触摸——既不触发系统/App 手势，也不点到内容。
-- **左右分离**：右侧滑入走系统级识别器；右侧上下滑仍走普通 pan（`handlesInward=NO`，横向时 Failed 让路给系统识别器，避免重复触发）。左侧完全不动，仍用原普通 pan 处理滑入+上下滑。
-- cn5.0.4 的边缘冻结保留在普通 pan 上（右侧上下滑、左侧各方向仍冻结）；系统级滑入路径不接冻结——系统层已取消 App 触摸，画面不会被拖走。
-
-## 1.5.0+cn5.0.4
-
-- **边缘手势改用冻结钉住画面（RemoteCompanion 2.1 方案）**：放弃 cn5.0.1–5.0.3 的"拒绝系统识别器"路线——iPhone 右边缘左滑本无系统返回手势，淘宝里图片被拖走是 `UIScrollView` 跟着触发手指动，拒绝层抓错了对象。本版回到 2.1 / RC4.4 验证过的思路：方向确认归 Triggr 接管后，立刻 `TGMultiFreezeBegin()`（SpringBoard 冻自己窗口 + Relay 喊前台 App 冻它的滚动视图，`TGFreeze` 同时还原 `contentOffset` 和 `zoomScale`），手指离开时 `TGMultiFreezeEnd()` 解冻。
-  - 治的是触发手指把图片拖走/缩小、列表滚动；不抑制识别器，回放的「左边缘右滑返回」照常生效。
-  - `frozen` 标志防重复冻结，`touchesEnded` / `touchesCancelled` / `reset` 三处兜底解冻，避免永久冻住。
-  - 触发时机保持 cn5.0 原样（Changed/Ended 达标即触发），不引入 cn5.1.2 的"只 Ended"改动。
-- 版本号升到 1.5.0+cn5.0.4。
-
-## 1.5.0+cn5.0.3
-
-- **拒绝层边缘判定 20 → 40pt**：cn5.0.2 的拒绝层实测仍无效，先把右边缘触摸起点判定宽度从 20 加大到 40pt（`TGRightEdgeGuardMargin`），试更大范围能否拦住从右侧边缘起的滑动。仅调这个阈值，其余逻辑不变。
-- 版本号升到 1.5.0+cn5.0.3。
-
-## 1.5.0+cn5.0.2
-
-- **修复 cn5.0.1 拒绝层不生效**：cn5.0.1 把 `_shouldReceiveTouch` 拒绝层加在 `Tweak.x`（只注入 SpringBoard），而淘宝等 App 里的返回识别器在 App 进程，SpringBoard 的 hook 够不到，所以完全没效果。本版把拒绝层挪到 `Relay.x`（注入 `com.apple.UIKit`，即 App 进程）。
-  - SpringBoard 通过 `TGRelayWanted` 新增的 `TGRelayWantsRightEdge` 位告诉 Relay「`edge.right` / `edge.right2` 已指派」——Relay 读不到 SpringBoard 的 `tgAssignedTriggers`，只能靠这个状态位同步。
-  - Relay 里的 `RightEdgeGuard` 组 hook `UIScreenEdgePanGestureRecognizer`：仍走 2.1 的 `_shouldReceiveTouch:withEvent:` 前置拒绝（右边缘 20pt + `edges` 含 Right + 右侧已指派 → 返回 NO），并加 `touchesBegan → setState:Failed` 兜底（防私有 selector 在新 iOS 签名有变没被调用）。
-  - 只拒绝 App 内系统右边缘手势：左侧、底部、顶部、没配 `edge.right` 的一律放行。不冻结画面，也不阻止触发手指拖动 App 内容。
-- 版本号升到 1.5.0+cn5.0.2。
-
-## 1.5.0+cn5.0.1
-
-- **右侧边缘滑入拒绝系统手势（试行）**：把 Triggr 2.1 用过、原先服务底部角落的拒绝层挪到右侧——在 `UIScreenEdgePanGestureRecognizer` 的 `_shouldReceiveTouch:withEvent:` 上判断：触摸起点落在右边 20pt 条内、系统识别器的 `edges` 含 Right、且 `edge.right` / `edge.right2` 已指派动作时返回 NO，让系统自己的侧向手势收不到这次触摸，不再和 Triggr 的回放各做一次。相比 cn5.1 的 `setState:Failed`，这是在触摸投递之前拒绝，更早也更干净。
-  - 只动右侧：左侧、底部、顶部、`edges==0` 的识别器一律放行，系统返回、切换器、通知中心照常。
-  - 只拒绝系统识别器，不冻结画面，也不阻止触发手指拖动 App 内容——淘宝里图片被拖动那类问题本版不处理。
-  - 这是试探性改动，仅试右侧单类 hook；确认效果后再决定是否扩展到其他方向。
-- 版本号升到 1.5.0+cn5.0.1。
+- **边缘手势按 2.1 的真实实现重做**。cn5.0 用一条普通 `UIPanGestureRecognizer` 同时管滑入和上下滑，既做不到「不点到内容」（普通识别器挂在 SpringBoard 里取消不了 App 进程的触摸），沿边竖滑也会和列表滚动互相干扰。
+  - **横向滑入**（`edge.left` / `right` / `left2` / `right2`）用系统级 `UIScreenEdgePanGestureRecognizer`，并给 `edges` 赋值。iOS 认它是真正的系统边缘手势，识别到就从事件路由层把触摸从 App 撤走。
+  - **沿边上下滑**（`edge.leftup` / `leftdown` / `rightup` / `rightdown`）改由 `-[SpringBoard sendEvent:]` 接管。SpringBoard 是系统 shell，backboardd 会把前台触摸的一份拷贝投给它，所以 App 内同样有效。用 `locationInView:nil` 的原始坐标按 `UITouchPhase` 自算位移，不看识别器的 `state`，也不调 `translationInView:`。
+  - 判定参数照抄 2.1 dylib 的常量：贴边带为屏宽 4%、纵向位移 ≥125pt、横向漂移 ≤纵向×0.4、速度 ≥500pt/s（按 min(时长, 0.03s) 折算）、时长 ≥0.9s 否决。
+- **行为说明**：竖向判定只读事件，最后照常把触摸交给 App，所以沿边竖滑时列表会跟着动。这是 2.1 本身的取舍（它的 PatchNotes 也提示挑误触也无所谓的动作），不是回归；真正拦得住 App 触摸的是横向滑入那条系统级 edge pan。
+- **版本清理**：5.0.1–5.2.1 的实现与记录全部作废，以 cn5.0 为基线直接出 5.1。
 
 ## 1.5.0+cn5.0
 
