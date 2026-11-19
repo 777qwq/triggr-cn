@@ -9,8 +9,9 @@ cn5.0.5 已经用系统级 `UIScreenEdgePanGestureRecognizer` 从源头解决「
 
 - **删掉右边缘拒绝层（cn5.0.1–5.0.3）**：移除 `Relay.x` 的 `RightEdgeGuard` 组（`UIScreenEdgePanGestureRecognizer` 的 `_shouldReceiveTouch:withEvent:` 前置拒绝 + `touchesBegan → Failed` 兜底）、`TGRightEdgeWanted` / `TGRightEdgeTouch` / `TGRightEdgeGuardMargin`（40pt）及 `%init(RightEdgeGuard)`；同步移除 `TGRelay.h` 的 `TGRelayWantsRightEdge` 状态位和 SpringBoard 端 `wantRightEdge` 的 `notify_set_state` 写入。系统级识别器识别时 iOS 已从源头取消 App 触摸，不需要在 App 进程再拒一次。
 - **删掉边缘冻结（cn5.0.4）**：移除 `TGEdgeRecognizer` 的 `frozen` 属性、`edgeFreezeBegin/End` 方法、`touchesMoved` 里的冻结调用与 `touchesEnded` / `touchesCancelled` / `reset` 三处解冻兜底。边缘触发回归 cn5.0 原样：只 `TGFire`，不冻画面。
-- **删掉边缘方向预判（一直挂着的约定）**：移除 `TGEdgeRecognizer` 的 `touchesMoved` 整段方向预判——它在 Possible 阶段用 4pt 阈值按位移方向提前 `Failed`（让 App 自己滚动/避免冻住列表）。理由：`slid:` 里已用 `containsObject` 门控触发，方向没配本就不会触发；识别器 `cancelsTouchesInView=NO` 且在 SpringBoard 进程，"让 App 处理"没有实际效果；cn5.0 边缘路径本就不冻结；且 4pt 预判太早、起步偏一点就会把本该识别的上滑误判为水平而丢掉。
-  - 配套：预判删除后，右侧普通 pan 原来靠 `!wantInward → Failed` 把横向滑入让给系统级识别器；这一层没了会在 `slid:` 的水平分支重复触发。改为在 `slid:` 水平滑入前加 `handlesInward` 门控——右侧普通 pan（`handlesInward=NO`）直接返回，滑入只由系统级识别器触发；左侧照旧。
+- **删掉竖直方向预判（一直挂着的约定）**：移除 `TGEdgeRecognizer.touchesMoved` 里按位移方向提前 `Failed` 的**竖直**预判——它在 Possible 阶段用 4pt 阈值判断上/下滑，没配就 Failed 让 App 自己滚动。理由：`slid:` 里已用 `containsObject` 门控触发，方向没配本就不会触发；识别器 `cancelsTouchesInView=NO` 且在 SpringBoard 进程，"让 App 处理"没有实际效果；cn5.0 边缘路径本就不冻结；且 4pt 预判太早、起步偏一点就会把本该识别的上滑误判为水平而丢掉。
+  - **保留横向让路（关键）**：`touchesMoved` 没有整段删除——单指、`ax>=ay` 且 `ax>4` 的横向滑入仍主动 `Failed`（判定同 cn5.0.5，`startPoint` 保留供其算位移）。右侧同时配滑入 + 上下滑时，系统级识别器（`systemSlid:`）和普通 pan（`slid:`）会收到同一串触摸；这条让路让普通 pan 在**识别层**主动退出，系统识别器才能干净识别、跑到触发判定。初版曾把整段 `touchesMoved` 删掉，结果普通 pan 在识别层挤掉系统识别器，右侧滑入不再触发；恢复横向让路后修复。`slid:` 水平分支另有 `handlesInward` 门控（右侧普通 pan 直接返回）作触发层双保险；左侧照旧。
+  - 不接冻结——cn4.9 系统级识别路径本就不冻画面。
 - 版本号升到 1.5.0+cn5.1。
 
 ## 1.5.0+cn5.0.5

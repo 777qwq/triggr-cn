@@ -3369,6 +3369,7 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
 @property (nonatomic) NSUInteger fingers;
 @property (nonatomic) BOOL vertical;      // single-finger sides take up/down as well
 @property (nonatomic) BOOL fired;
+@property (nonatomic) CGPoint startPoint;
 @property (nonatomic) BOOL wantInward, wantUp, wantDown;
 @property (nonatomic) BOOL handlesInward; // cn5.0.5: 右侧的滑入交给系统级识别器，普通 pan 只管上下滑
 @end
@@ -3388,6 +3389,7 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
             self.state = UIGestureRecognizerStateFailed;
             return;
         }
+        self.startPoint = p;
         self.fired = NO;
         // 每次触摸都重算：配置可能在两次滑动之间改过。
         NSString *side = self.edge == UIRectEdgeLeft ? @"left" : @"right";
@@ -3403,6 +3405,23 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
         return;
     }
     [super touchesBegan:touches withEvent:event];
+}
+
+// cn5.1.1：只保留横向让路——右侧普通 pan 在横向滑入时主动 Failed，把触摸让给系统级
+// UIScreenEdgePanGestureRecognizer。cn5.1 把这整段删掉后，右侧普通 pan 与系统识别器
+// 收到同一串触摸、在识别层把系统识别器挤掉，systemSlid: 没机会跑，滑入不再触发。
+// 竖直方向不做预判（没配的方向由 slid: 的 containsObject 门控挡住，不会触发动作）；
+// 不接冻结——cn4.9 系统级识别路径本就不冻画面。
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (self.state == UIGestureRecognizerStatePossible && !self.handlesInward && self.numberOfTouches <= 1) {
+        CGPoint p = [[touches anyObject] locationInView:nil];
+        CGFloat ax = fabs(p.x - self.startPoint.x), ay = fabs(p.y - self.startPoint.y);
+        if (ax > 4 && ax >= ay) { // 单指、横向为主：这是滑入，让给系统级识别器（同 cn5.0.5 判定）
+            self.state = UIGestureRecognizerStateFailed;
+            return;
+        }
+    }
+    [super touchesMoved:touches withEvent:event];
 }
 @end
 
