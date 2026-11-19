@@ -116,13 +116,18 @@ static void TGSyncUnavailable(NSDictionary<NSString *, NSArray<NSString *> *> *a
 
 static void TGPluginLog(NSString *format, ...);
 
-// 已移除的触发器（底部手势那一组）。老配置里留着这些键就是残留：读到就跳过，顺手清掉。
-// cn5.2：edge.bottomleft / bottomright 已接回来（左下角上滑 / 右下角上滑），不再算残留。
+// 已移除的触发器。老配置里留着这些键就是残留：读到就跳过，顺手清掉。
+// cn5.4：顶/底六路（四角 + 顶底双指）已删除，连同原 homebar 三个一起当残留清掉，
+// 免得老配置里还占着指派、却没有任何识别器去触发。
 static BOOL TGRetiredTrigger(NSString *trigger) {
     static NSSet *retired;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        retired = [NSSet setWithArray:@[@"homebar.single", @"homebar.doubletap", @"homebar.longpress"]];
+        retired = [NSSet setWithArray:@[
+            @"homebar.single", @"homebar.doubletap", @"homebar.longpress",
+            @"edge.topleft", @"edge.topright", @"edge.bottomleft", @"edge.bottomright",
+            @"edge.top2", @"edge.bottom2",
+        ]];
     });
     return trigger && [retired containsObject:trigger];
 }
@@ -3141,12 +3146,7 @@ static const unsigned long long TGEdgeGestureTypeBase = 0x7467000; // far from i
 static const CGFloat TGEdgeMargin = 20;    // 普通 pan 版左侧滑入：起点要落在这个贴边宽度内
 static const CGFloat TGEdgeDistance = 60;  // a slide has to travel this far away from the edge
 
-// cn5.2：2.1 的四角细分。顶/底边单指手势要求起点落在角落 24pt 内，
-// 再按 x < 屏宽/3、x > 屏宽×2/3 分成左角、右角（0x167dc / 0x168ac）。
-static const CGFloat TGEdgeCornerDepth = 24;
-static const CGFloat TGEdgeCornerThird = 3.0;
-
-// cn5.2：沿边上下滑走 2.1 的 sendEvent 路径。下面这组数就是 2.1 dylib 里的常量：
+// cn5.4：沿边上下滑走 2.1 的 sendEvent 路径。下面这组数就是 2.1 dylib 里的常量：
 // 贴边带固定 34pt（不是屏宽百分比，0x1ecdc 里是立即数），纵向位移 125pt，
 // 横向漂移不得超过纵向的 0.4（直线度），速度按 min(时长, 0.03s) 折算后要 ≥ 500pt/s，
 // 时长 ≥ 0.9s 直接否决；y ≥ 屏高×0.96 不参与（底部 4% 让给底边那组）。
@@ -3381,42 +3381,20 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
 @interface TGEdgeRecognizer : UIScreenEdgePanGestureRecognizer
 @property (nonatomic) UIRectEdge edge;
 @property (nonatomic) NSUInteger fingers;
-@property (nonatomic) BOOL corner;          // 顶/底单指：起点还要落在角落里
 @property (nonatomic, copy) NSString *trigger; // 本次触摸归属的 trigger id
 @property (nonatomic) BOOL fired;
 @end
 
-// 这条边 + 这个手指数对应的候选 trigger。顶/底单指有两个（左角、右角），其余一个。
+// 这条边 + 这个手指数对应的候选 trigger。cn5.4 只保留左右两条边（顶/底六路已删除）。
 static NSArray<NSString *> *TGEdgeCandidates(UIRectEdge edge, NSUInteger fingers) {
     if (edge == UIRectEdgeLeft) return @[fingers == 2 ? @"edge.left2" : @"edge.left"];
     if (edge == UIRectEdgeRight) return @[fingers == 2 ? @"edge.right2" : @"edge.right"];
-    if (edge == UIRectEdgeTop)
-        return fingers == 2 ? @[@"edge.top2"] : @[@"edge.topleft", @"edge.topright"];
-    if (edge == UIRectEdgeBottom)
-        return fingers == 2 ? @[@"edge.bottom2"] : @[@"edge.bottomleft", @"edge.bottomright"];
     return @[];
 }
 
 static BOOL TGEdgeAnyAssigned(NSArray<NSString *> *ids) {
     for (NSString *i in ids) if ([tgAssignedTriggers containsObject:i]) return YES;
     return NO;
-}
-
-// 2.1 的角判定：0x167dc 管底边、0x168ac 管顶边（两者只差 y 的方向），拿起点坐标回一个 trigger id。
-// 起点要在顶/底边 24pt 内，再按屏宽 1/3 分左右角；那个角没指派就回 nil。
-// cn5.2 只在识别器里用了这套几何，cn5.3 起拒绝层也走同一个函数，避免两处判定漂移。
-static NSString *TGEdgeCornerTrigger(CGPoint p, UIRectEdge edge) {
-    if (edge != UIRectEdgeTop && edge != UIRectEdgeBottom) return nil;
-    NSArray<NSString *> *ids = TGEdgeCandidates(edge, 1);
-    if (!TGEdgeAnyAssigned(ids)) return nil;
-    CGSize screen = [UIScreen mainScreen].bounds.size;
-    BOOL nearEdge = edge == UIRectEdgeTop ? (p.y <= TGEdgeCornerDepth)
-                                          : (p.y >= screen.height - TGEdgeCornerDepth);
-    if (!nearEdge) return nil;
-    NSString *picked = nil;
-    if (p.x < screen.width / TGEdgeCornerThird) picked = ids.firstObject;            // 左角
-    else if (p.x > screen.width * 2.0 / TGEdgeCornerThird) picked = ids.lastObject;  // 右角
-    return (picked && [tgAssignedTriggers containsObject:picked]) ? picked : nil;
 }
 
 @implementation TGEdgeRecognizer
@@ -3431,19 +3409,6 @@ static NSString *TGEdgeCornerTrigger(CGPoint p, UIRectEdge edge) {
     self.trigger = nil;
     NSArray<NSString *> *ids = TGEdgeCandidates(self.edge, self.fingers);
     if (!TGEdgeAnyAssigned(ids)) { self.state = UIGestureRecognizerStateFailed; return; }
-
-    if (self.corner) {
-        // 2.1 的四角细分（0x167dc / 0x168ac）：起点在顶/底边 24pt 内，再按屏宽 1/3 分左右角。
-        UITouch *touch = [touches anyObject];
-        if (!touch) { self.state = UIGestureRecognizerStateFailed; return; }
-        NSString *picked = TGEdgeCornerTrigger([touch locationInView:nil], self.edge);
-        if (!picked) {
-            self.state = UIGestureRecognizerStateFailed;
-            return;
-        }
-        self.trigger = picked;
-        return;
-    }
     self.trigger = ids.firstObject;
 }
 @end
@@ -3523,19 +3488,14 @@ static void TGUpdateEdgeGestures(void) {
     static TGEdgeTarget *target;
     if (!target) target = [TGEdgeTarget new];
     if (!tgEdgeRecognizers) tgEdgeRecognizers = [NSMutableArray array];
-    // cn5.2：一条边 + 一个手指数 = 一个识别器。顶/底单指由 touchesBegan 按起点再分左右角，
-    // 所以 8 个实例就覆盖了 2.1 的 10 个边缘 trigger。
-    struct { UIRectEdge edge; NSUInteger fingers; BOOL corner; } edges[] = {
-        {UIRectEdgeLeft, 1, NO},
-        {UIRectEdgeRight, 1, NO},
-        {UIRectEdgeLeft, 2, NO},
-        {UIRectEdgeRight, 2, NO},
-        {UIRectEdgeTop, 1, YES},
-        {UIRectEdgeBottom, 1, YES},
-        {UIRectEdgeTop, 2, NO},
-        {UIRectEdgeBottom, 2, NO},
+    // cn5.4：只剩左右两条边 × 一个手指数 = 4 个 trigger。左单指走普通 pan，其余三个是系统级。
+    struct { UIRectEdge edge; NSUInteger fingers; } edges[] = {
+        {UIRectEdgeLeft, 1},
+        {UIRectEdgeRight, 1},
+        {UIRectEdgeLeft, 2},
+        {UIRectEdgeRight, 2},
     };
-    for (int i = 0; i < 8; i++) {
+    for (int i = 0; i < 4; i++) {
         TGEdgeRecognizer *existing = nil;
         for (TGEdgeRecognizer *r in tgEdgeRecognizers)
             if (r.edge == edges[i].edge && r.fingers == edges[i].fingers) existing = r;
@@ -3569,7 +3529,6 @@ static void TGUpdateEdgeGestures(void) {
             r.edge = edges[i].edge;
             r.edges = edges[i].edge; // 系统级：告诉 iOS 这是哪条边的边缘手势
             r.fingers = edges[i].fingers;
-            r.corner = edges[i].corner;
             r.minimumNumberOfTouches = r.fingers;
             r.maximumNumberOfTouches = r.fingers;
             r.cancelsTouchesInView = YES; // 系统边缘手势：识别到就从源头取消 App 触摸
@@ -3662,60 +3621,107 @@ static void TGEdgeVerticalEvent(UIEvent *event) {
 }
 %end
 
-// cn5.3：2.1 的角拒绝层。之前只找到「几何避让」，漏了这一层——它不在 sendEvent，也不在
-// SBSystemGestureManager 上，而是装在所有屏幕边缘 pan 的收触摸入口：
-//   -[UIScreenEdgePanGestureRecognizer _shouldReceiveTouch:withEvent:]（2.1 在 0x6704 装 hook，IMP 0xa928）。
-// 逻辑照 2.1：只要某条边的角已指派（底=0x579，顶=0x588），任何 UIScreenEdgePanGestureRecognizer
-// 在角里的触摸都不收；唯独自己的 TGEdgeRecognizer 例外（0xa980 的 isKindOfClass 判断）。
-// 「上滑回主屏」的 SBHomeGesturePanGestureRecognizer 继承 SBScreenEdgePanGestureRecognizer，
-// 再继承 UIScreenEdgePanGestureRecognizer，所以底角一旦指派，它根本收不到那一下触摸——
-// 这正是 2.1 文案说的「划给 Triggr 的那段边不再做 iOS 手势」，也是底角上滑时灵时不灵的根因：
-// cn5.2 少了这层，我们的识别器和 home 手势抢同一次触摸，谁先 Begin 谁吃掉。
+// cn5.4：拒绝层只服务「从右侧滑入」（edge.right 单指）。指派后，右边缘那段归 Triggr，
+// 系统自己的右边缘手势不再抢这同一次触摸——和 2.1 的四角拒绝层是同一思路，只是换到右边。
+// 照 RC 源码（Tweak.x 18838 起）的分层做法，比 cn5.3 的单层严密：
+//   - hook 三层 screen-edge pan 类（UIScreenEdgePanGestureRecognizer / 它的私有子类 /
+//     SBScreenEdgePanGestureRecognizer），只挂基类的层会被子类重写绕过；
+//   - 三个时机都拦：_shouldReceiveTouch: 让识别器收不到触摸，touchesBegan/touchesMoved
+//     再兜一层，把已经起手、从边缘外滑进来的也摁成 Failed——这正是 cn5.3 单层「有时候
+//     还是被系统抢」的漏网处；
+//   - 右边缘按当前 UI 方向算，横屏会跟着旋。
+// 唯独自己的 TGEdgeRecognizer 放行（cn5.3 的 isKindOfClass 例外，对应 2.1 的 0xa980）。
+// 只对单指 edge.right 生效：双指右滑入、左侧各路与系统手势的既有行为都不动。
 @interface UIScreenEdgePanGestureRecognizer (TGRejectTouch)
 - (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event;
 @end
+@interface _UIScreenEdgePanGestureRecognizer : UIScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event;
+@end
+@interface SBScreenEdgePanGestureRecognizer : UIScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event;
+@end
+
+// SpringBoard 的 activeInterfaceOrientation 是权威方向（keyWindow/windowScene 在新 iPhone 上
+// 可能一直是竖屏）。照 RC 的 get_current_interface_orientation 取法，避免 statusBarOrientation 弃用告警。
+@interface SpringBoard (TGOrientation)
+- (UIInterfaceOrientation)activeInterfaceOrientation;
+@end
+
+static UIInterfaceOrientation TGCurrentOrientation(void) {
+    SpringBoard *sb = (SpringBoard *)[UIApplication sharedApplication];
+    if (sb && [sb respondsToSelector:@selector(activeInterfaceOrientation)])
+        return (UIInterfaceOrientation)[sb activeInterfaceOrientation];
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    return [UIApplication sharedApplication].statusBarOrientation;
+    #pragma clang diagnostic pop
+}
+
+// 触摸点是否落在「当前 UI 方向的右边缘带」。坐标是屏幕物理坐标（短边 S=宽、长边 L=高）。
+// 方向映射与 RC 的 RC_InBottomRegion 同源，右 = 下顺时针转 90°。
+static BOOL TGRightEdgeRejectTouch(UIGestureRecognizer *recognizer, UITouch *touch) {
+    if ([recognizer isKindOfClass:[TGEdgeRecognizer class]]) return NO; // 自己人照收
+    if (![tgAssignedTriggers containsObject:@"edge.right"]) return NO;  // 右侧滑入没指派就不干预
+    if (!touch) return NO;
+    CGPoint p = [touch locationInView:nil];
+    CGSize s = [UIScreen mainScreen].bounds.size;
+    CGFloat S = MIN(s.width, s.height), L = MAX(s.width, s.height);
+    const CGFloat margin = 44;
+    UIInterfaceOrientation o = TGCurrentOrientation();
+    BOOL atRight = NO;
+    switch (o) {
+        case UIInterfaceOrientationPortrait:           atRight = (p.x > S - margin); break;
+        case UIInterfaceOrientationPortraitUpsideDown: atRight = (p.x < margin);      break;
+        case UIInterfaceOrientationLandscapeLeft:      atRight = (p.y < margin);      break;
+        case UIInterfaceOrientationLandscapeRight:     atRight = (p.y > L - margin);  break;
+        default:                                       atRight = (p.x > S - margin); break;
+    }
+    return atRight;
+}
 
 %hook UIScreenEdgePanGestureRecognizer
 - (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
-    if ([self isKindOfClass:[TGEdgeRecognizer class]]) return %orig; // 自己人照收
-    if (!touch) return %orig;
-    CGPoint p = [touch locationInView:nil];
-    if (TGEdgeCornerTrigger(p, UIRectEdgeBottom) || TGEdgeCornerTrigger(p, UIRectEdgeTop)) return NO;
+    if (TGRightEdgeRejectTouch(self, touch)) return NO;
     return %orig;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, [touches anyObject])) { self.state = UIGestureRecognizerStateFailed; return; }
+    %orig;
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, [touches anyObject])) { self.state = UIGestureRecognizerStateFailed; return; }
+    %orig;
 }
 %end
 
-// cn5.3.1：补 2.1 缺失的第二层拒绝。2.1 只在 screen-edge pan 的 _shouldReceiveTouch: 拦了一层，
-// 但 SpringBoard 的「上滑回主屏」不只靠 screen-edge pan——SBHomeGestureInteraction 还管理
-// indirectPanGestureRecognizer / scrunchGestureRecognizer 两条普通 pan，它们不经过
-// _shouldReceiveTouch:，这正是底角上滑「有时候」仍能回主屏的漏网之鱼。
-// 这里以 home 手势 delegate 的身份，在起点落进已指派角落时：
-//   - gestureRecognizerShouldBegin: 直接否决；
-//   - shouldBeRequiredToFailByGestureRecognizer: 让 home 手势给我们的角识别器让路。
-// 只在「起点在已指派角落」时干预，其余一律 %orig，底部中间 1/3 与正常回主屏不受影响。
-@interface SBHomeGestureInteraction : NSObject
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g;
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)other;
-@end
-
-static BOOL TGGestureInAssignedCorner(UIGestureRecognizer *g) {
-    if (!g) return NO;
-    CGPoint p = [g locationInView:nil];
-    return TGEdgeCornerTrigger(p, UIRectEdgeBottom) ? YES : NO;
-}
-
-static BOOL TGIsOurCornerEdge(UIGestureRecognizer *g) {
-    return [g isKindOfClass:[TGEdgeRecognizer class]] && ((TGEdgeRecognizer *)g).corner;
-}
-
-%hook SBHomeGestureInteraction
-- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)g {
-    if (TGGestureInAssignedCorner(g)) return NO;
+%hook _UIScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, touch)) return NO;
     return %orig;
 }
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldBeRequiredToFailByGestureRecognizer:(UIGestureRecognizer *)other {
-    if (TGIsOurCornerEdge(other) && TGGestureInAssignedCorner(g)) return YES;
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, [touches anyObject])) { self.state = UIGestureRecognizerStateFailed; return; }
+    %orig;
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, [touches anyObject])) { self.state = UIGestureRecognizerStateFailed; return; }
+    %orig;
+}
+%end
+
+%hook SBScreenEdgePanGestureRecognizer
+- (BOOL)_shouldReceiveTouch:(UITouch *)touch withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, touch)) return NO;
     return %orig;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, [touches anyObject])) { self.state = UIGestureRecognizerStateFailed; return; }
+    %orig;
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (TGRightEdgeRejectTouch(self, [touches anyObject])) { self.state = UIGestureRecognizerStateFailed; return; }
+    %orig;
 }
 %end
 

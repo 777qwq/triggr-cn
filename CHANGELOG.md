@@ -3,6 +3,16 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.4
+
+- **删除顶/底六路边缘手势**：左下角上滑、右下角上滑、左上角下滑、右上角下滑、双指从顶部下滑、双指从底部上滑（cn5.2 加的）全部移除，边缘分组从 14 项减回 8 项，只保留左右两条边（滑入、沿边上下滑、双指滑入）。老配置里这六个键按残留清掉，不会留下空占的指派。
+- **拒绝层改为只服务「从右侧滑入」**：原 cn5.3 的拒绝层是给四角挡系统手势的，四角删掉后失去意义，这次移植到右边——单指 `edge.right` 指派后，右边缘那段不再被系统手势抢。照 RC 源码的分层做法加固，补上 cn5.3 单层漏掉的两类情况：
+  - hook 三层 screen-edge pan 类（`UIScreenEdgePanGestureRecognizer` 及其私有子类、`SBScreenEdgePanGestureRecognizer`），不再只挂基类、避免被子类重写绕过；
+  - 三个时机都拦：`_shouldReceiveTouch:` 拒收 + `touchesBegan:` / `touchesMoved:` 摁成 Failed——后者补上「起点在边缘外、滑进边缘内」时单层拦不住的漏网；
+  - 右边缘按当前 UI 方向算，横屏跟着旋；自己的 `TGEdgeRecognizer` 照收。
+  - 只对单指右滑入生效；双指右滑入、左侧滑入（普通 pan）与沿边上下滑的既有行为不动。
+- 删掉为底角回主屏加的 `SBHomeGestureInteraction` 仲裁层（服务对象已随四角一起移除）。设置页边缘分组说明同步。
+
 ## 1.5.0+cn5.3.1
 
 - **补上第二层 home 手势仲裁**，进一步压住底角上滑「有时候还是滑回主屏」。cn5.3 照 2.1 只拦了 `UIScreenEdgePanGestureRecognizer`，但 SpringBoard 的「上滑回主屏」不止那一条路：`SBHomeGestureInteraction` 还管理着 `indirectPanGestureRecognizer` / `scrunchGestureRecognizer` 两条普通 pan，不经过 `_shouldReceiveTouch:`。这次以 home 手势 delegate 的身份在起点落进已指派角落时直接否决其 `gestureRecognizerShouldBegin:`，并让它在仲裁中让位给 `TGEdgeRecognizer`。只在已指派角落干预，底部中间 1/3 与正常回主屏不受影响。
