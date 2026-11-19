@@ -3369,28 +3369,11 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
 @property (nonatomic) NSUInteger fingers;
 @property (nonatomic) BOOL vertical;      // single-finger sides take up/down as well
 @property (nonatomic) BOOL fired;
-@property (nonatomic) CGPoint startPoint;
 @property (nonatomic) BOOL wantInward, wantUp, wantDown;
 @property (nonatomic) BOOL handlesInward; // cn5.0.5: 右侧的滑入交给系统级识别器，普通 pan 只管上下滑
-@property (nonatomic) BOOL frozen;    // cn5.0.4: 这次滑动是否已冻结画面
 @end
 
 @implementation TGEdgeRecognizer
-
-// cn5.0.4：按 RemoteCompanion 2.1 的冻结方式，方向确认归 Triggr 接管后独占画面——
-// 走 cn4.70 那套 TGFreeze：SpringBoard 冻自己窗口，Relay 喊前台 App 冻它的滚动视图。
-// 这治的是「触发手指把图片拖走/缩小」，不是抑制识别器：返回手势不在 UIScrollView 里，
-// 冻结不碰它，回放的「左边缘右滑返回」照常生效。
-- (void)edgeFreezeBegin {
-    if (self.frozen) return;
-    self.frozen = YES;
-    TGMultiFreezeBegin();
-}
-- (void)edgeFreezeEnd {
-    if (!self.frozen) return;
-    self.frozen = NO;
-    TGMultiFreezeEnd();
-}
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (TGGesturePlaybackBusy()) { self.state = UIGestureRecognizerStateFailed; return; }
@@ -3405,7 +3388,6 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
             self.state = UIGestureRecognizerStateFailed;
             return;
         }
-        self.startPoint = p;
         self.fired = NO;
         // 每次触摸都重算：配置可能在两次滑动之间改过。
         NSString *side = self.edge == UIRectEdgeLeft ? @"left" : @"right";
@@ -3421,47 +3403,6 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
         return;
     }
     [super touchesBegan:touches withEvent:event];
-}
-
-- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    // 还没识别之前先看方向：这条边没配竖直动作时，竖直滑动要留给应用自己滚动，不能让它被系统手势取消。
-    // 只在单指时预判——双指的第二根手指离起点很远，按它算方向会误判。
-    if (self.state == UIGestureRecognizerStatePossible && self.numberOfTouches <= 1) {
-        CGPoint p = [[touches anyObject] locationInView:nil];
-        CGFloat ax = fabs(p.x - self.startPoint.x), ay = fabs(p.y - self.startPoint.y);
-        if (ax > 4 || ay > 4) {
-            if (ay > ax) {
-                // 按实际方向判：只配了上滑时，下滑要留给应用，不能把列表冻住。
-                BOOL up = p.y < self.startPoint.y;
-                if (!(up ? self.wantUp : self.wantDown)) {
-                    self.state = UIGestureRecognizerStateFailed;
-                    return;
-                }
-                [self edgeFreezeBegin]; // cn5.0.4：确认是接管的竖直方向，冻结画面
-            } else if (!self.wantInward) {
-                self.state = UIGestureRecognizerStateFailed;
-                return;
-            } else {
-                [self edgeFreezeBegin]; // cn5.0.4：确认是接管的滑入方向，冻结画面
-            }
-        }
-    }
-    [super touchesMoved:touches withEvent:event];
-}
-
-- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [super touchesEnded:touches withEvent:event];
-    if (TGMultiTouchesFinished(event)) [self edgeFreezeEnd];
-}
-
-- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [super touchesCancelled:touches withEvent:event];
-    if (TGMultiTouchesFinished(event)) [self edgeFreezeEnd];
-}
-
-- (void)reset {
-    [super reset];
-    [self edgeFreezeEnd]; // 兜底：手势被系统重置也要解冻，避免永久冻住
 }
 @end
 
@@ -3507,7 +3448,10 @@ static void TGUpdateMultiTouchGestures(SBSystemGestureManager *manager) {
         }
         return;
     }
-    // 离开边缘、水平为主：从边缘滑入
+    // 离开边缘、水平为主：从边缘滑入。
+    // cn5.1：方向预判删除后，右侧普通 pan 靠这里的 handlesInward 门控把滑入让给系统级识别器，
+    // 否则横向滑入会被普通 pan 和系统级识别器各触发一次（handlesInward=NO 即滑入不归普通 pan 管）。
+    if (!recognizer.handlesInward) return;
     CGFloat inward = left ? t.x : -t.x;
     if (inward >= TGEdgeDistance && ax > ay) {
         NSString *trigger = [NSString stringWithFormat:@"edge.%@%@", left ? @"left" : @"right",
@@ -4278,8 +4222,7 @@ static void TGUpdateOtherEvents(void) {
     // 不再经 Relay，因此位段只需通知状态栏与摇动。
     static int relayToken = -1;
     if (relayToken == -1 && notify_register_check(TGRelayWanted, &relayToken) != NOTIFY_STATUS_OK) relayToken = -1;
-    BOOL wantRightEdge = [tgAssignedTriggers containsObject:@"edge.right"] || [tgAssignedTriggers containsObject:@"edge.right2"];
-    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0) | (wantRightEdge ? TGRelayWantsRightEdge : 0));
+    if (relayToken != -1) notify_set_state(relayToken, (TGStatusBarInUse() ? TGRelayWantsStatusBar : 0) | ([tgAssignedTriggers containsObject:@"motion.shake"] ? TGRelayWantsShake : 0));
     
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     BOOL wantPower = TGAssignedAny(@"power.connected", @"power.disconnected");
