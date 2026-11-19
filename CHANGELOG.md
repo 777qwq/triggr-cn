@@ -3,42 +3,12 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
-## 1.5.0+cn5.4
-
-- **删除顶/底六路边缘手势**：左下角上滑、右下角上滑、左上角下滑、右上角下滑、双指从顶部下滑、双指从底部上滑（cn5.2 加的）全部移除，边缘分组从 14 项减回 8 项，只保留左右两条边（滑入、沿边上下滑、双指滑入）。老配置里这六个键按残留清掉，不会留下空占的指派。
-- **拒绝层改为只服务「从右侧滑入」**：原 cn5.3 的拒绝层是给四角挡系统手势的，四角删掉后失去意义，这次移植到右边——单指 `edge.right` 指派后，右边缘那段不再被系统手势抢。照 RC 源码的分层做法加固，补上 cn5.3 单层漏掉的两类情况：
-  - hook 三层 screen-edge pan 类（`UIScreenEdgePanGestureRecognizer` 及其私有子类、`SBScreenEdgePanGestureRecognizer`），不再只挂基类、避免被子类重写绕过；
-  - 三个时机都拦：`_shouldReceiveTouch:` 拒收 + `touchesBegan:` / `touchesMoved:` 摁成 Failed——后者补上「起点在边缘外、滑进边缘内」时单层拦不住的漏网；
-  - 右边缘按当前 UI 方向算，横屏跟着旋；自己的 `TGEdgeRecognizer` 照收。
-  - 只对单指右滑入生效；双指右滑入、左侧滑入（普通 pan）与沿边上下滑的既有行为不动。
-- 删掉为底角回主屏加的 `SBHomeGestureInteraction` 仲裁层（服务对象已随四角一起移除）。设置页边缘分组说明同步。
-
-## 1.5.0+cn5.3.1
-
-- **补上第二层 home 手势仲裁**，进一步压住底角上滑「有时候还是滑回主屏」。cn5.3 照 2.1 只拦了 `UIScreenEdgePanGestureRecognizer`，但 SpringBoard 的「上滑回主屏」不止那一条路：`SBHomeGestureInteraction` 还管理着 `indirectPanGestureRecognizer` / `scrunchGestureRecognizer` 两条普通 pan，不经过 `_shouldReceiveTouch:`。这次以 home 手势 delegate 的身份在起点落进已指派角落时直接否决其 `gestureRecognizerShouldBegin:`，并让它在仲裁中让位给 `TGEdgeRecognizer`。只在已指派角落干预，底部中间 1/3 与正常回主屏不受影响。
-- **「从左侧滑入」改普通 pan**。此前它是系统级 `UIScreenEdgePanGestureRecognizer`，会被 iOS 纳入返回手势仲裁、取代系统原生左滑返回。现在换成普通 `UIPanGestureRecognizer`（`cancelsTouchesInView=NO`），不再参与那套仲裁，系统原生返回保留。**取舍**：滑入时应用内容可能跟着动（与沿边上下滑类似）；其余 13 路边缘手势仍是系统级，能力不变。设置页边缘分组说明已同步。
-
-## 1.5.0+cn5.3
-
-- **补上 2.1 的角拒绝层**，修复底角上滑「有时候会滑回主屏」。cn5.2 只做了几何避让，漏了 2.1 真正拦住系统手势的那一层：
-  - 2.1 把 `- [UIScreenEdgePanGestureRecognizer _shouldReceiveTouch:withEvent:]` 整条换掉（`0x6704` 装 hook，IMP `0xa928`）：只要某条边的角已指派（底 = `0x579`，顶 = `0x588`），任何屏幕边缘 pan 在角里都收不到触摸，只有自己的 `TGEdgeRecognizer` 例外（`0xa980` 的 `isKindOfClass`）。
-  - 「上滑回主屏」的 `SBHomeGesturePanGestureRecognizer` 继承 `SBScreenEdgePanGestureRecognizer` → `UIScreenEdgePanGestureRecognizer`，正好落在这层拒绝范围内。cn5.2 没有这层，底角手势和 home 手势抢同一次触摸，谁先进入 Began 谁吃掉，于是时灵时不灵。
-  - 角判定统一成 `TGEdgeCornerTrigger()`（照 `0x167dc` / `0x168ac`），识别器和拒绝层共用一套几何，避免两处漂移。
-- **行为取舍**（与 2.1 一致）：四角指派后，那个角里不再触发系统手势——底角不再「上滑回主屏」，顶角不再「下拉通知中心」；在角里滑不够 60pt 就什么也不发生。底部中间 1/3 与屏幕其他区域不受影响，回主屏照常。
-- 设置页边缘分组说明补一句四角接管系统手势的后果。
-
 ## 1.5.0+cn5.2
 
-- **补齐 2.1 的全部 14 路边缘手势**。cn5.1 只铺了 left/right 两条边的 4 路，缺顶边、底边和四角：
-  - `edge.topleft` / `edge.topright`：左上角、右上角下滑；
-  - `edge.bottomleft` / `edge.bottomright`：左下角、右下角上滑；
-  - `edge.top2` / `edge.bottom2`：双指从顶部下滑、双指从底部上滑。
-  - 实现上仍是一条边一个系统级 `UIScreenEdgePanGestureRecognizer`（8 个实例覆盖 10 个 trigger）：顶/底单指由 `touchesBegan` 按起点再分左右角，四角要求起点落在顶/底边 24pt 内、并按屏宽 1/3 分界（照 2.1 的 `0x167dc` / `0x168ac`）。
-  - `slid:` 改成 2.1 的通用判定：按边取主方向位移 ≥60pt、另一方向不得超过主方向（45° 以内），不再写死「横向+向内」。
-- **修正沿边上下滑的贴边带**：从「屏宽 4%（约 15.6pt）」改为 2.1 实际使用的固定 **34pt**；并补上「y 进入底部 4% 就不走这条路径」的守卫，把底部让给底边那一组。
-- **设置页补齐 6 项**：边缘分组从 8 项扩到 14 项；`edge.bottomleft` / `bottomright` 从「已移除触发器」名单里摘掉，老配置不会再被当成残留清掉。
-- **系统手势 type 槽位顺延**：边缘类占 `+0..+7`（8 个实例覆盖 14 路中的 10 路 trigger），多指从 `+10` 起。
-- **已知行为**（与 2.1 一致，非缺陷）：左右滑入由系统级边缘手势识别，能从事件路由层撤走 App 触摸；顶/底与四角手势同样是系统级，也具备这个能力；只有沿左右边缘的上下滑走 `sendEvent:` 旁路，列表仍会跟着动。
+- **回到纯系统级识别器，移除全部拒绝层**。cn5.3～cn5.4 在左右边缘叠加的拒绝层（`_shouldReceiveTouch:` / `touchesBegan:` / `touchesMoved:` 三层 hook）会释放系统识别器对触摸的占有，反而让系统手势更容易被触发，已整体删除。边缘手势只靠识别器自身能力，不再 hook 任何系统识别器。
+- **保留 8 路边缘手势**：左右滑入、沿边上下滑、左右双指滑入。顶/底四角与顶底双指不提供。
+- **「从左侧滑入」保持普通 pan**：不取代系统原生左滑返回，代价是滑入时应用内容可能跟着动。其余滑入是系统级 `UIScreenEdgePanGestureRecognizer`，能从源头取消应用触摸；沿边上下滑走 `sendEvent:` 旁路，列表仍会跟着动。
+- **版本清理**：旧的 5.2 及 5.2 以上的实现与记录全部作废，以本版作为新的 cn5.2。
 
 ## 1.5.0+cn5.1
 
