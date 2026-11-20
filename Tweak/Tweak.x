@@ -3757,14 +3757,20 @@ static void TGHandleNotification(id req) {
                 }];
         }
 
-        // Record the text immediately before firing: TGFire → condition check is
-        // synchronous, so notiftext: sees this notification's text, not a stale one.
-        tgNotifEventText = TGNotifText(req) ?: @"";
-        tgNotifEventAt = now;
-        tgNotifEventValid = YES;
-
-        if (wantApp) TGFireMatching(TGNotificationAppPrefix, section);
-        if (wantAny) TGFire(@"notification.any");
+        // Snapshot the text while the request is alive, then fire on the main
+        // queue. Actions (banners, menus, third-party UIKit work) must not run on
+        // bbserverqueue: creating a UIWindow there trips
+        // CA_ASSERT_MAIN_THREAD_TRANSACTIONS and aborts SpringBoard.
+        NSString *text = TGNotifText(req) ?: @"";
+        dispatch_async(dispatch_get_main_queue(), ^{
+            @try {
+                tgNotifEventText = text;
+                tgNotifEventAt = now;
+                tgNotifEventValid = YES;
+                if (wantApp) TGFireMatching(TGNotificationAppPrefix, section);
+                if (wantAny) TGFire(@"notification.any");
+            } @catch (NSException *e) { }
+        });
     } @catch (NSException *e) { }
 }
 
