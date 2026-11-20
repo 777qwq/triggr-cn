@@ -51,6 +51,11 @@ static BOOL TGGesturePlaybackBusy(void) { return TGGesturePlaying(); }
 @end
 @interface SBIconView : UIView
 @end
+@interface SBRingerHardwareButton : NSObject
+- (void)performActionsForButtonDown:(id)event;
+- (void)performActionsForButtonLongPress:(id)event;
+- (void)performActionsForButtonUp:(id)event;
+@end
 
 #pragma mark - Assignments
 
@@ -2723,6 +2728,37 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^iosAction)(void)) {
 static BOOL tgRingerFromSwitch;
 static BOOL tgRingerReplaced;
 
+// mute.twice：0.8 秒内反方向连拨拨片两次。参数与 2.1 一致：
+// 0.4s 同状态去重（拨片会经 _updateRingerState 等路径重复上报）、
+// 0.8s 反方向窗口、0.8s 超时清理等待中的第一次。
+// 只在真实拨片事件的 _updateRingerState 上采一次样；独立于单次拨片动作，
+// 不改变系统静音行为（并行检测，和「摇晃」等触发器一类）。
+static long long tgMTLastState = -1;
+static CFTimeInterval tgMTLastAt;
+static long long tgMTFirstState = -1;
+static CFTimeInterval tgMTFirstAt;
+static NSUInteger tgMTGeneration;
+
+static void TGMuteTwiceDetect(long long state) {
+    if (![tgAssignedTriggers containsObject:@"mute.twice"]) return;
+    CFTimeInterval now = CACurrentMediaTime();
+    if (state == tgMTLastState && now - tgMTLastAt < 0.4) return; // 重复上报
+    tgMTLastState = state;
+    tgMTLastAt = now;
+    if (tgMTFirstState != -1 && tgMTFirstState != state && now - tgMTFirstAt < 0.8) {
+        tgMTFirstState = -1;          // 消费掉第一次，第三次连拨要重新起算
+        tgMTGeneration++;
+        TGFire(@"mute.twice");
+        return;
+    }
+    tgMTFirstState = state;
+    tgMTFirstAt = now;
+    NSUInteger gen = ++tgMTGeneration;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (gen == tgMTGeneration) tgMTFirstState = -1;
+    });
+}
+
 static BOOL TGMuteSwitchFire(long long state) {
     return TGFire(state ? @"mute.ring" : @"mute.silent") || TGFire(@"mute.toggle");
 }
@@ -2735,6 +2771,7 @@ static BOOL TGMuteSwitchFire(long long state) {
     tgRingerFromSwitch = NO;
 }
 - (void)_updateRingerState:(int)state withVisuals:(BOOL)visuals updatePreferenceRegister:(BOOL)update {
+    if (tgRingerFromSwitch) TGMuteTwiceDetect(state);
     if (tgRingerFromSwitch && tgReplaces && TGMuteSwitchFire(state)) {
         tgRingerReplaced = YES;
         return;
@@ -2749,6 +2786,75 @@ static BOOL TGMuteSwitchFire(long long state) {
     if (tgRingerReplaced) return; // already ran instead of the switch
     TGMuteSwitchFire(state);
 }
+%end
+
+#pragma mark - Action Button (iPhone 15 Pro/16 Pro, iOS 17+)
+// 安全模型参照 ActionGesture 0.0-3，但更保守：
+//   1) 不碰 _buttonActiveAssertion / _systemActionPreviewingAssertion 等私有
+//      断言，也不写哨兵文件——那是上游多次崩溃的根源；
+//   2) 三个方法都调 %orig，让 SpringBoard 的按压生命周期 100% 原生走完；
+//   3) Triggr 只在识别出的时刻并行 fire 自己的动作。Triggr 动作和系统「操作
+//      按钮」动作是两套体系，无法像 ActionGesture 那样替换系统动作，因此这里
+//      走并行语义：想让 Triggr 独占，请在系统「设置 > 操作按钮」把动作设为「无」；
+//   4) 启动守卫：类或三个方法任一缺失（老系统 / 无操作按钮机型）整段不注入。
+// 双击窗口 240ms、generation 防延迟回调竞态，均照搬 ActionGesture。
+
+static BOOL tgABButtonDown;
+static BOOL tgABDidLong;
+static BOOL tgABWaitingSecond;
+static BOOL tgABSecondInProgress;
+static NSUInteger tgABGeneration;
+
+static BOOL TGABRelevant(void) {
+    return [tgAssignedTriggers containsObject:@"action.press"] ||
+           [tgAssignedTriggers containsObject:@"action.double"] ||
+           [tgAssignedTriggers containsObject:@"action.hold"];
+}
+
+%group ActionButton
+%hook SBRingerHardwareButton
+- (void)performActionsForButtonDown:(id)event {
+    %orig;
+    if (!TGABRelevant()) return;
+    tgABButtonDown = YES;
+    tgABDidLong = NO;
+    tgABSecondInProgress = tgABWaitingSecond;
+    if (tgABSecondInProgress) {
+        tgABWaitingSecond = NO;
+        tgABGeneration++;
+    }
+}
+- (void)performActionsForButtonLongPress:(id)event {
+    %orig;
+    if (!tgABButtonDown) return;
+    tgABDidLong = YES;
+    tgABWaitingSecond = NO;
+    tgABSecondInProgress = NO;
+    tgABGeneration++;
+    TGFire(@"action.hold");
+}
+- (void)performActionsForButtonUp:(id)event {
+    BOOL wasDown = tgABButtonDown;
+    BOOL wasLong = tgABDidLong;
+    BOOL second = tgABSecondInProgress;
+    tgABButtonDown = NO;
+    tgABDidLong = NO;
+    tgABSecondInProgress = NO;
+    %orig;
+    if (!wasDown || wasLong) return;
+    if (second) {
+        TGFire(@"action.double");
+        return;
+    }
+    tgABWaitingSecond = YES;
+    NSUInteger gen = ++tgABGeneration;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.24 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (gen != tgABGeneration || !tgABWaitingSecond) return;
+        tgABWaitingSecond = NO;
+        TGFire(@"action.press");
+    });
+}
+%end
 %end
 
 #pragma mark - Touch ID (runs alongside: unlocking is untouched)
@@ -4398,6 +4504,15 @@ static void TGResyncAfterLaunch(void) {
         TGGestureStartListener();
     });
     %init(_ungrouped);
+    // Action Button：启动守卫。类或三个方法任一缺失就整段不注入，避免在没有
+    // 操作按钮的机型 / 老 iOS 上 hook 一个不存在或不完整的私有接口。
+    Class abClass = objc_getClass("SBRingerHardwareButton");
+    if (abClass &&
+        class_getInstanceMethod(abClass, @selector(performActionsForButtonDown:)) &&
+        class_getInstanceMethod(abClass, @selector(performActionsForButtonLongPress:)) &&
+        class_getInstanceMethod(abClass, @selector(performActionsForButtonUp:))) {
+        %init(ActionButton);
+    }
     Class sbBarWindow = objc_getClass("SBStatusBarWindow");
     Class uiBarWindow = objc_getClass("UIStatusBarWindow");
     if (sbBarWindow && !(uiBarWindow && [sbBarWindow isSubclassOfClass:uiBarWindow])) %init(StatusBarWindow17);

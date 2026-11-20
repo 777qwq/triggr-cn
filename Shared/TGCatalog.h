@@ -59,7 +59,12 @@ static const TGItem TGSideCombos[] = {
     {"combo.sideup", "按音量加"}, {"combo.sidedown", "按音量减"},
     {"combo.sideuphold", "长按音量加"}, {"combo.sidedownhold", "长按音量减"},
 };
-static const TGItem TGMuteSwitch[] = { {"mute.silent", "切到静音"}, {"mute.ring", "切到响铃"}, {"mute.toggle", "拨片切换"} };
+static const TGItem TGMuteSwitch[] = { {"mute.silent", "切到静音"}, {"mute.ring", "切到响铃"}, {"mute.toggle", "拨片切换"}, {"mute.twice", "快速来回拨两次"} };
+// iPhone 15 Pro / 16 Pro 的实体「操作按钮」。系统原生单击/长按动作无法被 Triggr
+// 替换（两套体系），这里是并行检测：要在系统「设置 > 操作按钮」里设为「无」才独占。
+static const TGItem TGActionButton[] = {
+    {"action.press", "单击"}, {"action.double", "双击"}, {"action.hold", "长按"},
+};
 static const TGItem TGStatusBar[] = {
     {"statusbar.tap", "点按"}, {"statusbar.doubletap", "双击"}, {"statusbar.hold", "长按"},
     {"statusbar.left.tap", "左侧点按"}, {"statusbar.left.doubletap", "左侧双击"}, {"statusbar.left.hold", "左侧长按"},
@@ -138,10 +143,11 @@ static const TGItem TGStateChanges[] = {
 static const TGGroup TGTriggerGroups[] = {
     {"锁键", TGHomeButton, TG_COUNT(TGHomeButton), NULL},
     {"触控 ID", TGTouchID, TG_COUNT(TGTouchID), "轻点两下是指不按下而轻触传感器两次。解锁状态下 iOS 不上报单次轻触和长按。手指停留与指纹匹配仅在锁屏界面生效，并与解锁并行。"},
+    {"操作按钮", TGActionButton, TG_COUNT(TGActionButton), "iPhone 15 Pro 及更新机型的实体操作按钮。单击、双击、长按与系统动作并行执行；要让 Triggr 独占某个手势，请在系统「设置 > 操作按钮」里把该动作设为「无」。双击需在单击后稍作等待，以判断是否还有第二下。"},
     {"锁屏键", TGLockButton, TG_COUNT(TGLockButton), NULL},
     {"音量键", TGVolume, TG_COUNT(TGVolume), "「音量加后音量减」（及反向）是两次快速连按；始终与系统并行执行，音量最终回到原位。"},
     {"锁键 + 音量键", TGSideCombos, TG_COUNT(TGSideCombos), "同时按住锁键与一个音量键。「长按音量加 / 长按音量减」指同时按住半秒；动作与 iOS 并行运行，继续按住仍会照常出现关机滑条和紧急 SOS。"},
-    {"拨片开关", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。"},
+    {"拨片开关", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。「快速来回拨两次」指在 0.8 秒内反方向连拨两次，与拨片的静音动作并行执行。"},
     {"状态栏手势", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
     {"主屏幕手势", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。「双击空白处」在主屏幕空白区域生效，不在图标上。"},
     {"边缘手势", TGEdges, TG_COUNT(TGEdges), "左右两条边，应用内、主屏幕和锁屏均有效。「从左侧滑入」是普通手势，保留系统原生返回，但内容可能跟着动；其余滑入由系统识别，会从源头取消应用触摸。沿边上下滑需贴边 34pt 内、以竖直为主快速滑动，列表仍会跟着动。"},
@@ -488,6 +494,9 @@ static inline NSString *TGTriggerWarning(NSString *trigger, BOOL replaces) {
         @"icon.flickdown": @"从图标起始的下滑搜索手势将执行此动作。",
         @"volume.updown": @"在半秒内先按音量加再按音量减。与两次按压并行执行。",
         @"volume.downup": @"在半秒内先按音量减再按音量加。与两次按压并行执行。",
+        @"action.press": @"与系统操作按钮的单击并行执行，系统的原生动作照常发生。想独占，请在系统「设置 > 操作按钮」里设为「无」。",
+        @"action.double": @"单击会稍作等待以判断是否有第二下。与系统动作并行执行。",
+        @"action.hold": @"与系统操作按钮的长按并行执行，系统的原生动作照常发生。想独占，请在系统「设置 > 操作按钮」里设为「无」。",
         @"time": @"在设备运行 Triggr 期间于此时间触发。睡眠时 iOS 可能延迟定时器；延误超过 5 分钟则跳过。",
         @"battery": @"电量越过该百分比时执行一次，而非每次变化都执行。",
         @"statusbar.tap": @"若同时指派了双击，单击会稍作等待以判断是否出现第二击。",
