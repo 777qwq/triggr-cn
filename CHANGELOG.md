@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.9
+
+- **冻结统一为一套：删掉"冻结瞬间快照"分支，多指与边缘竖滑共用落指快照**。cn5.2.8 里两套快照并存——多指还原到冻结瞬间 offset（多存 `tgFreezeOffsets`/`tgFreezeZooms`），边缘还原到落指快照（`tgBeganOffsets` + `useBegan` 分支 + `TGFreezeBeginFromBegan` 专用入口 + `TGRelayFreezeBeganBegin` 专用通知），体验分裂、代码层层加分支。cn5.2.9 把这套收敛：**删掉**冻结瞬间的 offset/zoom 数组、`useBegan`/`tgFreezeBeganGen` 分支、`TGFreezeBeginFromBegan` 入口和 `TGRelayFreezeBeganBegin` 通知；落指那一刻统一快照所有 scrollView 的 `contentOffset + zoomScale`（weak key + generation 保护，无状态幂等，多指识别器与边缘各在自己的 `touchesBegan` 调同一句），冻结只记 `tgFreezeSnapGen`，解冻一律还原到落指位置。多指与边缘从此走同一个 `TGFreezeBegin/End` 和同一组 Snapshot/Begin/End 通知。generation 不符（冻结期间换了轮）时不还原位置、只恢复开关，避免串场。判据（cn5.2.7 四向滑起手收紧、cn5.2.6 捏合方向闸门、cn5.2.5 正交分解、cn5.2.2 点按误触）与触发阈值一律不动。
+
 ## 1.5.0+cn5.2.8
 
 - **沿边上下滑接上冻结，参照 RC 的落指快照 + 早冻机制；触发距离与时长减半**。此前四条沿边竖滑没有任何冻结，手指滑动时列表会跟着滚。cn5.2.8 借 RC 的做法：手指落下瞬间在 SpringBoard 与 App 两侧快照所有 scrollView 的 `contentOffset`（`NSMapTable` weak key + generation 保护，无视觉影响），纵向一走稳（>10pt、方向够直、该方向有指派）就先 `TGFreezeBeginFromBegan()` 钉住画面，解冻时还原到**落指位置**，把冻结前已滚掉的那几 pt 一并撤销——这是"早冻"能成立的关键。抬手、多指介入、2s 兜底均解冻；多指那套仍还原到冻结瞬间 offset，完全不受影响。触发判据按用户要求只改两项：`TGVertDistance` 125→62.5pt、`TGVertMaxDuration` 0.9→0.45s；速度 500pt/s、横向漂移 0.4 比例不变。早冻阈值沿用 RC 原值 10pt。

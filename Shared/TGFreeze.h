@@ -5,32 +5,31 @@
 // 外加 tgFreezeOffsets / tgFreezeScrollDisabled / tgFreezeRecognizers / tgFreezeOn 几个全局。
 // 反汇编出来的操作序列与本文件一致：存 contentOffset → setScrollEnabled:NO →
 // gestureRecognizers 逐个 setEnabled:NO，结束时把 offset 摆回原位再恢复开关。
+// cn5.2.9 把"存 offset"从冻结瞬间提前到落指那一刻（见下），不动 2.1 的分工骨架。
 //
 // 为什么不靠 cancelsTouchesInView：多指识别器挂在 SpringBoard 的进程里，那个属性只取消
 // 同进程、同窗口视图树的触摸投递；前台 App 是独立进程，它收不到这个取消。2.1 的答案不是
 // 取消触摸，而是各进程冻结自己的界面——SpringBoard 冻自己的窗口，App 由 Relay 冻自己的。
 //
 // 比 2.1 多存一样 zoomScale：照片缩小改的是 UIScrollView.zoomScale，而 2.1 只还原
-// contentOffset。多指手势要等手指移动才认得出，冻结必然晚于缩放的头几十毫秒，不还原
-// zoomScale 就会留下「已经小了一圈」的画面。
+// contentOffset。落指就快照 offset 与 zoom，解冻还原到落指值，把冻结/缩放前那几十
+// 毫秒里已经滚掉、缩掉的量一并撤销——这就是 cn5.2.9 起多指与边缘共用的统一快照。
 //
 // 2 秒兜底：漏掉一次恢复，App 会永久滚不动，这个代价远大于多冻两秒。
 
 static NSMutableArray *tgFreezeViews;            // UIScrollView
 static NSMutableArray *tgFreezeScrollDisabled;   // 原本 scrollEnabled 的
 static NSMutableArray *tgFreezeRecognizers;      // 原本 enabled 的识别器
-static NSMutableArray *tgFreezeOffsets;          // NSValue(CGPoint)
-static NSMutableArray *tgFreezeZooms;            // NSNumber(zoomScale)
 static BOOL tgFreezeOn;
 static NSInteger tgFreezeGeneration;
 
-// 边缘竖滑专用（照 RemoteCompanion 的做法）：手指落下那一刻就快照 contentOffset，
-// 解冻时还原到这里，把冻结前已经滚掉的那几 pt 也一并撤销。weak key 让释放的 view 自动出表，
-// generation 防止拿上一轮触摸的旧快照还原。多指手势不快照，仍还原到冻结瞬间的 offset。
+// cn5.2.9 统一快照：落指那一刻快照所有 scrollView 的 contentOffset + zoomScale，
+// 解冻一律还原到这里（多指与边缘竖滑共用同一套）。weak key 让释放的 view 自动出表；
+// generation 防止冻结期间新一轮快照把位置覆盖后、又拿旧快照还原串了触摸。
 static NSMapTable *tgBeganOffsets;               // UIScrollView -> NSValue(CGPoint)
+static NSMapTable *tgBeganZooms;                 // UIScrollView -> NSNumber(zoomScale)
 static NSInteger tgBeganGeneration;
-static BOOL tgFreezeUseBegan;                    // 本轮冻结要不要还原到落指快照
-static NSInteger tgFreezeBeganGen;               // 冻结那一刻的 tgBeganGeneration
+static NSInteger tgFreezeSnapGen;                // 本轮冻结对应的快照 generation（解冻时校验）
 
 static void TGFreezeCollect(UIView *view, NSMutableArray *out) {
     if ([view isKindOfClass:UIScrollView.class]) [out addObject:view];
@@ -56,37 +55,30 @@ static NSArray<UIWindow *> *TGFreezeWindows(void) {
 static void TGFreezeEnd(void);
 static void TGFreezeBegin(void);
 
-// 落指时快照所有 scrollView 的 contentOffset（SpringBoard 与 App 各自一份）。
+// 落指时快照所有 scrollView 的 contentOffset + zoomScale（SpringBoard 与 App 各自一份）。
 // 只记位置、不改任何状态，便宜且无视觉影响；generation++ 让后续冻结能认出"是不是这一轮触摸"。
 static void TGFreezeSnapshotBegan(void) {
     if (!NSThread.isMainThread) {
         dispatch_async(dispatch_get_main_queue(), ^{ TGFreezeSnapshotBegan(); });
         return;
     }
-    if (!tgBeganOffsets) tgBeganOffsets = [NSMapTable weakToStrongObjectsMapTable];
+    if (!tgBeganOffsets) {
+        tgBeganOffsets = [NSMapTable weakToStrongObjectsMapTable];
+        tgBeganZooms = [NSMapTable weakToStrongObjectsMapTable];
+    }
     [tgBeganOffsets removeAllObjects];
+    [tgBeganZooms removeAllObjects];
     @try {
         for (UIWindow *window in TGFreezeWindows()) {
             NSMutableArray *found = [NSMutableArray array];
             TGFreezeCollect(window, found);
-            for (UIScrollView *view in found)
+            for (UIScrollView *view in found) {
                 [tgBeganOffsets setObject:[NSValue valueWithCGPoint:view.contentOffset] forKey:view];
+                [tgBeganZooms setObject:@(view.zoomScale) forKey:view];
+            }
         }
     } @catch (__unused NSException *e) { }
     tgBeganGeneration++;
-}
-
-// 边缘竖滑走这条：除了正常冻结，还记下"本次要还原到落指快照"（gen 必须匹配才算数）。
-// 标记置位必须在主线程、紧跟真正的冻结之前，避免 TGFreezeBegin 的非主线程 dispatch 把标记丢掉。
-static void TGFreezeBeginFromBegan(void) {
-    if (!NSThread.isMainThread) {
-        dispatch_async(dispatch_get_main_queue(), ^{ TGFreezeBeginFromBegan(); });
-        return;
-    }
-    if (tgFreezeOn) return; // 已有冻结在跑，别把 began 标记泄漏给它
-    tgFreezeUseBegan = YES;
-    tgFreezeBeganGen = tgBeganGeneration;
-    TGFreezeBegin();
 }
 
 static void TGFreezeBegin(void) {
@@ -97,26 +89,21 @@ static void TGFreezeBegin(void) {
     }
     tgFreezeOn = YES;
     NSInteger generation = ++tgFreezeGeneration;
+    tgFreezeSnapGen = tgBeganGeneration; // 统一：记下这一轮对应的落指快照
     if (!tgFreezeViews) {
         tgFreezeViews = [NSMutableArray array];
         tgFreezeScrollDisabled = [NSMutableArray array];
         tgFreezeRecognizers = [NSMutableArray array];
-        tgFreezeOffsets = [NSMutableArray array];
-        tgFreezeZooms = [NSMutableArray array];
     }
     [tgFreezeViews removeAllObjects];
     [tgFreezeScrollDisabled removeAllObjects];
     [tgFreezeRecognizers removeAllObjects];
-    [tgFreezeOffsets removeAllObjects];
-    [tgFreezeZooms removeAllObjects];
     @try {
         for (UIWindow *window in TGFreezeWindows()) {
             NSMutableArray *found = [NSMutableArray array];
             TGFreezeCollect(window, found);
             for (UIScrollView *view in found) {
                 [tgFreezeViews addObject:view];
-                [tgFreezeOffsets addObject:[NSValue valueWithCGPoint:view.contentOffset]];
-                [tgFreezeZooms addObject:@(view.zoomScale)];
                 if (view.scrollEnabled) {
                     [tgFreezeScrollDisabled addObject:view];
                     view.scrollEnabled = NO;
@@ -145,33 +132,30 @@ static void TGFreezeEnd(void) {
     tgFreezeOn = NO;
     tgFreezeGeneration++;
     @try {
-        NSUInteger count = MIN(tgFreezeViews.count, tgFreezeOffsets.count);
-        for (NSUInteger i = 0; i < count; i++) {
-            UIScrollView *view = tgFreezeViews[i];
-            // 顺序要紧：setZoomScale 会按缩放比例重算 contentOffset，先还原缩放再摆位置。
-            if (i < tgFreezeZooms.count) {
-                CGFloat zoom = [tgFreezeZooms[i] doubleValue];
-                if (zoom > 0 && fabs(view.zoomScale - zoom) > 0.01)
-                    [view setZoomScale:zoom animated:NO];
-            }
-            CGPoint to = [tgFreezeOffsets[i] CGPointValue];
-            // 边缘竖滑且快照是同一轮触摸：还原到落指位置，而不是冻结瞬间的位置。
-            // 正常多指冻结（useBegan=NO）或快照已过期（gen 不符）走原来的冻结 offset。
-            BOOL useBegan = tgFreezeUseBegan && (tgFreezeBeganGen == tgBeganGeneration);
-            if (useBegan) {
+        // 统一：还原到落指快照。generation 不匹配说明冻结期间又落了新手指、快照已换轮，
+        // 这时不还原位置（免得拿新快照的旧位置串场），但仍照常恢复开关与识别器。
+        BOOL snapValid = (tgFreezeSnapGen == tgBeganGeneration);
+        for (UIScrollView *view in tgFreezeViews) {
+            if (snapValid) {
+                // 顺序要紧：setZoomScale 会按缩放比例重算 contentOffset，先还原缩放再摆位置。
+                NSNumber *z = [tgBeganZooms objectForKey:view];
+                if (z) {
+                    CGFloat zoom = z.doubleValue;
+                    if (zoom > 0 && fabs(view.zoomScale - zoom) > 0.01)
+                        [view setZoomScale:zoom animated:NO];
+                }
                 NSValue *began = [tgBeganOffsets objectForKey:view];
-                if (began) to = began.CGPointValue;
+                if (began) {
+                    CGPoint to = began.CGPointValue;
+                    if (fabs(view.contentOffset.x - to.x) + fabs(view.contentOffset.y - to.y) > 0.5)
+                        [view setContentOffset:to animated:NO];
+                }
             }
-            if (fabs(view.contentOffset.x - to.x) + fabs(view.contentOffset.y - to.y) > 0.5)
-                [view setContentOffset:to animated:NO];
         }
-        tgFreezeUseBegan = NO;
         for (UIScrollView *view in tgFreezeScrollDisabled) view.scrollEnabled = YES;
         for (UIGestureRecognizer *recognizer in tgFreezeRecognizers) recognizer.enabled = YES;
     } @catch (__unused NSException *e) { }
     [tgFreezeViews removeAllObjects];
     [tgFreezeScrollDisabled removeAllObjects];
     [tgFreezeRecognizers removeAllObjects];
-    [tgFreezeOffsets removeAllObjects];
-    [tgFreezeZooms removeAllObjects];
 }

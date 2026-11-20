@@ -10,12 +10,10 @@
 // A Darwin notification state set by SpringBoard: which events are assigned.
 #define TGRelayWanted "com.johndie.triggr/relay-wanted"
 #define TGRelayBack "com.johndie.triggr/back"
-// 多指手势触发时钉住画面：SpringBoard 冻自己的窗口，App 收到这两条冻自己的。
-// 跨进程做不到「取消对方的触摸」，只能各冻各的（Triggr 2.1 的 TGFreeze 就是这么分工）。
+// 落指快照 + 冻结/解冻：多指与边缘竖滑共用同一套。SpringBoard 落指时发 Snapshot，
+// 冻结/解冻分别发 Begin/End；App 侧照此快照自己的 offset 并冻/解自己的界面。
+#define TGRelayFreezeSnapshot "com.johndie.triggr/freeze-snapshot"
 #define TGRelayFreezeBegin "com.johndie.triggr/freeze-begin"
 #define TGRelayFreezeEnd "com.johndie.triggr/freeze-end"
-// 边缘竖滑：落指先快照 offset（App 侧同步快照），早冻时要求解冻还原到落指位置。
-#define TGRelayFreezeSnapshot "com.johndie.triggr/freeze-snapshot"
-#define TGRelayFreezeBeganBegin "com.johndie.triggr/freeze-began-begin"
 #define TGRelayWantsStatusBar 1ULL
 #define TGRelayWantsShake 2ULL

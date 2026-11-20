@@ -3206,6 +3206,13 @@ static void TGMultiFreezeEnd(void) {
     notify_post(TGRelayFreezeEnd);
 }
 
+// cn5.2.9：落指快照多指与边缘共用。快照无状态、幂等——落指阶段画面还没动，
+// 同一轮里几个识别器各调一次结果一样，generation 在冻结前多 ++ 几次也无害。
+static void TGMultiSnapshotBegan(void) {
+    TGFreezeSnapshotBegan();
+    notify_post(TGRelayFreezeSnapshot);
+}
+
 // 所有手指都抬起（或已被系统取消）才算这一轮结束。识别成功时手指往往还按着，
 // 这时候解冻，App 的识别器会立刻恢复、接着把照片缩下去。
 static BOOL TGMultiTouchesFinished(UIEvent *event) {
@@ -3248,6 +3255,7 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
     return TGMultiRadiusForTouches(touches, self.view);
 }
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    TGMultiSnapshotBegan();
     if (event.allTouches.count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
     if (event.allTouches.count == self.fingers && self.initialRadius <= 0) {
         self.initialRadius = [self radiusForTouches:event.allTouches];
@@ -3335,6 +3343,7 @@ static BOOL TGSwipeDirectionMatches(CGPoint c, UISwipeGestureRecognizerDirection
 
 @implementation TGSwipeRecognizer
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    TGMultiSnapshotBegan();
     NSUInteger n = event.allTouches.count;
     if (n > self.numberOfTouchesRequired) { self.state = UIGestureRecognizerStateFailed; return; }
     if (n == self.numberOfTouchesRequired && !self.origins) {
@@ -3415,6 +3424,7 @@ static const CGFloat TGTapMoveLimit = 10.0;
     return NO;
 }
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    TGMultiSnapshotBegan();
     NSUInteger n = event.allTouches.count;
     if (n > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
     if (n != self.fingers) return; // 手指还没到齐，等落齐了再记起点（允许逐指落下）
@@ -3731,11 +3741,11 @@ static int tgVertSide;              // 0 = left, 1 = right, -1 = none
 static CGPoint tgVertStart;
 static CFTimeInterval tgVertStartTime;
 
-// cn5.2.8：边缘竖滑冻结走"落指快照"版——SpringBoard 冻自己的窗口、通知 App 也快照并冻，
-// 解冻时两边都还原到落指位置（把冻结前滚掉的那几 pt 撤销）。触发判据本身不变。
+// cn5.2.9：边缘竖滑与多指共用统一的落指快照 + TGFreezeBegin/End，
+// 解冻都还原到落指位置（把冻结前滚掉的那几 pt 撤销）。触发判据本身不变。
 static void TGEdgeFreezeBegin(void) {
-    TGFreezeBeginFromBegan();
-    notify_post(TGRelayFreezeBeganBegin);
+    TGFreezeBegin();
+    notify_post(TGRelayFreezeBegin);
 }
 static void TGEdgeFreezeEnd(void) {
     TGFreezeEnd();

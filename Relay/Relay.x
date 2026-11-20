@@ -291,8 +291,11 @@ static void TGRelayDoBack(void) {
         notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
  TGRelayDoBack();
         });
-        // cn4.70：多指手势触发时 SpringBoard 发这两条，本 App 冻/解自己的界面。
-        // 跨进程改不了对方的触摸投递，只能各冻各的（TGFreeze.h 顶部有说明）。
+        // cn5.2.9：统一冻结——落指快照 + 冻结/解冻，多指与边缘竖滑共用这三条。
+        static int freezeSnapshotToken = -1;
+        notify_register_dispatch(TGRelayFreezeSnapshot, &freezeSnapshotToken, dispatch_get_main_queue(), ^(int t) {
+            TGFreezeSnapshotBegan();
+        });
         static int freezeBeginToken = -1;
         notify_register_dispatch(TGRelayFreezeBegin, &freezeBeginToken, dispatch_get_main_queue(), ^(int t) {
             TGFreezeBegin();
@@ -300,15 +303,6 @@ static void TGRelayDoBack(void) {
         static int freezeEndToken = -1;
         notify_register_dispatch(TGRelayFreezeEnd, &freezeEndToken, dispatch_get_main_queue(), ^(int t) {
             TGFreezeEnd();
-        });
-        // cn5.2.8：边缘竖滑——落指先快照本进程 offset，早冻时还原到落指位置。
-        static int freezeSnapshotToken = -1;
-        notify_register_dispatch(TGRelayFreezeSnapshot, &freezeSnapshotToken, dispatch_get_main_queue(), ^(int t) {
-            TGFreezeSnapshotBegan();
-        });
-        static int freezeBeganBeginToken = -1;
-        notify_register_dispatch(TGRelayFreezeBeganBegin, &freezeBeganBeginToken, dispatch_get_main_queue(), ^(int t) {
-            TGFreezeBeginFromBegan();
         });
     }
 }
