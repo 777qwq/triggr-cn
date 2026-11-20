@@ -2728,39 +2728,47 @@ static BOOL TGLockFaceIDPress(NSUInteger reported, void (^iosAction)(void)) {
 static BOOL tgRingerFromSwitch;
 static BOOL tgRingerReplaced;
 
-// mute.twice：0.8 秒内反方向连拨拨片两次。参数与 2.1 一致：
-// 0.4s 同状态去重（拨片会经 _updateRingerState 等路径重复上报）、
-// 0.8s 反方向窗口、0.8s 超时清理等待中的第一次。
-// 只在真实拨片事件的 _updateRingerState 上采一次样；独立于单次拨片动作，
-// 不改变系统静音行为（并行检测，和「摇晃」等触发器一类）。
+// mute.twice：语义照抄 2.1（反汇编 sub_1ea24）——配了 twice 时，0.8s 内反方向
+// 连拨的第二次只 fire mute.twice，取代本次的单次动作；没配 twice 时行为不变。
+// 参数一致：0.4s 同状态去重（拨片经 _updateRingerState / HUD 两条路径上报）、
+// 0.8s 反方向窗口、0.8s 超时清理等待中的第一次。返回值沿用单次动作：是否吞掉
+// 系统静音，交给现有的「替换按键动作」逻辑。
 static long long tgMTLastState = -1;
 static CFTimeInterval tgMTLastAt;
 static long long tgMTFirstState = -1;
 static CFTimeInterval tgMTFirstAt;
 static NSUInteger tgMTGeneration;
-
-static void TGMuteTwiceDetect(long long state) {
-    if (![tgAssignedTriggers containsObject:@"mute.twice"]) return;
-    CFTimeInterval now = CACurrentMediaTime();
-    if (state == tgMTLastState && now - tgMTLastAt < 0.4) return; // 重复上报
-    tgMTLastState = state;
-    tgMTLastAt = now;
-    if (tgMTFirstState != -1 && tgMTFirstState != state && now - tgMTFirstAt < 0.8) {
-        tgMTFirstState = -1;          // 消费掉第一次，第三次连拨要重新起算
-        tgMTGeneration++;
-        TGFire(@"mute.twice");
-        return;
-    }
-    tgMTFirstState = state;
-    tgMTFirstAt = now;
-    NSUInteger gen = ++tgMTGeneration;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        if (gen == tgMTGeneration) tgMTFirstState = -1;
-    });
-}
+static BOOL tgMTReplaced;
 
 static BOOL TGMuteSwitchFire(long long state) {
-    return TGFire(state ? @"mute.ring" : @"mute.silent") || TGFire(@"mute.toggle");
+    CFTimeInterval now = CACurrentMediaTime();
+    // 同一拨片事件会走两条路径，0.4s 内同状态去重，返回上一次的替换结果
+    if (state == tgMTLastState && now - tgMTLastAt < 0.4) return tgMTReplaced;
+    tgMTLastState = state;
+    tgMTLastAt = now;
+
+    BOOL hasTwice = [tgAssignedTriggers containsObject:@"mute.twice"];
+    BOOL ran;
+    if (hasTwice && tgMTFirstState != -1 && tgMTFirstState != state && now - tgMTFirstAt < 0.8) {
+        // 反方向连拨的第二次：twice 取代单次
+        tgMTFirstState = -1;          // 消费掉第一次，第三次连拨重新起算
+        tgMTGeneration++;
+        ran = TGFire(@"mute.twice");
+    } else {
+        ran = TGFire(state ? @"mute.ring" : @"mute.silent") || TGFire(@"mute.toggle");
+        if (hasTwice) {
+            tgMTFirstState = state;
+            tgMTFirstAt = now;
+            NSUInteger gen = ++tgMTGeneration;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                if (gen == tgMTGeneration) tgMTFirstState = -1;
+            });
+        } else {
+            tgMTFirstState = -1;
+        }
+    }
+    tgMTReplaced = ran;
+    return ran;
 }
 
 %hook SpringBoard
@@ -2771,7 +2779,6 @@ static BOOL TGMuteSwitchFire(long long state) {
     tgRingerFromSwitch = NO;
 }
 - (void)_updateRingerState:(int)state withVisuals:(BOOL)visuals updatePreferenceRegister:(BOOL)update {
-    if (tgRingerFromSwitch) TGMuteTwiceDetect(state);
     if (tgRingerFromSwitch && tgReplaces && TGMuteSwitchFire(state)) {
         tgRingerReplaced = YES;
         return;
