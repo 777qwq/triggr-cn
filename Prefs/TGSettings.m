@@ -411,8 +411,8 @@ static PSSpecifier *TGSwitchRow(NSString *name, NSString *key, BOOL defaultValue
         [actions addObject:copy];
     }
     UISwipeActionsConfiguration *config = [UISwipeActionsConfiguration configurationWithActions:actions];
-    // 「移除」是破坏性的：这套配置默认滑到底就等于点了它。触发器删掉还能重设，手势删掉就没了，
-    // 所以由子类决定这一行要不要强制「先滑出按钮、再点一下」。
+    // 「移除」是破坏性的：这套配置默认滑到底就等于点了它。个别子类可能要强制
+    // 「先滑出按钮、再点一下」，由子类 override allowsFullSwipeForSpecifier: 决定。
     config.performsFirstActionWithFullSwipe = [self allowsFullSwipeForSpecifier:spec];
     return config;
 }
@@ -712,7 +712,7 @@ static void TGPromptTimes(UIViewController *host, void (^done)(NSString *encoded
 // 关键词里不要带 @：那是条件末尾的「持续 N 秒」分隔符，会与它冲突。
 static void TGPromptNotifText(UIViewController *host, BOOL negated, void (^done)(NSString *encoded)) {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:negated ? @"通知文本不含" : @"通知文本包含"
-        message:@"匹配通知标题或正文中的文字，不区分大小写、按字面包含（不是正则）。只在通知到达的那一刻判定，且不要输入 @。" preferredStyle:UIAlertControllerStyleAlert];
+        message:@"匹配通知标题或正文中的文字，不区分大小写。" preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
         field.placeholder = @"关键词";
         field.autocorrectionType = UITextAutocorrectionTypeNo;
@@ -3072,7 +3072,7 @@ static NSURL *tgGestureExportURL;
         [specs addObject:tab];
 
         PSSpecifier *list = [PSSpecifier groupSpecifierWithName:@"已保存的手势"];
-        [list setProperty:library.count ? @"点按可试播或重命名；删除是从右往左滑，滑出「删除」再点一下，滑到底不会直接删。" : @"还没有手势。先点上方「录制新手势」。" forKey:@"footerText"];
+        [list setProperty:library.count ? @"点按可试播或重命名，从右往左滑可删除。" : @"还没有手势。先点上方「录制新手势」。" forKey:@"footerText"];
         [specs addObject:list];
         for (NSDictionary *g in library) {
             NSString *name = g[@"name"];
@@ -3177,11 +3177,6 @@ static NSURL *tgGestureExportURL;
     return [spec propertyForKey:@"tgGestureName"] ? @"删除" : nil;
 }
 
-// 录一条手势要几十秒，删掉找不回来，所以这一屏不做「滑到底即删」。
-- (BOOL)allowsFullSwipeForSpecifier:(PSSpecifier *)spec {
-    return NO;
-}
-
 - (void)exportGestures {
     NSArray *library = TGGestureLibrary();
     if (!library.count) return;
@@ -3217,7 +3212,7 @@ static NSURL *tgGestureExportURL;
     }
 }
 
-// 删除只在这条从右往左的滑动里：点按的菜单留给试播和重命名。滑出「删除」再点，全滑不会直接删。
+// 删除只在这条从右往左的滑动里：点按的菜单留给试播和重命名。滑到底即删（基类默认）。
 - (BOOL)swipedSpecifier:(PSSpecifier *)spec {
     NSString *name = [spec propertyForKey:@"tgGestureName"];
     if (!name) return NO;
