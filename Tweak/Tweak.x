@@ -127,6 +127,7 @@ static BOOL TGRetiredTrigger(NSString *trigger) {
             @"homebar.single", @"homebar.doubletap", @"homebar.longpress",
             @"edge.topleft", @"edge.topright", @"edge.bottomleft", @"edge.bottomright",
             @"edge.top2", @"edge.bottom2",
+            @"notification.any", // 「通知」分组已移除，改由自定义事件「来自应用的通知」承担
         ]];
     });
     return trigger && [retired containsObject:trigger];
@@ -3655,20 +3656,127 @@ static void TGWritePluginManifest(void) {
 
 #pragma mark - Notifications and calls
 
-// "Notification from <app>": only which app posted, never what it says. A
-// respring re-posts what's already in Notification Center, so the first
-// seconds after launch are ignored.
+// "Notification from <app>": which app posted plus an optional literal text
+// match over the notification's combined text. A respring re-posts what's
+// already in Notification Center, so the first seconds after launch are ignored.
 static BOOL tgWatchNotifications;
 static CFTimeInterval tgSpringBoardStarted;
 static void TGFireMatching(NSString *prefix, NSString *value);
 
+// Read a notification's fields without depending on private classes: call by
+// selector with respondsToSelector guards (same approach as WXRelay). Handles
+// NSAttributedString via stringValue and the three section-id spellings.
+static id TGNotifCall(id obj, SEL sel) {
+    return (obj && sel && [obj respondsToSelector:sel]) ? ((id (*)(id, SEL))objc_msgSend)(obj, sel) : nil;
+}
+static NSString *TGNotifString(id value) {
+    if (!value) return nil;
+    NSString *s = nil;
+    if ([value isKindOfClass:NSString.class]) s = value;
+    else {
+        id r = TGNotifCall(value, @selector(stringValue));
+        if ([r isKindOfClass:NSString.class]) s = r;
+    }
+    return [s stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+}
+static NSString *TGNotifField(id obj, NSString *name) {
+    return TGNotifString(TGNotifCall(obj, NSSelectorFromString(name)));
+}
+static NSString *TGNotifSection(id req) {
+    NSString *v = TGNotifField(req, @"sectionIdentifier");
+    if (v.length) return v;
+    v = TGNotifField(req, @"sectionID");
+    return v.length ? v : TGNotifField(req, @"section");
+}
+// Title / subtitle / header / body / message, de-duplicated and joined. This is
+// what "文本匹配" checks — no distinction between title and body, plain
+// case-insensitive "contains", never a regex.
+static NSString *TGNotifText(id req) {
+    id content = TGNotifCall(req, @selector(content));
+    NSMutableArray *parts = [NSMutableArray array];
+    NSMutableSet *seen = [NSMutableSet set];
+    for (NSString *name in @[@"title", @"subtitle", @"header", @"body", @"message"]) {
+        NSString *v = TGNotifField(content, name);
+        if (!v.length) v = TGNotifField(req, name);
+        if (v.length && ![seen containsObject:v]) { [seen addObject:v]; [parts addObject:v]; }
+    }
+    return [parts componentsJoinedByString:@"\n"];
+}
+static NSString *TGNotifID(id req) {
+    NSString *v = TGNotifField(req, @"bulletinID");
+    if (v.length) return v;
+    v = TGNotifField(req, @"recordID");
+    return v.length ? v : nil;
+}
+
+// One notification reaches us through both NCNotificationDispatcher and the
+// BBServer entries; fire it at most once. Dedupe by bulletin id (8s window),
+// with a section+text fingerprint fallback when the id is unavailable. Two
+// genuinely separate notifications from one app are NOT collapsed (unlike the
+// Bluetooth connect de-bounce): we only dedupe when a trigger actually matched.
+static void TGFireNotifications(id req) {
+    if (!tgWatchNotifications || CACurrentMediaTime() - tgSpringBoardStarted < 15) return;
+    @try {
+        NSString *section = TGNotifSection(req);
+        NSString *text = TGNotifText(req);
+        NSMutableArray<NSString *> *matches = [NSMutableArray array];
+        for (NSString *trigger in tgAssignedTriggers.copy) {
+            if (![trigger hasPrefix:TGNotificationAppPrefix]) continue;
+            NSArray *parts = TGNotificationParts(trigger);
+            NSString *app = parts[0], *overrideID = parts[1], *keyword = parts[2];
+            // App / bundle match: an explicit override wins; bare "*" matches any.
+            NSString *target = overrideID.length ? overrideID : app;
+            if (![app isEqualToString:@"*"] || overrideID.length) {
+                if (!target.length || !section.length || [target caseInsensitiveCompare:section] != NSOrderedSame) continue;
+            }
+            // Text match: a keyword must be literally contained (case-insensitive).
+            // If it isn't, this trigger does not fire — no fallback to bundle-only.
+            if (keyword.length && !(text.length && [text rangeOfString:keyword options:NSCaseInsensitiveSearch].location != NSNotFound)) continue;
+            [matches addObject:trigger];
+        }
+        if (!matches.count) return;
+        NSString *ident = TGNotifID(req);
+        NSString *fingerprint = ident.length ? ident : (section.length ? [NSString stringWithFormat:@"%@|%@", section, text] : nil);
+        if (!fingerprint.length) return;
+        static NSMutableDictionary<NSString *, NSNumber *> *seen;
+        static dispatch_once_t once;
+        dispatch_once(&once, ^{ seen = [NSMutableDictionary dictionary]; });
+        CFTimeInterval now = CACurrentMediaTime();
+        BOOL fresh = YES;
+        @synchronized (seen) {
+            if (now - [seen[fingerprint] doubleValue] < 8) fresh = NO;
+            else {
+                seen[fingerprint] = @(now);
+                if (seen.count > 256)
+                    [seen enumerateKeysAndObjectsUsingBlock:^(NSString *k, NSNumber *v, BOOL *stop) {
+                        if (now - v.doubleValue >= 8) [seen removeObjectForKey:k];
+                    }];
+            }
+        }
+        if (!fresh) return;
+        for (NSString *trigger in matches) TGFire(trigger);
+    } @catch (NSException *e) { }
+}
+
 %hook NCNotificationDispatcher
 - (void)postNotificationWithRequest:(id)request {
     %orig;
-    if (!tgWatchNotifications || CACurrentMediaTime() - tgSpringBoardStarted < 15) return;
-    id section = [request respondsToSelector:@selector(sectionIdentifier)] ? [request performSelector:@selector(sectionIdentifier)] : nil;
-    if ([section isKindOfClass:NSString.class]) TGFireMatching(TGNotificationAppPrefix, section);
-    if ([tgAssignedTriggers containsObject:@"notification.any"]) TGFire(@"notification.any");
+    TGFireNotifications(request);
+}
+%end
+
+%hook BBServer
+- (void)publishBulletinRequest:(id)request destinations:(unsigned long long)destinations {
+    %orig;
+    TGFireNotifications(request);
+}
+- (void)publishBulletin:(id)bulletin destinations:(unsigned long long)destinations {
+    %orig;
+    TGFireNotifications(bulletin);
+}
+- (void)publishBulletin:(id)bulletin destinations:(unsigned long long)destinations alwaysToLockScreen:(BOOL)alwaysToLockScreen {
+    %orig;
+    TGFireNotifications(bulletin);
 }
 %end
 
