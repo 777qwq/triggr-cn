@@ -3263,7 +3263,11 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
     self.scale = r / self.initialRadius;
     // cn5.2.3：scale 一偏离 1（约 5%）就冻，赶在照片缩下去之前，但已是"确实在缩放"
     // 而非"手指刚落下、还不知要干什么"。真正的识别阈值仍是下面的 0.7/1.4。
-    if (!self.didFreeze && (self.scale < 0.95 || self.scale > 1.05)) {
+    // cn5.2.6：冻结还要按指派方向——捏合识别器只在缩小(<1)时冻、张开识别器只在放大(>1)时冻，
+    // 否则只指派捏合时做张开会白冻（画面冻住但 desiredDirection 不符、动作不触发）。
+    BOOL scaleMatches = (self.desiredDirection < 0) ? (self.scale < 0.95)
+                      : (self.desiredDirection > 0) ? (self.scale > 1.05) : NO;
+    if (!self.didFreeze && scaleMatches) {
         self.didFreeze = YES;
         TGMultiFreezeBegin();
     }
@@ -3299,6 +3303,17 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
 // 不受落指间距/半径基数影响，起手即可判。
 static const CGFloat TGSwipePanLimit = 5.0;     // 平移分量：质心位移 > 5pt
 static const CGFloat TGSwipeSpreadLimit = 5.0;  // 偏差分量：任一指偏离 > 5pt 即判为非平移，不冻
+// cn5.2.6：冻结也要按"指派方向"来——只指派上滑时做下/左/右滑不该白冻。
+// 用质心位移的主导轴判定方向，与 UISwipeGestureRecognizer 自身的方向判定一致：
+// 垂直分量占优看 y 的符号，水平分量占优看 x 的符号。
+static BOOL TGSwipeDirectionMatches(CGPoint c, UISwipeGestureRecognizerDirection dir) {
+    BOOL vertical = fabs(c.y) >= fabs(c.x);
+    if (dir & UISwipeGestureRecognizerDirectionUp)    return vertical && c.y < 0;
+    if (dir & UISwipeGestureRecognizerDirectionDown)  return vertical && c.y > 0;
+    if (dir & UISwipeGestureRecognizerDirectionLeft)  return !vertical && c.x < 0;
+    if (dir & UISwipeGestureRecognizerDirectionRight) return !vertical && c.x > 0;
+    return NO;
+}
 @interface TGSwipeRecognizer : UISwipeGestureRecognizer
 @property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSValue *> *origins;
 @property (nonatomic) BOOL didFreeze;
@@ -3337,9 +3352,10 @@ static const CGFloat TGSwipeSpreadLimit = 5.0;  // 偏差分量：任一指偏�
                 CGFloat ex = d[i].x - c.x, ey = d[i].y - c.y;
                 spread = MAX(spread, hypot(ex, ey));          // 偏差分量
             }
-            // 两个正交分量：平移要动、偏差要小。一指固定捏合两者相等，必然同时越线→不冻；
-            // 对称捏合质心几乎不动→不冻；纯滑动偏差≈0→正常冻。
-            if (hypot(c.x, c.y) > TGSwipePanLimit && spread <= TGSwipeSpreadLimit) {
+            // 三个条件：平移要动、偏差要小、方向要匹配指派。前两个正交分量保证捏合不误冻；
+            // 第三个（cn5.2.6）保证只指派上滑时下/左/右滑不白冻。
+            if (hypot(c.x, c.y) > TGSwipePanLimit && spread <= TGSwipeSpreadLimit &&
+                TGSwipeDirectionMatches(c, self.direction)) {
                 self.didFreeze = YES;
                 TGMultiFreezeBegin();
             }
