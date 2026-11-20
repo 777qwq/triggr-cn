@@ -3289,50 +3289,60 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
 @end
 
 // 多指轻扫也要钉住：不冻的话列表会跟着手指滚一段，抬手时还回弹一下。
-// cn5.2.4 判据正交化：cn5.2.3 只看质心位移，但质心不是滑动专属——捏合/张开不对称时
-// （一指固定、一指移动）质心同样大幅漂移，于是"只指派上滑、做捏合"也误冻。
-// 现在同时看两个正交轴：平移轴（质心位移）要动，且缩放轴（半径变化）要稳。
-// 捏合/张开时半径在变、越过闸门，本识别器不冻；纯滑动时半径基本不变，正常冻。
-static const CGFloat TGSwipePanLimit = 5.0;      // 平移轴：质心位移 > 5pt
-static const CGFloat TGRadiusStableGate = 0.05;  // 缩放轴闸门：半径变化 ±5% 以内算"没在缩放"
+// cn5.2.5 判据正交化（位移矢量版）：cn5.2.4 用"质心位移 + 半径变化率"仍误冻——半径是位置量，
+// 起手前几帧还没拉开差距，质心却已因一指固定而漂移越线（食指沿圆弧斜移时半径几乎不变）。
+// 现改看每指的位移矢量 dᵢ = 当前位置 − 起点，拆到两个正交子空间：
+//   平移分量 c  = mean(dᵢ)  —— 纯平移时大，对称捏合时≈0
+//   偏差分量 eᵢ = dᵢ − c    —— 纯平移时≈0，一指固定捏合时恒等于 |c|
+// 一指固定捏合：d₁=0, d₂=(−x,0) → c=(−x/2,0)，|e₁|=|e₂|=x/2=|c|，质心一旦越过 pan 阈值，
+// 偏差必然同时越过 spread 阈值，两条件不可能同时成立 → 不冻。用绝对 pt 阈值，
+// 不受落指间距/半径基数影响，起手即可判。
+static const CGFloat TGSwipePanLimit = 5.0;     // 平移分量：质心位移 > 5pt
+static const CGFloat TGSwipeSpreadLimit = 5.0;  // 偏差分量：任一指偏离 > 5pt 即判为非平移，不冻
 @interface TGSwipeRecognizer : UISwipeGestureRecognizer
-@property (nonatomic) CGPoint startCenter;
-@property (nonatomic) CGFloat startRadius;
-@property (nonatomic) BOOL hasCenter;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSValue *> *origins;
 @property (nonatomic) BOOL didFreeze;
 @end
 
 @implementation TGSwipeRecognizer
-- (CGPoint)centerForTouches:(NSSet<UITouch *> *)touches {
-    NSUInteger n = touches.count;
-    if (n == 0) return CGPointZero;
-    CGPoint c = CGPointZero;
-    for (UITouch *t in touches) {
-        CGPoint p = [t locationInView:self.view];
-        c.x += p.x; c.y += p.y;
-    }
-    c.x /= n; c.y /= n;
-    return c;
-}
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (event.allTouches.count == self.numberOfTouchesRequired) {
-        self.startCenter = [self centerForTouches:event.allTouches];
-        self.startRadius = TGMultiRadiusForTouches(event.allTouches, self.view);
-        self.hasCenter = YES;
+    NSUInteger n = event.allTouches.count;
+    if (n > self.numberOfTouchesRequired) { self.state = UIGestureRecognizerStateFailed; return; }
+    if (n == self.numberOfTouchesRequired && !self.origins) {
+        self.origins = [NSMutableDictionary dictionary];
+        for (UITouch *t in event.allTouches)
+            self.origins[@(t.hash)] = [NSValue valueWithCGPoint:[t locationInView:self.view]];
     }
     [super touchesBegan:touches withEvent:event];
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (!self.didFreeze && self.hasCenter && event.allTouches.count == self.numberOfTouchesRequired) {
-        CGPoint c = [self centerForTouches:event.allTouches];
-        CGFloat moved = hypot(c.x - self.startCenter.x, c.y - self.startCenter.y);
-        CGFloat r = TGMultiRadiusForTouches(event.allTouches, self.view);
-        CGFloat scale = (self.startRadius > 0 && r > 0) ? r / self.startRadius : 1;
-        // 两个正交轴：平移要动、缩放要稳。捏合/张开时半径变化越过闸门，本识别器不冻，
-        // 交给捏合识别器（若已指派）；纯滑动时半径基本不变，照常冻。
-        if (moved > TGSwipePanLimit && fabs(scale - 1) <= TGRadiusStableGate) {
-            self.didFreeze = YES;
-            TGMultiFreezeBegin();
+    if (!self.didFreeze && self.state == UIGestureRecognizerStatePossible &&
+        self.origins.count == self.numberOfTouchesRequired &&
+        event.allTouches.count == self.numberOfTouchesRequired) {
+        NSUInteger n = 0;
+        CGPoint sum = CGPointZero;
+        CGPoint d[4]; // 本识别器只要求 2 或 3 指
+        for (UITouch *t in event.allTouches) {
+            NSValue *v = self.origins[@(t.hash)];
+            if (!v) { n = 0; break; }
+            CGPoint o = v.CGPointValue, p = [t locationInView:self.view];
+            d[n].x = p.x - o.x; d[n].y = p.y - o.y;
+            sum.x += d[n].x; sum.y += d[n].y;
+            n++;
+        }
+        if (n == self.numberOfTouchesRequired) {
+            CGPoint c = { sum.x / n, sum.y / n };            // 平移分量
+            CGFloat spread = 0;
+            for (NSUInteger i = 0; i < n; i++) {
+                CGFloat ex = d[i].x - c.x, ey = d[i].y - c.y;
+                spread = MAX(spread, hypot(ex, ey));          // 偏差分量
+            }
+            // 两个正交分量：平移要动、偏差要小。一指固定捏合两者相等，必然同时越线→不冻；
+            // 对称捏合质心几乎不动→不冻；纯滑动偏差≈0→正常冻。
+            if (hypot(c.x, c.y) > TGSwipePanLimit && spread <= TGSwipeSpreadLimit) {
+                self.didFreeze = YES;
+                TGMultiFreezeBegin();
+            }
         }
     }
     [super touchesMoved:touches withEvent:event];
@@ -3347,7 +3357,7 @@ static const CGFloat TGRadiusStableGate = 0.05;  // 缩放轴闸门：半径变�
 }
 - (void)reset {
     [super reset];
-    self.hasCenter = NO; self.startRadius = 0; self.didFreeze = NO;
+    self.origins = nil; self.didFreeze = NO;
 }
 @end
 
