@@ -3213,6 +3213,25 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
     return YES;
 }
 
+// cn5.2.4 判据正交化：把每指位移拆成两个正交自由度——
+//   平移轴 = 所有手指质心的位移；缩放轴 = 各指到质心的平均半径变化。
+// 纯平移：质心动、半径不变；纯缩放：半径变、质心理想不动。
+// 不对称缩放（一指固定一指动）时质心也会漂，所以缩放判据绝不能依赖质心。
+// 两个识别器共用下面这一个半径量，各看各的轴、并要求另一轴静止，互不串扰。
+static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) {
+    NSUInteger n = touches.count;
+    if (n < 2 || n > 3) return 0;
+    CGPoint pts[3];
+    NSUInteger i = 0;
+    for (UITouch *t in touches) pts[i++] = [t locationInView:view];
+    CGPoint c = CGPointZero;
+    for (NSUInteger k = 0; k < n; k++) { c.x += pts[k].x; c.y += pts[k].y; }
+    c.x /= n; c.y /= n;
+    CGFloat sum = 0;
+    for (NSUInteger k = 0; k < n; k++) sum += hypot(pts[k].x - c.x, pts[k].y - c.y);
+    return sum / n;
+}
+
 // 捏合/张开：UIPinchGestureRecognizer 写死两指，三指要自己量各指到质心的半径。
 @interface TGPinchRecognizer : UIGestureRecognizer
 @property (nonatomic) NSUInteger fingers;
@@ -3225,17 +3244,7 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
 
 @implementation TGPinchRecognizer
 - (CGFloat)radiusForTouches:(NSSet<UITouch *> *)touches {
-    NSUInteger n = touches.count;
-    if (n < 2 || n > 3) return 0;
-    CGPoint pts[3];
-    NSUInteger i = 0;
-    for (UITouch *t in touches) pts[i++] = [t locationInView:self.view];
-    CGPoint c = CGPointZero;
-    for (NSUInteger k = 0; k < n; k++) { c.x += pts[k].x; c.y += pts[k].y; }
-    c.x /= n; c.y /= n;
-    CGFloat sum = 0;
-    for (NSUInteger k = 0; k < n; k++) sum += hypot(pts[k].x - c.x, pts[k].y - c.y);
-    return sum / n;
+    return TGMultiRadiusForTouches(touches, self.view);
 }
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (event.allTouches.count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
@@ -3280,11 +3289,15 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
 @end
 
 // 多指轻扫也要钉住：不冻的话列表会跟着手指滚一段，抬手时还回弹一下。
-// cn5.2.3：把冻结从"手指到齐"挪到"质心真的移动"。捏合/张开时两指反向、质心几乎不动，
-// 所以指派了本识别器、用户却在捏合时，不会因手指落下就误冻。
-static const CGFloat TGSwipePanLimit = 5.0;
+// cn5.2.4 判据正交化：cn5.2.3 只看质心位移，但质心不是滑动专属——捏合/张开不对称时
+// （一指固定、一指移动）质心同样大幅漂移，于是"只指派上滑、做捏合"也误冻。
+// 现在同时看两个正交轴：平移轴（质心位移）要动，且缩放轴（半径变化）要稳。
+// 捏合/张开时半径在变、越过闸门，本识别器不冻；纯滑动时半径基本不变，正常冻。
+static const CGFloat TGSwipePanLimit = 5.0;      // 平移轴：质心位移 > 5pt
+static const CGFloat TGRadiusStableGate = 0.05;  // 缩放轴闸门：半径变化 ±5% 以内算"没在缩放"
 @interface TGSwipeRecognizer : UISwipeGestureRecognizer
 @property (nonatomic) CGPoint startCenter;
+@property (nonatomic) CGFloat startRadius;
 @property (nonatomic) BOOL hasCenter;
 @property (nonatomic) BOOL didFreeze;
 @end
@@ -3304,6 +3317,7 @@ static const CGFloat TGSwipePanLimit = 5.0;
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (event.allTouches.count == self.numberOfTouchesRequired) {
         self.startCenter = [self centerForTouches:event.allTouches];
+        self.startRadius = TGMultiRadiusForTouches(event.allTouches, self.view);
         self.hasCenter = YES;
     }
     [super touchesBegan:touches withEvent:event];
@@ -3311,7 +3325,12 @@ static const CGFloat TGSwipePanLimit = 5.0;
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (!self.didFreeze && self.hasCenter && event.allTouches.count == self.numberOfTouchesRequired) {
         CGPoint c = [self centerForTouches:event.allTouches];
-        if (hypot(c.x - self.startCenter.x, c.y - self.startCenter.y) > TGSwipePanLimit) {
+        CGFloat moved = hypot(c.x - self.startCenter.x, c.y - self.startCenter.y);
+        CGFloat r = TGMultiRadiusForTouches(event.allTouches, self.view);
+        CGFloat scale = (self.startRadius > 0 && r > 0) ? r / self.startRadius : 1;
+        // 两个正交轴：平移要动、缩放要稳。捏合/张开时半径变化越过闸门，本识别器不冻，
+        // 交给捏合识别器（若已指派）；纯滑动时半径基本不变，照常冻。
+        if (moved > TGSwipePanLimit && fabs(scale - 1) <= TGRadiusStableGate) {
             self.didFreeze = YES;
             TGMultiFreezeBegin();
         }
@@ -3328,7 +3347,7 @@ static const CGFloat TGSwipePanLimit = 5.0;
 }
 - (void)reset {
     [super reset];
-    self.hasCenter = NO; self.didFreeze = NO;
+    self.hasCenter = NO; self.startRadius = 0; self.didFreeze = NO;
 }
 @end
 
