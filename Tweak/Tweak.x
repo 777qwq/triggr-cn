@@ -3220,6 +3220,7 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
 @property (nonatomic) NSInteger direction;
 @property (nonatomic) CGFloat scale;
 @property (nonatomic) CGFloat initialRadius;
+@property (nonatomic) BOOL didFreeze; // cn5.2.3：本轮是否已冻，避免重复 notify
 @end
 
 @implementation TGPinchRecognizer
@@ -3240,9 +3241,9 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
     if (event.allTouches.count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
     if (event.allTouches.count == self.fingers && self.initialRadius <= 0) {
         self.initialRadius = [self radiusForTouches:event.allTouches];
-        // 手指数一到齐就冻，赶在缩放真正发生之前。等 scale 到 0.7 再冻已经晚了：
-        // 那时照片已经小了一圈，还原 zoomScale 也会先缩再弹回。
-        TGMultiFreezeBegin();
+        // cn5.2.3：手指到齐先不冻，等 touchesMoved 里 scale 真的偏离 1 才冻。
+        // 这样"只指派了别的同手数手势、用户其实在捏合/张开"时，本识别器（若挂着）
+        // 不会因手指落下就冻；只有确认是缩放动作才冻。
     }
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -3251,6 +3252,12 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
     CGFloat r = [self radiusForTouches:event.allTouches];
     if (r <= 0) return;
     self.scale = r / self.initialRadius;
+    // cn5.2.3：scale 一偏离 1（约 5%）就冻，赶在照片缩下去之前，但已是"确实在缩放"
+    // 而非"手指刚落下、还不知要干什么"。真正的识别阈值仍是下面的 0.7/1.4。
+    if (!self.didFreeze && (self.scale < 0.95 || self.scale > 1.05)) {
+        self.didFreeze = YES;
+        TGMultiFreezeBegin();
+    }
     if (self.scale < 0.7 || self.scale > 1.4) {
         NSInteger d = self.scale < 0.7 ? -1 : 1;
         if (self.desiredDirection != d) { self.state = UIGestureRecognizerStateFailed; return; }
@@ -3268,18 +3275,48 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
 }
 - (void)reset {
     [super reset];
-    self.direction = 0; self.scale = 1; self.initialRadius = 0;
+    self.direction = 0; self.scale = 1; self.initialRadius = 0; self.didFreeze = NO;
 }
 @end
 
 // 多指轻扫也要钉住：不冻的话列表会跟着手指滚一段，抬手时还回弹一下。
+// cn5.2.3：把冻结从"手指到齐"挪到"质心真的移动"。捏合/张开时两指反向、质心几乎不动，
+// 所以指派了本识别器、用户却在捏合时，不会因手指落下就误冻。
+static const CGFloat TGSwipePanLimit = 5.0;
 @interface TGSwipeRecognizer : UISwipeGestureRecognizer
+@property (nonatomic) CGPoint startCenter;
+@property (nonatomic) BOOL hasCenter;
+@property (nonatomic) BOOL didFreeze;
 @end
 
 @implementation TGSwipeRecognizer
+- (CGPoint)centerForTouches:(NSSet<UITouch *> *)touches {
+    NSUInteger n = touches.count;
+    if (n == 0) return CGPointZero;
+    CGPoint c = CGPointZero;
+    for (UITouch *t in touches) {
+        CGPoint p = [t locationInView:self.view];
+        c.x += p.x; c.y += p.y;
+    }
+    c.x /= n; c.y /= n;
+    return c;
+}
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (event.allTouches.count == self.numberOfTouchesRequired) TGMultiFreezeBegin();
+    if (event.allTouches.count == self.numberOfTouchesRequired) {
+        self.startCenter = [self centerForTouches:event.allTouches];
+        self.hasCenter = YES;
+    }
     [super touchesBegan:touches withEvent:event];
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (!self.didFreeze && self.hasCenter && event.allTouches.count == self.numberOfTouchesRequired) {
+        CGPoint c = [self centerForTouches:event.allTouches];
+        if (hypot(c.x - self.startCenter.x, c.y - self.startCenter.y) > TGSwipePanLimit) {
+            self.didFreeze = YES;
+            TGMultiFreezeBegin();
+        }
+    }
+    [super touchesMoved:touches withEvent:event];
 }
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesEnded:touches withEvent:event];
@@ -3288,6 +3325,10 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesCancelled:touches withEvent:event];
     if (TGMultiTouchesFinished(event)) TGMultiFreezeEnd();
+}
+- (void)reset {
+    [super reset];
+    self.hasCenter = NO; self.didFreeze = NO;
 }
 @end
 
