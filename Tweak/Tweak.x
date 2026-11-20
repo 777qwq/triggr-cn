@@ -3240,6 +3240,12 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
     return sum / n;
 }
 
+// cn5.2.9：给捏合补上 5.2.5 当初只给滑动加、漏掉这一半的正交闸门。
+// 四向滑时两指会自然收拢，半径比 scale 很容易破 0.95，但那是"整体平移(质心 c 大)+
+// 间距微变(偏差 e 小)"；真捏合是偏差主导。要求 max|e| > |c|×系数 才认作真缩放。
+// 系数真机可调：偏严(更易漏冻)就调高，误冻没清干净就调低。
+static const CGFloat TGPinchSpreadDominance = 0.8;
+
 // 捏合/张开：UIPinchGestureRecognizer 写死两指，三指要自己量各指到质心的半径。
 @interface TGPinchRecognizer : UIGestureRecognizer
 @property (nonatomic) NSUInteger fingers;
@@ -3247,6 +3253,7 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
 @property (nonatomic) NSInteger direction;
 @property (nonatomic) CGFloat scale;
 @property (nonatomic) CGFloat initialRadius;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSValue *> *origins; // cn5.2.9：每指起点，算正交分量
 @property (nonatomic) BOOL didFreeze; // cn5.2.3：本轮是否已冻，避免重复 notify
 @end
 
@@ -3259,6 +3266,10 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
     if (event.allTouches.count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
     if (event.allTouches.count == self.fingers && self.initialRadius <= 0) {
         self.initialRadius = [self radiusForTouches:event.allTouches];
+        // cn5.2.9：手指到齐记每指起点，供 touchesMoved 做正交分解，挡住四向滑收拢误冻捏合。
+        self.origins = [NSMutableDictionary dictionary];
+        for (UITouch *t in event.allTouches)
+            self.origins[@(t.hash)] = [NSValue valueWithCGPoint:[t locationInView:self.view]];
         // cn5.2.3：手指到齐先不冻，等 touchesMoved 里 scale 真的偏离 1 才冻。
         // 这样"只指派了别的同手数手势、用户其实在捏合/张开"时，本识别器（若挂着）
         // 不会因手指落下就冻；只有确认是缩放动作才冻。
@@ -3276,7 +3287,34 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
     // 否则只指派捏合时做张开会白冻（画面冻住但 desiredDirection 不符、动作不触发）。
     BOOL scaleMatches = (self.desiredDirection < 0) ? (self.scale < 0.95)
                       : (self.desiredDirection > 0) ? (self.scale > 1.05) : NO;
-    if (!self.didFreeze && scaleMatches) {
+    // cn5.2.9 对称闸门：算每指位移 dᵢ 的平移分量 c 与偏差分量 eᵢ。四向滑时 c 是整体滑移、
+    // 偏差只是两指自然收拢的小量；真缩放则偏差主导（对称捏合 c≈0、一指固定时 |e|=|c|）。
+    // 只有偏差占主导才认作真缩放，挡住"捏合指派了动作、做四向滑时其他方向白冻"。
+    BOOL spreadDominates = NO;
+    if (scaleMatches && self.origins.count == self.fingers) {
+        NSUInteger n = 0;
+        CGPoint sum = CGPointZero;
+        CGPoint d[3];
+        for (UITouch *t in event.allTouches) {
+            NSValue *v = self.origins[@(t.hash)];
+            if (!v) { n = 0; break; }
+            CGPoint o = v.CGPointValue, p = [t locationInView:self.view];
+            d[n].x = p.x - o.x; d[n].y = p.y - o.y;
+            sum.x += d[n].x; sum.y += d[n].y;
+            n++;
+        }
+        if (n == self.fingers) {
+            CGPoint c = { sum.x / n, sum.y / n };
+            CGFloat cLen = hypot(c.x, c.y);
+            CGFloat maxE = 0;
+            for (NSUInteger i = 0; i < n; i++) {
+                CGFloat ex = d[i].x - c.x, ey = d[i].y - c.y;
+                maxE = MAX(maxE, hypot(ex, ey));
+            }
+            spreadDominates = maxE > cLen * TGPinchSpreadDominance;
+        }
+    }
+    if (!self.didFreeze && scaleMatches && spreadDominates) {
         self.didFreeze = YES;
         TGMultiFreezeBegin();
     }
@@ -3298,6 +3336,7 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
 - (void)reset {
     [super reset];
     self.direction = 0; self.scale = 1; self.initialRadius = 0; self.didFreeze = NO;
+    self.origins = nil;
 }
 @end
 

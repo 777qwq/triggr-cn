@@ -5,7 +5,7 @@
 
 ## 1.5.0+cn5.2.9
 
-- **冻结统一为一套：删掉"冻结瞬间快照"分支，多指与边缘竖滑共用落指快照**。cn5.2.8 里两套快照并存——多指还原到冻结瞬间 offset（多存 `tgFreezeOffsets`/`tgFreezeZooms`），边缘还原到落指快照（`tgBeganOffsets` + `useBegan` 分支 + `TGFreezeBeginFromBegan` 专用入口 + `TGRelayFreezeBeganBegin` 专用通知），体验分裂、代码层层加分支。cn5.2.9 把这套收敛：**删掉**冻结瞬间的 offset/zoom 数组、`useBegan`/`tgFreezeBeganGen` 分支、`TGFreezeBeginFromBegan` 入口和 `TGRelayFreezeBeganBegin` 通知；落指那一刻统一快照所有 scrollView 的 `contentOffset + zoomScale`（weak key + generation 保护，无状态幂等，多指识别器与边缘各在自己的 `touchesBegan` 调同一句），冻结只记 `tgFreezeSnapGen`，解冻一律还原到落指位置。多指与边缘从此走同一个 `TGFreezeBegin/End` 和同一组 Snapshot/Begin/End 通知。generation 不符（冻结期间换了轮）时不还原位置、只恢复开关，避免串场。判据（cn5.2.7 四向滑起手收紧、cn5.2.6 捏合方向闸门、cn5.2.5 正交分解、cn5.2.2 点按误触）与触发阈值一律不动。
+- **冻结统一为一套：删掉"冻结瞬间快照"分支，多指与边缘竖滑共用落指快照**。cn5.2.8 里两套快照并存——多指还原到冻结瞬间 offset（多存 `tgFreezeOffsets`/`tgFreezeZooms`），边缘还原到落指快照（`tgBeganOffsets` + `useBegan` 分支 + `TGFreezeBeginFromBegan` 专用入口 + `TGRelayFreezeBeganBegin` 专用通知），体验分裂、代码层层加分支。cn5.2.9 把这套收敛：**删掉**冻结瞬间的 offset/zoom 数组、`useBegan`/`tgFreezeBeganGen` 分支、`TGFreezeBeginFromBegan` 入口和 `TGRelayFreezeBeganBegin` 通知；落指那一刻统一快照所有 scrollView 的 `contentOffset + zoomScale`（weak key + generation 保护，无状态幂等，多指识别器与边缘各在自己的 `touchesBegan` 调同一句），冻结只记 `tgFreezeSnapGen`，解冻一律还原到落指位置。多指与边缘从此走同一个 `TGFreezeBegin/End` 和同一组 Snapshot/Begin/End 通知。generation 不符（冻结期间换了轮）时不还原位置、只恢复开关，避免串场。滑动判据（cn5.2.7 起手收紧）、点按（cn5.2.2）与所有触发阈值不动。**同版本追加修正**：5.2.9 初版真机发现"捏合指派了动作时，做四向滑的其他方向也误冻"——根因是 5.2.5 的正交闸门只加在滑动识别器上、捏合识别器漏了对称的一半，四向滑时两指自然收拢让 `scale<0.95` 误触发捏合冻结。给 `TGPinchRecognizer` 补上同样的位移正交分解：记每指起点，冻结条件在 `scale` 方向匹配之外再加 `max|e| > |c|×0.8`（偏差主导才是真缩放；对称捏合 `c≈0`、一指固定 `|e|=|c|` 均通过，四向滑收拢因 `c` 大 `e` 小被挡）。系数真机可调。张开识别器、滑动、点按、冻结快照统一那套均不受影响。
 
 ## 1.5.0+cn5.2.8
 
