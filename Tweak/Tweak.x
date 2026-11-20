@@ -3291,6 +3291,58 @@ static BOOL TGMultiTouchesFinished(UIEvent *event) {
 }
 @end
 
+// cn5.2.2 方案三：自定义点按识别器，自己按位移判定，不依赖任何其他识别器挂载。
+// 系统 UITapGestureRecognizer 只看抬手时触点是否落在按下点的容差内；捏合/张开虽然
+// 中途位移很大，抬手时两指又回到起点附近，于是被误认成点按，还在抬手那一刻卡一下。
+// 这里 touchesBegan 记下每指起点，touchesMoved 一旦累计到某指偏离超过阈值就自己 fail，
+// 纯点按位移小才认成功。这样即使只指派了点按、没指派捏合也能挡住误触，且没有
+// "等其他识别器判失败"的抬手延迟。位移按每指相对自己的起点算——捏合时质心几乎不动，
+// 只有单指位移大，光看质心抓不住。
+static const CGFloat TGTapMoveLimit = 10.0;
+@interface TGTapRecognizer : UIGestureRecognizer
+@property (nonatomic) NSUInteger fingers;
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSValue *> *origins;
+@end
+
+@implementation TGTapRecognizer
+- (BOOL)movedTooFar:(NSSet<UITouch *> *)touches {
+    for (UITouch *t in touches) {
+        NSValue *v = self.origins[@(t.hash)];
+        if (!v) continue;
+        CGPoint o = v.CGPointValue, p = [t locationInView:self.view];
+        if (hypot(p.x - o.x, p.y - o.y) > TGTapMoveLimit) return YES;
+    }
+    return NO;
+}
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    NSUInteger n = event.allTouches.count;
+    if (n > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
+    if (n != self.fingers) return; // 手指还没到齐，等落齐了再记起点（允许逐指落下）
+    self.origins = [NSMutableDictionary dictionary];
+    for (UITouch *t in event.allTouches)
+        self.origins[@(t.hash)] = [NSValue valueWithCGPoint:[t locationInView:self.view]];
+}
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (self.state != UIGestureRecognizerStatePossible) return;
+    if ([self movedTooFar:event.allTouches]) self.state = UIGestureRecognizerStateFailed;
+}
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (self.state != UIGestureRecognizerStatePossible) return;
+    // 手指从没到齐过（origins 空）说明这不是本识别器的手势，直接 fail，
+    // 否则两指捏合会被同时挂着的三指点按识别器误认成"位移为零的三指点按"。
+    if (self.origins.count != self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
+    // 抬手前再算一次，兜住"中途没 moved 事件、但终点已超阈值"的情况。
+    self.state = [self movedTooFar:event.allTouches] ? UIGestureRecognizerStateFailed : UIGestureRecognizerStateEnded;
+}
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (self.state == UIGestureRecognizerStatePossible) self.state = UIGestureRecognizerStateFailed;
+}
+- (void)reset {
+    [super reset];
+    self.origins = nil;
+}
+@end
+
 @interface TGMultiTouchTarget : NSObject <UIGestureRecognizerDelegate>
 + (instancetype)shared;
 - (UIGestureRecognizer *)recognizerFor:(int)idx;
@@ -3315,9 +3367,8 @@ static const void *TGMultiIndexKey = &TGMultiIndexKey;
         p.desiredDirection = slot.kind == 5 ? -1 : 1;
         g = p;
     } else if (slot.kind == 0) {
-        UITapGestureRecognizer *t = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
-        t.numberOfTouchesRequired = slot.fingers;
-        t.numberOfTapsRequired = 1;
+        TGTapRecognizer *t = [[TGTapRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
+        t.fingers = slot.fingers;
         g = t;
     } else {
         TGSwipeRecognizer *s = [[TGSwipeRecognizer alloc] initWithTarget:self action:@selector(recognized:)];
@@ -3358,22 +3409,8 @@ static const void *TGMultiIndexKey = &TGMultiIndexKey;
     if (idx < 0 || idx >= TG_SLOT_COUNT) return NO;
     return [tgAssignedTriggers containsObject:@(TGInAppGestures[idx].identifier)];
 }
-// cn5.2.1：点按等「同手指数」的滑动/捏合先判。两指点按时若夹杂小幅滑动或没跨阈值的捏合，
-// 原先会落到最宽松的 tap 上误触发；让 tap 依赖这些手势先失败，它们认了就不再认点按。
-// 只处理我们自己的 tap（kind==0）与同 fingers 的非 tap 槽位，不干预系统识别器，也不影响
-// 四个方向识别器之间的共存（方向识别器都是非 tap，彼此不建立依赖）。
-- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)other {
-    NSNumber *idxN = objc_getAssociatedObject(g, TGMultiIndexKey);
-    if (!idxN) return NO;
-    int idx = idxN.intValue;
-    if (idx < 0 || idx >= TG_SLOT_COUNT || kTGSlots[idx].kind != 0) return NO; // 只有点按要等别人
-    NSNumber *otherN = objc_getAssociatedObject(other, TGMultiIndexKey);
-    if (!otherN) return NO; // 系统自己的识别器，不干预
-    int oidx = otherN.intValue;
-    if (oidx < 0 || oidx >= TG_SLOT_COUNT) return NO;
-    TGGestureSlot os = kTGSlots[oidx];
-    return os.fingers == kTGSlots[idx].fingers && os.kind != 0; // 同手数的滑动/捏合先判
-}
+// cn5.2.2：误触改由 TGTapRecognizer 自己按位移判定，不再用失败依赖。
+// 四向识别器仍需共存（同一个滑动只会被一个方向认，彼此不互斥）。
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
     return YES; // 方向识别器共存的关键
 }
