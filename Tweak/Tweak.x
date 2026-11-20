@@ -3301,13 +3301,26 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
 // 一指固定捏合：d₁=0, d₂=(−x,0) → c=(−x/2,0)，|e₁|=|e₂|=x/2=|c|，质心一旦越过 pan 阈值，
 // 偏差必然同时越过 spread 阈值，两条件不可能同时成立 → 不冻。用绝对 pt 阈值，
 // 不受落指间距/半径基数影响，起手即可判。
-static const CGFloat TGSwipePanLimit = 5.0;     // 平移分量：质心位移 > 5pt
+// 起手误冻收紧：旧值 5pt 时方向还没长稳，按压回弹/斜向落指的单帧抖动就能让质心
+// 越过阈值、主导轴短暂指向某个指派方向 → 不该冻的方向被冻住。阈值提到 16pt（真机
+// 可调），让方向走稳再冻；正常上滑照样能过，只是晚几十毫秒，解冻时 setContentOffset
+// 会把先滚的几 pt 弹回。
+static const CGFloat TGSwipePanLimit = 16.0;    // 平移分量：质心位移 > 16pt（真机可调）
 static const CGFloat TGSwipeSpreadLimit = 5.0;  // 偏差分量：任一指偏离 > 5pt 即判为非平移，不冻
+// 方向纯度：旧判据 fabs(y)>=fabs(x) 只要过 45° 就算该方向，起手方向抖动时容易短暂落错轴。
+// 要求主导轴分量占 |c| 的 0.82 以上（偏离主轴 <35°），近 45° 的斜向位移先不认，等长稳再判。
+// 0.82 对正常斜着上滑足够宽松，只挡 35°~55° 的模糊区。
+static const CGFloat TGSwipeAxisDominance = 0.82;
 // cn5.2.6：冻结也要按"指派方向"来——只指派上滑时做下/左/右滑不该白冻。
 // 用质心位移的主导轴判定方向，与 UISwipeGestureRecognizer 自身的方向判定一致：
 // 垂直分量占优看 y 的符号，水平分量占优看 x 的符号。
 static BOOL TGSwipeDirectionMatches(CGPoint c, UISwipeGestureRecognizerDirection dir) {
-    BOOL vertical = fabs(c.y) >= fabs(c.x);
+    CGFloat ax = fabs(c.x), ay = fabs(c.y);
+    CGFloat len = hypot(ax, ay);
+    if (len <= 0) return NO;
+    BOOL vertical = ay >= ax;
+    // 方向纯度闸门：近 45° 的斜向位移不当任何方向，等它长稳。
+    if (vertical ? (ay < len * TGSwipeAxisDominance) : (ax < len * TGSwipeAxisDominance)) return NO;
     if (dir & UISwipeGestureRecognizerDirectionUp)    return vertical && c.y < 0;
     if (dir & UISwipeGestureRecognizerDirectionDown)  return vertical && c.y > 0;
     if (dir & UISwipeGestureRecognizerDirectionLeft)  return !vertical && c.x < 0;
