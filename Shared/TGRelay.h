@@ -14,5 +14,8 @@
 // 跨进程做不到「取消对方的触摸」，只能各冻各的（Triggr 2.1 的 TGFreeze 就是这么分工）。
 #define TGRelayFreezeBegin "com.johndie.triggr/freeze-begin"
 #define TGRelayFreezeEnd "com.johndie.triggr/freeze-end"
+// 边缘竖滑：落指先快照 offset（App 侧同步快照），早冻时要求解冻还原到落指位置。
+#define TGRelayFreezeSnapshot "com.johndie.triggr/freeze-snapshot"
+#define TGRelayFreezeBeganBegin "com.johndie.triggr/freeze-began-begin"
 #define TGRelayWantsStatusBar 1ULL
 #define TGRelayWantsShake 2ULL

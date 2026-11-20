@@ -301,6 +301,15 @@ static void TGRelayDoBack(void) {
         notify_register_dispatch(TGRelayFreezeEnd, &freezeEndToken, dispatch_get_main_queue(), ^(int t) {
             TGFreezeEnd();
         });
+        // cn5.2.8：边缘竖滑——落指先快照本进程 offset，早冻时还原到落指位置。
+        static int freezeSnapshotToken = -1;
+        notify_register_dispatch(TGRelayFreezeSnapshot, &freezeSnapshotToken, dispatch_get_main_queue(), ^(int t) {
+            TGFreezeSnapshotBegan();
+        });
+        static int freezeBeganBeginToken = -1;
+        notify_register_dispatch(TGRelayFreezeBeganBegin, &freezeBeganBeginToken, dispatch_get_main_queue(), ^(int t) {
+            TGFreezeBeginFromBegan();
+        });
     }
 }
 

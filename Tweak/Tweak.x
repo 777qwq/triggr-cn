@@ -3170,11 +3170,12 @@ static const CGFloat TGEdgeDistance = 60;  // a slide has to travel this far awa
 // 时长 ≥ 0.9s 直接否决；y ≥ 屏高×0.96 不参与（底部 4% 让给底边那组）。
 static const CGFloat TGVertEdgeMargin = 34;      // 0x1ecdc: x ≤ 34 / x ≥ 屏宽-34
 static const CGFloat TGVertBottomGuard = 0.96;   // 0x1ecdc: y ≤ 屏高×0.96 才继续
-static const CGFloat TGVertDistance = 125;       // 0x9850: 0x405f400000000000
+static const CGFloat TGVertDistance = 62.5;      // cn5.2.8：125 的一半，触发距离
+static const CGFloat TGVertEarlyFreeze = 10;     // cn5.2.8：纵向一过 10pt 且方向明确即早冻（照 RC）
 static const CGFloat TGVertStraightness = 0.4;   // 0x22968
 static const CGFloat TGVertSpeed = 500;          // 0x22980
 static const CGFloat TGVertSpeedWindow = 0.03;   // 0x22978
-static const CGFloat TGVertMaxDuration = 0.9;    // 0x22970
+static const CGFloat TGVertMaxDuration = 0.45;   // cn5.2.8：0.9 的一半，超时否决
 
 #pragma mark - Multi-touch gestures (cn4.68, moved here from the in-app Relay)
 // 14 槽位，顺序与 Shared/TGCatalog.h 的 TGInAppGestures 严格一一对应。
@@ -3725,13 +3726,27 @@ static void TGUpdateEdgeGestures(void) {
 // 不是这里的 bug：真正能拦住 App 触摸的是横向滑入那条系统级 edge pan。
 static BOOL tgVertTracking;
 static BOOL tgVertFired;
+static BOOL tgVertFrozen;           // cn5.2.8：本轮触摸是否已早冻，抬手时要解冻
 static int tgVertSide;              // 0 = left, 1 = right, -1 = none
 static CGPoint tgVertStart;
 static CFTimeInterval tgVertStartTime;
 
+// cn5.2.8：边缘竖滑冻结走"落指快照"版——SpringBoard 冻自己的窗口、通知 App 也快照并冻，
+// 解冻时两边都还原到落指位置（把冻结前滚掉的那几 pt 撤销）。触发判据本身不变。
+static void TGEdgeFreezeBegin(void) {
+    TGFreezeBeginFromBegan();
+    notify_post(TGRelayFreezeBeganBegin);
+}
+static void TGEdgeFreezeEnd(void) {
+    TGFreezeEnd();
+    notify_post(TGRelayFreezeEnd);
+}
+
 static void TGEdgeVerticalReset(void) {
+    if (tgVertFrozen) TGEdgeFreezeEnd();
     tgVertTracking = NO;
     tgVertFired = NO;
+    tgVertFrozen = NO;
     tgVertSide = -1;
 }
 
@@ -3758,6 +3773,10 @@ static void TGEdgeVerticalEvent(UIEvent *event) {
         tgVertTracking = YES;
         tgVertStart = p;
         tgVertStartTime = CACurrentMediaTime();
+        // cn5.2.8：落指就在 SpringBoard 和 App 两侧快照 offset，供稍后早冻的解冻还原。
+        // 只快照不改状态，无视觉影响；若这一轮没触发早冻，快照自然作废。
+        TGFreezeSnapshotBegan();
+        notify_post(TGRelayFreezeSnapshot);
         return;
     }
 
@@ -3767,13 +3786,23 @@ static void TGEdgeVerticalEvent(UIEvent *event) {
         if (tgVertFired) return; // 一次触摸只触发一次
         CGFloat dx = p.x - tgVertStart.x, dy = p.y - tgVertStart.y;
         CGFloat adx = fabs(dx), ady = fabs(dy);
-        if (ady < TGVertDistance) return;                                // 纵向 ≥ 125pt
-        if (adx > ady * TGVertStraightness) return;                      // 横向漂移 ≤ 纵向×0.4
-        CFTimeInterval elapsed = CACurrentMediaTime() - tgVertStartTime;
-        if (elapsed >= TGVertMaxDuration) return;                        // 时长 ≥ 0.9s 否决
-        if (ady / MAX(elapsed, TGVertSpeedWindow) < TGVertSpeed) return; // 速度 ≥ 500pt/s
         NSString *side = tgVertSide == 0 ? @"left" : @"right";
         NSString *trigger = [NSString stringWithFormat:@"edge.%@%@", side, dy < 0 ? @"up" : @"down"];
+
+        // cn5.2.8 早冻：纵向一过 10pt、方向够直、且该方向 trigger 有指派，就先钉住画面。
+        // 触发仍要等到 62.5pt + 速度判据；早冻只是别让列表在这段里跟着滚。
+        if (!tgVertFrozen && ady > TGVertEarlyFreeze &&
+            adx <= ady * TGVertStraightness &&
+            [tgAssignedTriggers containsObject:trigger]) {
+            tgVertFrozen = YES;
+            TGEdgeFreezeBegin();
+        }
+
+        if (ady < TGVertDistance) return;                                // 纵向 ≥ 62.5pt
+        if (adx > ady * TGVertStraightness) return;                      // 横向漂移 ≤ 纵向×0.4
+        CFTimeInterval elapsed = CACurrentMediaTime() - tgVertStartTime;
+        if (elapsed >= TGVertMaxDuration) return;                        // 时长 ≥ 0.45s 否决
+        if (ady / MAX(elapsed, TGVertSpeedWindow) < TGVertSpeed) return; // 速度 ≥ 500pt/s
         if (![tgAssignedTriggers containsObject:trigger]) return;
         tgVertFired = YES;
         TGFire(trigger);
