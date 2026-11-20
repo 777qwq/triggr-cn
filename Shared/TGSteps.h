@@ -61,6 +61,7 @@ typedef NS_ENUM(NSInteger, TGConditionKind) {
     TGConditionKindBatteryAbove,
     TGConditionKindTime,        // time:HHMM-HHMM, overnight allowed
     TGConditionKindNetwork,     // 裸 wifi / !wifi：有没有网（Wi-Fi 或蜂窝），与 wifi: 不是一回事
+    TGConditionKindNotificationText, // notiftext:<关键词>：刚到的通知文本字面包含关键词
 };
 
 #define TGArgumentMax 128
@@ -129,7 +130,7 @@ static inline BOOL TGConditionParse(NSString *encoded, TGCondition *out) {
     }
     if (!body.length) return NO;
 
-    // 只有 Wi-Fi 和蓝牙吃参数，其余条件后面不许有剩余文本。
+    // Wi-Fi、蓝牙、通知文本吃参数，其余条件后面不许有剩余文本。
     // 裸 "wifi"（不带冒号）是 2.0 的 "No network at all"：Wi-Fi 和蜂窝都没有，
     // 和「已连任意 Wi-Fi」（wifi: 名字为空）是两回事，不能再归一成同一个。
     // 裸 "bt" 仍然等于「任意蓝牙设备」。
@@ -146,6 +147,13 @@ static inline BOOL TGConditionParse(NSString *encoded, TGCondition *out) {
     } else if ([body hasPrefix:@"bt:"]) {
         out->kind = TGConditionKindBluetooth;
         body = [body substringFromIndex:3];
+        takesArgument = YES;
+    } else if ([body hasPrefix:@"notiftext:"]) {
+        // 通知文本字面包含。关键词不能为空：空串会退化成「任意通知都通过」，
+        // 那样的语义应该用 notification.any 触发器本身，而不是一个条件。
+        body = [body substringFromIndex:10];
+        if (!body.length) return NO;
+        out->kind = TGConditionKindNotificationText;
         takesArgument = YES;
     } else if ([body hasPrefix:@"battery<"] || [body hasPrefix:@"battery>"]) {
         // "battery" 是 7 个字符，操作符在 7、数值从 8 开始（原片段写的 8/9 差一位，
@@ -181,7 +189,7 @@ static inline BOOL TGConditionParse(NSString *encoded, TGCondition *out) {
         return NO;
     }
 
-    // 吃参数的两个：剩下的就是名字；其余的后面不许再有东西。
+    // 吃参数的三个：剩下的就是名字；其余的后面不许再有东西。
     if (!takesArgument && body.length) return NO;
     strlcpy(out->argument, body.UTF8String ?: "", TGArgumentMax);
     return YES;
@@ -194,6 +202,7 @@ static inline NSString *TGConditionEncode(const TGCondition *condition) {
     switch (condition->kind) {
         case TGConditionKindWiFi: body = [@"wifi:" stringByAppendingString:name]; break;
         case TGConditionKindBluetooth: body = [@"bt:" stringByAppendingString:name]; break;
+        case TGConditionKindNotificationText: body = [@"notiftext:" stringByAppendingString:name]; break;
         case TGConditionKindBatteryBelow: body = [NSString stringWithFormat:@"battery<%d", condition->value]; break;
         case TGConditionKindBatteryAbove: body = [NSString stringWithFormat:@"battery>%d", condition->value]; break;
         case TGConditionKindTime: body = [NSString stringWithFormat:@"time:%04d-%04d", condition->start, condition->end]; break;

@@ -43,6 +43,12 @@ def parse(encoded):
         cond["kind"], body, takes_argument = "wifi", body[5:], True
     elif body.startswith("bt:"):
         cond["kind"], body, takes_argument = "bt", body[3:], True
+    elif body.startswith("notiftext:"):
+        # 通知文本字面包含；空关键词不合法（会退化成任意通知都通过）。
+        body = body[10:]
+        if not body:
+            return None
+        cond["kind"], takes_argument = "notiftext", True
     elif body.startswith("battery<") or body.startswith("battery>"):
         cond["kind"] = "battery_below" if body[7] == "<" else "battery_above"
         cond["value"] = min(max(int(body[8:] or 0), 0), 100)
@@ -69,7 +75,8 @@ def parse(encoded):
 
 STATE = {"wifi": None, "bt": None, "charging": False, "locked": False,
          "music": False, "headphones": False, "lowpower": False,
-         "cellular": False, "battery": 50, "now": 1200}
+         "cellular": False, "battery": 50, "now": 1200,
+         "notiftext": "", "notif_fresh": False}
 
 
 def holds(c):
@@ -97,6 +104,9 @@ def holds(c):
     elif k == "time":
         now = STATE["now"]
         v = (c["start"] <= now < c["end"]) if c["start"] <= c["end"] else (now >= c["start"] or now < c["end"])
+    elif k == "notiftext":
+        # 只有刚收到通知（fresh）且文本里字面包含关键词才成立；不区分大小写、非正则。
+        v = STATE["notif_fresh"] and bool(c["arg"]) and bool(STATE["notiftext"]) and (c["arg"].lower() in STATE["notiftext"].lower())
     else:
         return False
     return (not v) if c["negated"] else v
@@ -158,7 +168,8 @@ def run_steps(steps, index=0, frames=None, stopped=None):
 def reset(**kw):
     STATE.update({"wifi": None, "bt": None, "charging": False, "locked": False,
                   "music": False, "headphones": False, "lowpower": False,
-                  "cellular": False, "battery": 50, "now": 1200})
+                  "cellular": False, "battery": 50, "now": 1200,
+                  "notiftext": "", "notif_fresh": False})
     STATE.update(kw)
 
 
@@ -196,6 +207,15 @@ case("暂停跨块：外层不成立时不跑",
 case("未连 Wi-Fi：有蜂窝仍成立", ["if:!wifi:", "a", "endif"], ["a"], wifi=None, cellular=True)
 case("完全没有网络：Wi-Fi 与蜂窝都没有", ["if:!wifi", "a", "endif"], ["a"], wifi=None, cellular=False)
 case("完全没有网络：有蜂窝就不算断网", ["if:!wifi", "a", "endif", "b"], ["b"], wifi=None, cellular=True)
+# 通知文本：字面包含、不区分大小写、只在刚收到通知时成立。
+case("通知文本包含：命中", ["if:notiftext:验证码", "a", "endif"], ["a"], notiftext="您的验证码是 1234", notif_fresh=True)
+case("通知文本包含：不区分大小写", ["if:notiftext:HELLO", "a", "endif"], ["a"], notiftext="say hello world", notif_fresh=True)
+case("通知文本包含：未命中不跑", ["if:notiftext:验证码", "a", "endif", "b"], ["b"], notiftext="恭喜你中奖了", notif_fresh=True)
+case("通知文本包含：非 fresh（旧通知）不成立", ["if:notiftext:验证码", "a", "endif", "b"], ["b"], notiftext="验证码 1234", notif_fresh=False)
+case("通知文本包含：文本为空不成立", ["if:notiftext:验证码", "a", "endif", "b"], ["b"], notiftext="", notif_fresh=True)
+case("通知文本不含：命中反义", ["if:!notiftext:验证码", "a", "endif"], ["a"], notiftext="恭喜你中奖了", notif_fresh=True)
+case("通知文本不含：含关键词则不跑", ["if:!notiftext:验证码", "a", "endif", "b"], ["b"], notiftext="验证码 1234", notif_fresh=True)
+case("通知文本：字面匹配（关键词含点号不当正则）", ["if:notiftext:a.b", "a", "endif", "b"], ["b"], notiftext="axb", notif_fresh=True)
 
 # 暂停/等待后的续跑
 def _pause_case():
@@ -309,7 +329,8 @@ def main():
     # 解析器逐词表检查：每个词都能解析
     for word in ["wifi:", "wifi:Home", "bt:", "bt:AirPods", "charging", "locked", "music",
                  "headphones", "lowpower", "battery<20", "battery>80", "time:2200-0600",
-                 "time:9:00-18:00", "!charging", "!wifi:", "charging@10"]:
+                 "time:9:00-18:00", "!charging", "!wifi:", "charging@10",
+                 "notiftext:验证码", "!notiftext:hello"]:
         if parse(word) is None:
             bad += 1
             print("FAIL 解析失败:", word)

@@ -207,13 +207,7 @@ static NSString *TGAppName(NSString *identifier) {
 static NSString *TGSettingsTriggerTitle(NSString *trigger) {
     if ([trigger hasPrefix:TGAppLaunchedPrefix]) return [@"打开了 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGAppLaunchedPrefix.length])];
     if ([trigger hasPrefix:TGAppLeftPrefix]) return [@"离开了 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGAppLeftPrefix.length])];
-    if ([trigger hasPrefix:TGNotificationAppPrefix]) {
-        NSArray *parts = TGNotificationParts(trigger);
-        NSString *app = parts[0], *keyword = parts[2];
-        NSString *source = [app isEqualToString:@"*"] ? @"任意应用" : TGAppName(app);
-        if (keyword.length) return [NSString stringWithFormat:@"来自%@的通知 · 含「%@」", source, keyword];
-        return [NSString stringWithFormat:@"来自%@的通知", source];
-    }
+    if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@"来自 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGNotificationAppPrefix.length])];
     if ([trigger hasPrefix:@"icon.flick"] && TGIsCustomTrigger(trigger)) {
         NSRange colon = [trigger rangeOfString:@":"];
         return [NSString stringWithFormat:@"在 %@ 上%@", TGFlickDirectionTitle(trigger), TGAppName([trigger substringFromIndex:colon.location + 1])];
@@ -593,137 +587,6 @@ static NSArray<NSString *> *TGPairedBluetoothDevices(void) {
 
 @end
 
-#pragma mark - Notification trigger editor
-
-@interface TGNotificationPickerController : UIViewController <UITextFieldDelegate>
-@property (nonatomic, copy) void (^onSave)(NSString *trigger);
-@end
-
-@implementation TGNotificationPickerController {
-    NSString *_appID;
-    UIButton *_appButton;
-    UITextField *_overrideField;
-    UITextField *_keywordField;
-}
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.title = @"新建通知";
-    self.view.backgroundColor = UIColor.systemGroupedBackgroundColor;
-    _appID = @"*";
-    self.navigationItem.rightBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"添加" style:UIBarButtonItemStylePlain target:self action:@selector(add)];
-
-    UILabel *(^heading)(NSString *) = ^UILabel *(NSString *text) {
-        UILabel *l = [UILabel new];
-        l.text = text;
-        l.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-        l.textColor = UIColor.secondaryLabelColor;
-        return l;
-    };
-    UILabel *(^note)(NSString *text) = ^UILabel *(NSString *text) {
-        UILabel *l = [UILabel new];
-        l.text = text;
-        l.numberOfLines = 0;
-        l.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-        l.textColor = UIColor.secondaryLabelColor;
-        return l;
-    };
-    UITextField *(^field)(NSString *) = ^UITextField *(NSString *placeholder) {
-        UITextField *f = [UITextField new];
-        f.placeholder = placeholder;
-        f.borderStyle = UITextBorderStyleRoundedRect;
-        f.backgroundColor = UIColor.secondarySystemFillColor;
-        f.autocapitalizationType = UITextAutocapitalizationTypeNone;
-        f.autocorrectionType = UITextAutocorrectionTypeNo;
-        f.returnKeyType = UIReturnKeyDone;
-        f.delegate = self;
-        [f.heightAnchor constraintEqualToConstant:44].active = YES;
-        return f;
-    };
-
-    _appButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    _appButton.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
-    [_appButton setTitle:@"任意应用" forState:UIControlStateNormal];
-    [_appButton addTarget:self action:@selector(pickApp) forControlEvents:UIControlEventTouchUpInside];
-    [_appButton.heightAnchor constraintEqualToConstant:44].active = YES;
-
-    _overrideField = field(@"如 com.apple.ShazamNotifications");
-    _keywordField = field(@"要匹配的关键词");
-
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[
-        heading(@"目标应用"), _appButton,
-        note(@"选择要监听哪个应用的通知；保持「任意应用」可匹配所有到来的通知。"),
-        heading(@"通知 Bundle ID 覆盖（可选）"), _overrideField,
-        note(@"若 iOS 用其他标识符投递通知（如 com.apple.ShazamNotifications），可手动指定自定义通知 Bundle ID。"),
-        heading(@"文本匹配（可选）"), _keywordField,
-        note(@"匹配标题、副标题或正文中的文本（不区分大小写）。留空则不检查文本；填了就必须命中才触发。"),
-    ]];
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 10;
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:stack];
-    UILayoutGuide *guide = self.view.safeAreaLayoutGuide;
-    [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:guide.topAnchor constant:20],
-        [stack.leadingAnchor constraintEqualToAnchor:guide.leadingAnchor constant:16],
-        [stack.trailingAnchor constraintEqualToAnchor:guide.trailingAnchor constant:-16],
-    ]];
-}
-
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    [_appButton setTitle:[_appID isEqualToString:@"*"] ? @"任意应用" : TGAppName(_appID) forState:UIControlStateNormal];
-}
-
-- (void)pickApp {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"目标应用" message:nil preferredStyle:UIAlertControllerStyleActionSheet];
-    [sheet addAction:[UIAlertAction actionWithTitle:[@"任意应用" stringByAppendingString:[_appID isEqualToString:@"*"] ? @"  ✓" : @""] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        _appID = @"*";
-        [_appButton setTitle:@"任意应用" forState:UIControlStateNormal];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"选择应用…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-        PSSpecifier *spec = [PSSpecifier preferenceSpecifierNamed:@"应用" target:self set:@selector(setPickedApp:specifier:)
-            get:@selector(readPickedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
-        [spec setProperty:@YES forKey:@"useSearchBar"];
-        [spec setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
-        ATLApplicationListSelectionController *list = [ATLApplicationListSelectionController new];
-        list.specifier = spec;
-        list.title = @"应用";
-        [self.navigationController pushViewController:list animated:YES];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = _appButton;
-    sheet.popoverPresentationController.sourceRect = _appButton.bounds;
-    [self presentViewController:sheet animated:YES completion:nil];
-}
-
-// AltList writes the picked bundle id back through this setter.
-- (void)setPickedApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
-    if ([identifier isKindOfClass:NSString.class] && identifier.length) _appID = identifier;
-}
-- (id)readPickedApp:(PSSpecifier *)spec { return nil; }
-
-- (BOOL)textFieldShouldReturn:(UITextField *)textField {
-    [textField resignFirstResponder];
-    return YES;
-}
-
-- (void)add {
-    NSString *(^clean)(NSString *) = ^NSString *(NSString *s) {
-        NSString *t = [s stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-        return [t stringByReplacingOccurrencesOfString:TGNotificationSep withString:@""];
-    };
-    NSString *overrideID = clean(_overrideField.text);
-    NSString *keyword = clean(_keywordField.text);
-    NSString *value = _appID;
-    if (overrideID.length || keyword.length)
-        value = [NSString stringWithFormat:@"%@%@%@%@%@", _appID, TGNotificationSep, overrideID, TGNotificationSep, keyword];
-    NSString *trigger = [TGNotificationAppPrefix stringByAppendingString:value];
-    if (self.onSave) self.onSave(trigger);
-}
-
-@end
-
 #pragma mark - Conflict warnings
 
 // Why adding `adding` to `list` probably won't do what the user expects, or nil.
@@ -845,6 +708,29 @@ static void TGPromptTimes(UIViewController *host, void (^done)(NSString *encoded
     TGPresentSheet(host, alert);
 }
 
+// 通知文本包含关键词。按到达瞬间判定、字面包含、不区分大小写。
+// 关键词里不要带 @：那是条件末尾的「持续 N 秒」分隔符，会与它冲突。
+static void TGPromptNotifText(UIViewController *host, BOOL negated, void (^done)(NSString *encoded)) {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:negated ? @"通知文本不含" : @"通知文本包含"
+        message:@"匹配通知标题或正文中的文字，不区分大小写、按字面包含（不是正则）。只在通知到达的那一刻判定，且不要输入 @。" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"关键词";
+        field.autocorrectionType = UITextAutocorrectionTypeNo;
+        field.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    __weak UIAlertController *weakAlert = alert;
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *kw = [weakAlert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        NSString *clean = [kw stringByReplacingOccurrencesOfString:@"@" withString:@""];
+        if (clean.length) {
+            NSString *prefix = negated ? @"!notiftext:" : @"notiftext:";
+            done([prefix stringByAppendingString:clean]);
+        }
+    }]];
+    TGPresentSheet(host, alert);
+}
+
 // 整个词表，一个 sheet 列出来。done 拿到编码后的条件。
 static void TGPresentConditionPicker(UIViewController *host, NSString *title, void (^done)(NSString *encoded)) {
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:title message:nil preferredStyle:UIAlertControllerStyleActionSheet];
@@ -868,6 +754,8 @@ static void TGPresentConditionPicker(UIViewController *host, NSString *title, vo
     add(@"电量低于…", ^{ TGPromptBattery(host, NO, done); });
     add(@"电量高于…", ^{ TGPromptBattery(host, YES, done); });
     add(@"时间段内…", ^{ TGPromptTimes(host, done); });
+    add(@"通知文本包含…", ^{ TGPromptNotifText(host, NO, done); });
+    add(@"通知文本不含…", ^{ TGPromptNotifText(host, YES, done); });
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     TGPresentSheet(host, sheet);
 }
@@ -2297,8 +2185,10 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [addLeftApp setProperty:@YES forKey:@"useSearchBar"];
             [addLeftApp setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
             [specs addObject:addLeftApp];
-            PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:@"来自应用的通知" target:self set:nil get:nil detail:nil cell:PSListItemCell edit:nil];
-            [addNotification setProperty:TGNotificationAppPrefix forKey:@"tgAddEvent"];
+            PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:@"来自应用的通知" target:self set:@selector(setNotifyingApp:specifier:)
+                get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+            [addNotification setProperty:@YES forKey:@"useSearchBar"];
+            [addNotification setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
             [specs addObject:addNotification];
             PSSpecifier *addFlick = [PSSpecifier preferenceSpecifierNamed:@"应用图标轻扫" target:self set:@selector(setFlickedApp:specifier:)
                 get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
@@ -2380,6 +2270,10 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
     if ([identifier isKindOfClass:NSString.class] && identifier.length) _pendingTrigger = [TGAppLeftPrefix stringByAppendingString:identifier];
 }
 
+- (void)setNotifyingApp:(NSString *)identifier specifier:(PSSpecifier *)spec {
+    if ([identifier isKindOfClass:NSString.class] && identifier.length) _pendingTrigger = [TGNotificationAppPrefix stringByAppendingString:identifier];
+}
+
 - (NSString *)openedApp:(PSSpecifier *)spec {
     return nil;
 }
@@ -2407,16 +2301,6 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [weakSelf pushPickerForTrigger:trigger];
         };
         [self.navigationController pushViewController:timePicker animated:YES];
-        return;
-    }
-    if ([prefix isEqualToString:TGNotificationAppPrefix]) {
-        TGNotificationPickerController *picker = [TGNotificationPickerController new];
-        __weak typeof(self) weakSelf = self;
-        picker.onSave = ^(NSString *trigger) {
-            [weakSelf.navigationController popViewControllerAnimated:NO];
-            [weakSelf pushPickerForTrigger:trigger];
-        };
-        [self.navigationController pushViewController:picker animated:YES];
         return;
     }
     void (^next)(NSString *) = ^(NSString *value) { [self pushPickerForTrigger:[prefix stringByAppendingString:value]]; };

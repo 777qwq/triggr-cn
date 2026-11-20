@@ -127,7 +127,6 @@ static BOOL TGRetiredTrigger(NSString *trigger) {
             @"homebar.single", @"homebar.doubletap", @"homebar.longpress",
             @"edge.topleft", @"edge.topright", @"edge.bottomleft", @"edge.bottomright",
             @"edge.top2", @"edge.bottom2",
-            @"notification.any", // 「通知」分组已移除，改由自定义事件「来自应用的通知」承担
         ]];
     });
     return trigger && [retired containsObject:trigger];
@@ -1666,6 +1665,14 @@ static BOOL TGIOKitCharging(void) {
     return charging;
 }
 
+// 通知文本条件（notiftext:）取的是「刚到的这条通知」的文本，不是可随时查询的
+// 系统状态。通知 hook 在 fire 之前把它暂存到这里；TGFire → 仅当/如果判定是同步
+// 的，所以紧跟着就能读到。时间戳 + 事件标志用来挡两种误判：非通知写入的残留，
+// 以及几小时前某条通知留下的旧文本（那条条件此时应当不成立）。
+static NSString *tgNotifEventText;
+static CFTimeInterval tgNotifEventAt;
+static BOOL tgNotifEventValid;
+
 static BOOL TGConditionCharging(void) {
     return TGIOKitCharging() || TGIsPluggedIn();
 }
@@ -1789,6 +1796,16 @@ static BOOL TGConditionHolds(TGCondition condition) {
             int now = TGNowClock();
             holds = condition.start <= condition.end ? (now >= condition.start && now < condition.end)
                                                      : (now >= condition.start || now < condition.end);
+            break;
+        }
+        case TGConditionKindNotificationText: {
+            // 通知文本是事件瞬时数据：只在刚收到通知的极短窗口内判定。
+            // 窗口给 1 秒——覆盖 %orig 之后同步 fire 的整条链；「如果」里若带
+            // @秒 延迟重判，那一刻窗口已过、必然不成立，符合「按到达瞬间判定」。
+            // name 是用户在条件里填的关键词，大小写不敏感的字面包含，非正则。
+            BOOL fresh = tgNotifEventValid && CACurrentMediaTime() - tgNotifEventAt < 1.0;
+            holds = fresh && name.length && tgNotifEventText.length &&
+                    [tgNotifEventText rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound;
             break;
         }
         default: return NO;
@@ -3656,9 +3673,12 @@ static void TGWritePluginManifest(void) {
 
 #pragma mark - Notifications and calls
 
-// "Notification from <app>": which app posted plus an optional literal text
-// match over the notification's combined text. A respring re-posts what's
-// already in Notification Center, so the first seconds after launch are ignored.
+// "Notification from <app>": only which app posted, never what it says. A
+// respring re-posts what's already in Notification Center, so the first
+// seconds after launch are ignored.
+// notification.any / notification.app: 只负责"哪类事件"；文本关键词交给条件系统
+// (notiftext:)。这里读一次通知文本暂存起来，紧随其后的 TGFire 同步判定仅当/如果
+// 时就能拿到。一个 respring 会重发通知中心里已有的通知，启动头 15 秒忽略。
 static BOOL tgWatchNotifications;
 static CFTimeInterval tgSpringBoardStarted;
 static void TGFireMatching(NSString *prefix, NSString *value);
@@ -3689,7 +3709,7 @@ static NSString *TGNotifSection(id req) {
     return v.length ? v : TGNotifField(req, @"section");
 }
 // Title / subtitle / header / body / message, de-duplicated and joined. This is
-// what "文本匹配" checks — no distinction between title and body, plain
+// what notiftext: checks — no distinction between title and body, plain
 // case-insensitive "contains", never a regex.
 static NSString *TGNotifText(id req) {
     id content = TGNotifCall(req, @selector(content));
@@ -3709,74 +3729,64 @@ static NSString *TGNotifID(id req) {
     return v.length ? v : nil;
 }
 
-// One notification reaches us through both NCNotificationDispatcher and the
-// BBServer entries; fire it at most once. Dedupe by bulletin id (8s window),
-// with a section+text fingerprint fallback when the id is unavailable. Two
-// genuinely separate notifications from one app are NOT collapsed (unlike the
-// Bluetooth connect de-bounce): we only dedupe when a trigger actually matched.
-static void TGFireNotifications(id req) {
+// One notification can arrive through both NCNotificationDispatcher and the
+// BBServer entries; fire at most once. Dedupe by bulletin id (8s window), with a
+// section+text fingerprint fallback. Two genuinely separate notifications from
+// one app are NOT collapsed — we only dedupe the duplicate delivery of one event.
+static void TGHandleNotification(id req) {
     if (!tgWatchNotifications || CACurrentMediaTime() - tgSpringBoardStarted < 15) return;
     @try {
         NSString *section = TGNotifSection(req);
-        NSString *text = TGNotifText(req);
-        NSMutableArray<NSString *> *matches = [NSMutableArray array];
-        for (NSString *trigger in tgAssignedTriggers.copy) {
-            if (![trigger hasPrefix:TGNotificationAppPrefix]) continue;
-            NSArray *parts = TGNotificationParts(trigger);
-            NSString *app = parts[0], *overrideID = parts[1], *keyword = parts[2];
-            // App / bundle match: an explicit override wins; bare "*" matches any.
-            NSString *target = overrideID.length ? overrideID : app;
-            if (![app isEqualToString:@"*"] || overrideID.length) {
-                if (!target.length || !section.length || [target caseInsensitiveCompare:section] != NSOrderedSame) continue;
-            }
-            // Text match: a keyword must be literally contained (case-insensitive).
-            // If it isn't, this trigger does not fire — no fallback to bundle-only.
-            if (keyword.length && !(text.length && [text rangeOfString:keyword options:NSCaseInsensitiveSearch].location != NSNotFound)) continue;
-            [matches addObject:trigger];
-        }
-        if (!matches.count) return;
+        BOOL wantAny = [tgAssignedTriggers containsObject:@"notification.any"];
+        BOOL wantApp = section.length && TGAssignedPrefix(TGNotificationAppPrefix);
+        if (!wantAny && !wantApp) return;
+
         NSString *ident = TGNotifID(req);
-        NSString *fingerprint = ident.length ? ident : (section.length ? [NSString stringWithFormat:@"%@|%@", section, text] : nil);
+        NSString *fingerprint = ident.length ? ident : (section.length ? section : nil);
         if (!fingerprint.length) return;
         static NSMutableDictionary<NSString *, NSNumber *> *seen;
         static dispatch_once_t once;
         dispatch_once(&once, ^{ seen = [NSMutableDictionary dictionary]; });
         CFTimeInterval now = CACurrentMediaTime();
-        BOOL fresh = YES;
         @synchronized (seen) {
-            if (now - [seen[fingerprint] doubleValue] < 8) fresh = NO;
-            else {
-                seen[fingerprint] = @(now);
-                if (seen.count > 256)
-                    [seen enumerateKeysAndObjectsUsingBlock:^(NSString *k, NSNumber *v, BOOL *stop) {
-                        if (now - v.doubleValue >= 8) [seen removeObjectForKey:k];
-                    }];
-            }
+            if (now - [seen[fingerprint] doubleValue] < 8) return; // duplicate delivery
+            seen[fingerprint] = @(now);
+            if (seen.count > 256)
+                [seen enumerateKeysAndObjectsUsingBlock:^(NSString *k, NSNumber *v, BOOL *stop) {
+                    if (now - v.doubleValue >= 8) [seen removeObjectForKey:k];
+                }];
         }
-        if (!fresh) return;
-        for (NSString *trigger in matches) TGFire(trigger);
+
+        // Record the text immediately before firing: TGFire → condition check is
+        // synchronous, so notiftext: sees this notification's text, not a stale one.
+        tgNotifEventText = TGNotifText(req) ?: @"";
+        tgNotifEventAt = now;
+        tgNotifEventValid = YES;
+
+        if (wantApp) TGFireMatching(TGNotificationAppPrefix, section);
+        if (wantAny) TGFire(@"notification.any");
     } @catch (NSException *e) { }
 }
 
 %hook NCNotificationDispatcher
 - (void)postNotificationWithRequest:(id)request {
     %orig;
-    TGFireNotifications(request);
+    TGHandleNotification(request);
 }
 %end
 
 %hook BBServer
 - (void)publishBulletinRequest:(id)request destinations:(unsigned long long)destinations {
     %orig;
-    TGFireNotifications(request);
+    TGHandleNotification(request);
 }
 - (void)publishBulletin:(id)bulletin destinations:(unsigned long long)destinations {
     %orig;
-    TGFireNotifications(bulletin);
+    TGHandleNotification(bulletin);
 }
 - (void)publishBulletin:(id)bulletin destinations:(unsigned long long)destinations alwaysToLockScreen:(BOOL)alwaysToLockScreen {
     %orig;
-    TGFireNotifications(bulletin);
+    TGHandleNotification(bulletin);
 }
 %end
 

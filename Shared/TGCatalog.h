@@ -116,6 +116,9 @@ static const TGItem TGCalls[] = {
     {"call.outgoing", "拨出电话"}, {"call.ended", "通话结束"},
 };
 
+// Only that a notification arrived (Custom Events has "Notification from <app>").
+static const TGItem TGNotifications[] = { {"notification.any", "任意通知"} };
+
 // Whatever app plays through iOS's Now Playing (Music, Spotify, Crest…).
 static const TGItem TGMusic[] = {
     {"music.started", "开始播放"}, {"music.stopped", "暂停或停止播放"}, {"music.changed", "切歌"},
@@ -147,6 +150,7 @@ static const TGGroup TGTriggerGroups[] = {
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},
     {"CarPlay", TGCarPlay, TG_COUNT(TGCarPlay), "靠音频输出端口判断，有线和无线 CarPlay 都算。连接在建立会话时触发，断开在端口切回扬声器时触发。"},
     {"电话", TGCalls, TG_COUNT(TGCalls), "使用 CallKit 的电话、FaceTime 及其他通话应用。来电在响铃时触发，接听电话在接通时触发。开启「实时留言信箱」后，转入语音信箱的电话也算接听。"},
+    {"通知", TGNotifications, TG_COUNT(TGNotifications), "收到任意通知时触发，无论是否显示横幅。想只针对某个应用，用自定义事件中的「来自应用的通知」。要按通知内容筛选，给这个触发器加「仅当 → 通知文本包含…」（匹配标题或正文，字面包含、不区分大小写，按到达瞬间判定）；开启系统的「隐藏通知内容」时正文会被打码，匹配可能失效。"},
     {"音乐", TGMusic, TG_COUNT(TGMusic), "任何出现在「正在播放」里的应用：音乐、Spotify、YouTube、播客等。切歌每首新歌运行一次，含暂停后的第一首；Triggr 自身媒体动作引起的变化 1 秒内忽略，避免指派自我循环。"},
     {"距离传感器", TGProximity, TG_COUNT(TGProximity), "听筒旁的传感器。指派后屏幕亮着期间它会一直开启（略耗电）。「挥手」指遮挡不到半秒；指派了「挥手」后，「遮挡」会等这么久才执行。"},
     {"状态变化", TGStateChanges, TG_COUNT(TGStateChanges), "在变化发生后触发。控制中心的 Wi-Fi 开关只会断开网络（即「离开 Wi-Fi 网络」），Wi-Fi 本身保持开启。由 Triggr 自身动作引起的变化在一秒内被忽略，避免指派循环触发。"},
@@ -335,14 +339,7 @@ static inline BOOL TGExtensionRunnable(NSString *action) {
 #define TGBatteryBelowPrefix @"battery.below:"
 #define TGAppLaunchedPrefix @"app.launched:"
 #define TGAppLeftPrefix @"app.left:" // 离开前台（含锁屏）：用户切走、回桌面、锁屏
-// "notification.app:<app bundle><SEP><override bundle><SEP><keyword>"
-// <app bundle> is "*" for any app. <override bundle> covers iOS posting a
-// notification under a different id (e.g. com.apple.ShazamNotifications).
-// <keyword> is a case-insensitive literal "contains" match over the combined
-// title/subtitle/header/body/message text; empty means no text check.
-// Old single-part values ("notification.app:<bundle>") stay valid: no override, no keyword.
-#define TGNotificationAppPrefix @"notification.app:"
-#define TGNotificationSep @"\x01" // unit separator: never occurs in a bundle id or normal text
+#define TGNotificationAppPrefix @"notification.app:" // "notification.app:<bundle id>"
 #define TGTimePrefix @"time:"
 // A flick on one app's icon: "icon.flickup:<bundle id>" (runs instead of the plain flick).
 #define TGIconFlickUpPrefix @"icon.flickup:"
@@ -558,15 +555,6 @@ static inline NSString *TGFlickDirectionTitle(NSString *trigger) {
     return direction;
 }
 
-// notification.app:<app><SEP><override><SEP><keyword> — split into up to 3 parts.
-static inline NSArray<NSString *> *TGNotificationParts(NSString *trigger) {
-    NSString *value = [trigger hasPrefix:TGNotificationAppPrefix] ? [trigger substringFromIndex:TGNotificationAppPrefix.length] : @"";
-    NSArray *parts = [value componentsSeparatedByString:TGNotificationSep];
-    NSMutableArray *out = [NSMutableArray arrayWithCapacity:3];
-    for (NSInteger i = 0; i < 3; i++) [out addObject:i < parts.count ? parts[i] : @""];
-    return out;
-}
-
 static inline NSString *TGCustomTriggerTitle(NSString *trigger) {
     NSString *value = nil;
     for (NSString *prefix in TGCustomPrefixes()) if ([trigger hasPrefix:prefix]) value = [trigger substringFromIndex:prefix.length];
@@ -578,13 +566,7 @@ static inline NSString *TGCustomTriggerTitle(NSString *trigger) {
     if ([trigger hasPrefix:TGBatteryBelowPrefix]) return [NSString stringWithFormat:@"电量跌破 %@%%", value];
     if ([trigger hasPrefix:TGAppLaunchedPrefix]) return [@"打开了 " stringByAppendingString:value];
     if ([trigger hasPrefix:TGAppLeftPrefix]) return [@"离开了 " stringByAppendingString:value];
-    if ([trigger hasPrefix:TGNotificationAppPrefix]) {
-        NSArray *parts = TGNotificationParts(trigger);
-        NSString *app = parts[0], *keyword = parts[2];
-        NSString *source = [app isEqualToString:@"*"] ? @"任意应用" : app;
-        if (keyword.length) return [NSString stringWithFormat:@"来自%@的通知 · 含「%@」", source, keyword];
-        return [NSString stringWithFormat:@"来自%@的通知", source];
-    }
+    if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@"来自 " stringByAppendingString:value];
     if ([trigger hasPrefix:@"icon.flick"]) return [NSString stringWithFormat:@"在 %@ 上%@", TGFlickDirectionTitle(trigger), value];
     int hour, minute;
     NSString *days;
@@ -598,7 +580,7 @@ static inline NSString *TGTriggerTitle(NSString *trigger) {
         for (int i = 0; i < TGTriggerGroups[g].count; i++)
             if ([trigger isEqualToString:@(TGTriggerGroups[g].items[i].identifier)]) {
                 // Events ("接入充电器") read fine alone; presses need their button.
-                BOOL event = TGTriggerGroups[g].items == TGOther || TGTriggerGroups[g].items == TGStateChanges || TGTriggerGroups[g].items == TGMotion || TGTriggerGroups[g].items == TGMusic || TGTriggerGroups[g].items == TGCalls;
+                BOOL event = TGTriggerGroups[g].items == TGOther || TGTriggerGroups[g].items == TGStateChanges || TGTriggerGroups[g].items == TGMotion || TGTriggerGroups[g].items == TGMusic || TGTriggerGroups[g].items == TGNotifications || TGTriggerGroups[g].items == TGCalls;
                 if (TGTriggerGroups[g].items == TGIcons) {
                     // 双击空白处归类在图标组，但它是主屏幕手势，不是图标手势。
                     if ([trigger isEqualToString:@"homescreen.doubletap"]) return @"主屏幕双击空白处";
@@ -693,6 +675,11 @@ static inline NSString *TGSeqConditionTitle(NSString *cond) {
         opposite = name.length ? [NSString stringWithFormat:@"未连接蓝牙「%@」", name] : @"未连接蓝牙设备";
     }
     else if ([cond isEqualToString:@"bt"]) { base = @"已连接蓝牙设备"; opposite = @"未连接蓝牙设备"; }
+    else if ([cond hasPrefix:@"notiftext:"]) {
+        NSString *kw = [cond substringFromIndex:10];
+        base = [NSString stringWithFormat:@"通知文本含「%@」", kw];
+        opposite = [NSString stringWithFormat:@"通知文本不含「%@」", kw];
+    }
     else if ([cond isEqualToString:@"charging"]) { base = @"充电中"; opposite = @"未充电"; }
     else if ([cond isEqualToString:@"locked"]) { base = @"已锁定"; opposite = @"未锁定"; }
     else if ([cond isEqualToString:@"music"]) { base = @"音乐播放中"; opposite = @"音乐未播放"; }
