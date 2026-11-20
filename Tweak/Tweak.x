@@ -3240,11 +3240,9 @@ static CGFloat TGMultiRadiusForTouches(NSSet<UITouch *> *touches, UIView *view) 
     return sum / n;
 }
 
-// cn5.2.9：给捏合补上 5.2.5 当初只给滑动加、漏掉这一半的正交闸门。
-// 四向滑时两指会自然收拢，半径比 scale 很容易破 0.95，但那是"整体平移(质心 c 大)+
-// 间距微变(偏差 e 小)"；真捏合是偏差主导。要求 max|e| > |c|×系数 才认作真缩放。
-// 系数真机可调：偏严(更易漏冻)就调高，误冻没清干净就调低。
-static const CGFloat TGPinchSpreadDominance = 0.8;
+// cn5.2.10：删去 cn5.2.9 给捏合加的整套正交闸门，冻结阈值放宽到与识别一致（见 touchesMoved）。
+// cn5.2.9 起落指就快照 offset/zoom、解冻还原到落指位置，照片即使先缩了也会弹回，
+// "赶在缩下去之前冻住"已不再必要——阈值放到 0.7 后四向滑的自然收拢够不着，误冻迎刃而解。
 
 // 捏合/张开：UIPinchGestureRecognizer 写死两指，三指要自己量各指到质心的半径。
 @interface TGPinchRecognizer : UIGestureRecognizer
@@ -3253,7 +3251,6 @@ static const CGFloat TGPinchSpreadDominance = 0.8;
 @property (nonatomic) NSInteger direction;
 @property (nonatomic) CGFloat scale;
 @property (nonatomic) CGFloat initialRadius;
-@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSValue *> *origins; // cn5.2.9：每指起点，算正交分量
 @property (nonatomic) BOOL didFreeze; // cn5.2.3：本轮是否已冻，避免重复 notify
 @end
 
@@ -3266,13 +3263,8 @@ static const CGFloat TGPinchSpreadDominance = 0.8;
     if (event.allTouches.count > self.fingers) { self.state = UIGestureRecognizerStateFailed; return; }
     if (event.allTouches.count == self.fingers && self.initialRadius <= 0) {
         self.initialRadius = [self radiusForTouches:event.allTouches];
-        // cn5.2.9：手指到齐记每指起点，供 touchesMoved 做正交分解，挡住四向滑收拢误冻捏合。
-        self.origins = [NSMutableDictionary dictionary];
-        for (UITouch *t in event.allTouches)
-            self.origins[@(t.hash)] = [NSValue valueWithCGPoint:[t locationInView:self.view]];
-        // cn5.2.3：手指到齐先不冻，等 touchesMoved 里 scale 真的偏离 1 才冻。
-        // 这样"只指派了别的同手数手势、用户其实在捏合/张开"时，本识别器（若挂着）
-        // 不会因手指落下就冻；只有确认是缩放动作才冻。
+        // cn5.2.10：手指到齐先不冻，等 touchesMoved 里 scale 偏离到 0.7/1.4（与识别阈值一致）才冻。
+        // "只指派了别的同手数手势、用户其实在捏合/张开"时本识别器不会因手指落下就冻。
     }
 }
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
@@ -3281,46 +3273,19 @@ static const CGFloat TGPinchSpreadDominance = 0.8;
     CGFloat r = [self radiusForTouches:event.allTouches];
     if (r <= 0) return;
     self.scale = r / self.initialRadius;
-    // cn5.2.3：scale 一偏离 1（约 5%）就冻，赶在照片缩下去之前，但已是"确实在缩放"
-    // 而非"手指刚落下、还不知要干什么"。真正的识别阈值仍是下面的 0.7/1.4。
-    // cn5.2.6：冻结还要按指派方向——捏合识别器只在缩小(<1)时冻、张开识别器只在放大(>1)时冻，
-    // 否则只指派捏合时做张开会白冻（画面冻住但 desiredDirection 不符、动作不触发）。
-    BOOL scaleMatches = (self.desiredDirection < 0) ? (self.scale < 0.95)
-                      : (self.desiredDirection > 0) ? (self.scale > 1.05) : NO;
-    // cn5.2.9 对称闸门：算每指位移 dᵢ 的平移分量 c 与偏差分量 eᵢ。四向滑时 c 是整体滑移、
-    // 偏差只是两指自然收拢的小量；真缩放则偏差主导（对称捏合 c≈0、一指固定时 |e|=|c|）。
-    // 只有偏差占主导才认作真缩放，挡住"捏合指派了动作、做四向滑时其他方向白冻"。
-    BOOL spreadDominates = NO;
-    if (scaleMatches && self.origins.count == self.fingers) {
-        NSUInteger n = 0;
-        CGPoint sum = CGPointZero;
-        CGPoint d[3];
-        for (UITouch *t in event.allTouches) {
-            NSValue *v = self.origins[@(t.hash)];
-            if (!v) { n = 0; break; }
-            CGPoint o = v.CGPointValue, p = [t locationInView:self.view];
-            d[n].x = p.x - o.x; d[n].y = p.y - o.y;
-            sum.x += d[n].x; sum.y += d[n].y;
-            n++;
-        }
-        if (n == self.fingers) {
-            CGPoint c = { sum.x / n, sum.y / n };
-            CGFloat cLen = hypot(c.x, c.y);
-            CGFloat maxE = 0;
-            for (NSUInteger i = 0; i < n; i++) {
-                CGFloat ex = d[i].x - c.x, ey = d[i].y - c.y;
-                maxE = MAX(maxE, hypot(ex, ey));
-            }
-            spreadDominates = maxE > cLen * TGPinchSpreadDominance;
-        }
-    }
-    if (!self.didFreeze && scaleMatches && spreadDominates) {
-        self.didFreeze = YES;
-        TGMultiFreezeBegin();
-    }
+    // cn5.2.10：冻结阈值放宽到与识别一致（0.7/1.4），不再用 cn5.2.3 的 0.95 早冻、
+    // 也不再需要 cn5.2.9 的正交闸门分辨"真缩放还是四向滑自然收拢"。
+    // cn5.2.9 起落指就快照 offset/zoom、解冻还原到落指位置：照片即使先缩到 0.7 也会弹回，
+    // 所以"赶在缩下去之前冻住"的初衷已由还原机制兜底。四向滑收拢通常远不到 30%，够不着 0.7，
+    // 捏合识别器不再误冻。cn5.2.6 的方向闸门仍在——捏合只认缩小、张开只认放大。
     if (self.scale < 0.7 || self.scale > 1.4) {
         NSInteger d = self.scale < 0.7 ? -1 : 1;
         if (self.desiredDirection != d) { self.state = UIGestureRecognizerStateFailed; return; }
+        // 冻结与识别同一时刻发生：确认是缩放动作才冻，且冻的必是已触发的动作（不再白冻）。
+        if (!self.didFreeze) {
+            self.didFreeze = YES;
+            TGMultiFreezeBegin();
+        }
         self.direction = d;
         self.state = UIGestureRecognizerStateEnded;
     }
@@ -3336,7 +3301,6 @@ static const CGFloat TGPinchSpreadDominance = 0.8;
 - (void)reset {
     [super reset];
     self.direction = 0; self.scale = 1; self.initialRadius = 0; self.didFreeze = NO;
-    self.origins = nil;
 }
 @end
 

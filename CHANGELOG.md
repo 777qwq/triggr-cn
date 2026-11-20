@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.10
+
+- **捏合冻结阈值放宽到与识别一致，删去 cn5.2.9 的正交闸门**。cn5.2.9 修正版给 `TGPinchRecognizer` 加的位移正交分解（`TGPinchSpreadDominance=0.8`、`origins`、`spreadDominates`）是为"0.95 早冻"分辨真缩放与四向滑自然收拢而补的闸门，但真机上仍出现"捏合指派动作时，四向滑未指派方向只能滑一小段就停、抬手弹回"——起手阶段质心位移 `c` 还小，两指落下的微小偏差就能让 `max|e| > c×0.8` 成立，闸门在小分母处失效。既然 cn5.2.9 起落指就快照 offset/zoom、解冻还原到落指位置，"赶在照片缩下去之前冻住"的初衷已由还原机制兜底，不必再用 0.95 早冻。cn5.2.10 删掉整套正交闸门（常量、`origins` 属性、每指起点记录、`spreadDominates` 计算），把捏合/张开的冻结阈值由 0.95/1.05 放宽到与识别一致的 0.7/1.4，冻结与识别在同一帧发生——确认是缩放动作才冻，冻的必是已触发的动作，不再白冻/误冻。代价是真捏合时照片会先缩到 0.7，抬手解冻靠落指快照弹回（落点正确，但过程闪动可能比 0.95 早冻更明显）。cn5.2.6 方向闸门（捏合只认缩小、张开只认放大）、四向滑判据（cn5.2.7）、点按（cn5.2.2）、冻结快照统一那套（cn5.2.9）均不动。
+
 ## 1.5.0+cn5.2.9
 
 - **冻结统一为一套：删掉"冻结瞬间快照"分支，多指与边缘竖滑共用落指快照**。cn5.2.8 里两套快照并存——多指还原到冻结瞬间 offset（多存 `tgFreezeOffsets`/`tgFreezeZooms`），边缘还原到落指快照（`tgBeganOffsets` + `useBegan` 分支 + `TGFreezeBeginFromBegan` 专用入口 + `TGRelayFreezeBeganBegin` 专用通知），体验分裂、代码层层加分支。cn5.2.9 把这套收敛：**删掉**冻结瞬间的 offset/zoom 数组、`useBegan`/`tgFreezeBeganGen` 分支、`TGFreezeBeginFromBegan` 入口和 `TGRelayFreezeBeganBegin` 通知；落指那一刻统一快照所有 scrollView 的 `contentOffset + zoomScale`（weak key + generation 保护，无状态幂等，多指识别器与边缘各在自己的 `touchesBegan` 调同一句），冻结只记 `tgFreezeSnapGen`，解冻一律还原到落指位置。多指与边缘从此走同一个 `TGFreezeBegin/End` 和同一组 Snapshot/Begin/End 通知。generation 不符（冻结期间换了轮）时不还原位置、只恢复开关，避免串场。滑动判据（cn5.2.7 起手收紧）、点按（cn5.2.2）与所有触发阈值不动。**同版本追加修正**：5.2.9 初版真机发现"捏合指派了动作时，做四向滑的其他方向也误冻"——根因是 5.2.5 的正交闸门只加在滑动识别器上、捏合识别器漏了对称的一半，四向滑时两指自然收拢让 `scale<0.95` 误触发捏合冻结。给 `TGPinchRecognizer` 补上同样的位移正交分解：记每指起点，冻结条件在 `scale` 方向匹配之外再加 `max|e| > |c|×0.8`（偏差主导才是真缩放；对称捏合 `c≈0`、一指固定 `|e|=|c|` 均通过，四向滑收拢因 `c` 大 `e` 小被挡）。系数真机可调。张开识别器、滑动、点按、冻结快照统一那套均不受影响。
