@@ -3358,6 +3358,22 @@ static const void *TGMultiIndexKey = &TGMultiIndexKey;
     if (idx < 0 || idx >= TG_SLOT_COUNT) return NO;
     return [tgAssignedTriggers containsObject:@(TGInAppGestures[idx].identifier)];
 }
+// cn5.2.1：点按等「同手指数」的滑动/捏合先判。两指点按时若夹杂小幅滑动或没跨阈值的捏合，
+// 原先会落到最宽松的 tap 上误触发；让 tap 依赖这些手势先失败，它们认了就不再认点按。
+// 只处理我们自己的 tap（kind==0）与同 fingers 的非 tap 槽位，不干预系统识别器，也不影响
+// 四个方向识别器之间的共存（方向识别器都是非 tap，彼此不建立依赖）。
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRequireFailureOfGestureRecognizer:(UIGestureRecognizer *)other {
+    NSNumber *idxN = objc_getAssociatedObject(g, TGMultiIndexKey);
+    if (!idxN) return NO;
+    int idx = idxN.intValue;
+    if (idx < 0 || idx >= TG_SLOT_COUNT || kTGSlots[idx].kind != 0) return NO; // 只有点按要等别人
+    NSNumber *otherN = objc_getAssociatedObject(other, TGMultiIndexKey);
+    if (!otherN) return NO; // 系统自己的识别器，不干预
+    int oidx = otherN.intValue;
+    if (oidx < 0 || oidx >= TG_SLOT_COUNT) return NO;
+    TGGestureSlot os = kTGSlots[oidx];
+    return os.fingers == kTGSlots[idx].fingers && os.kind != 0; // 同手数的滑动/捏合先判
+}
 - (BOOL)gestureRecognizer:(UIGestureRecognizer *)g shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
     return YES; // 方向识别器共存的关键
 }
