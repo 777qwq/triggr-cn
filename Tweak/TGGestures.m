@@ -1107,7 +1107,10 @@ static void tg_gesture_play(NSString *name, const TGGestureFrame *frames, NSUInt
     g_playTouched = NO;
     g_watchEvents = g_watchSent = g_watchDowns = g_watchMixed = 0;
     g_playResult = @"playing";
-    g_playStopOnTouch = tg_gestures_stop_on_touch();
+    // cn5.2.18: the synthetic back swipe must not be interrupted by the very touch
+    // that triggered it (e.g. a gesture trigger still has its finger down). User
+    // gesture playback keeps the configured stop-on-touch behaviour.
+    g_playStopOnTouch = [name isEqualToString:@"__back__"] ? NO : tg_gestures_stop_on_touch();
     BOOL dots = tg_gestures_show_touches();
     if (dots) dispatch_async(dispatch_get_main_queue(), ^{ tg_gesture_dots_show(); });
     g_playing = YES;
@@ -1181,6 +1184,77 @@ static NSArray<NSString *> *tg_gesture_words(NSString *text) {
 
 BOOL TGGestureRecording(void) { return g_recActive; }
 BOOL TGGesturePlaying(void) { return g_playing; }
+
+// cn5.2.18: synthesize a left-edge swipe that iOS's own UIScreenEdgePanGestureRecognizer
+// accepts, so the frontmost app runs its NATIVE interactive pop — no in-app tweak needed.
+// This is the AssistiveTouch approach and works in apps that don't load our Relay (WeChat...).
+//
+// What made 5.2.15 flaky, and what this fixes:
+//  1. No dwell at the edge: the finger moved after 27ms, before the recognizer had enough
+//     samples to commit "finger down on left edge". We now hold at the edge ~90ms.
+//  2. Edge bit only on 2 frames (55ms): shorter than the sampling window. We keep edge=8
+//     for the whole dwell plus the early travel, dropping it only once well inside.
+//  3. Too fast / abrupt: eased ramp over ~0.5s, like a real thumb.
+//  4. Stop-on-touch could abort it (disabled in tg_gesture_play for the back name).
+BOOL TGPlayBackFromLeftEdge(void) {
+    uint64_t sender = tg_touch_sender();
+    if (!sender) {
+        TGLog(@"[Gesture] back: no touch sender yet (screen untouched since respring)");
+        return NO;
+    }
+    if (g_playing) return NO;                    // don't collide with a user gesture playback
+    __block CGSize screen = CGSizeZero;
+    tg_on_main_sync(^{ screen = [UIScreen mainScreen].fixedCoordinateSpace.bounds.size; });
+    if (screen.width <= 0 || screen.height <= 0) return NO;
+
+    double y = screen.height * 0.5;              // mid-height, clear of top/bottom bars
+    double startX = 1.0;                         // right on the left edge
+    double edgeX = 26.0;                         // edge bit stays until the finger is this far in
+    double endX = screen.width * 0.5;            // past the interactive-pop commit threshold
+
+    // Timeline (seconds): dwell on edge, eased travel, brief hold, lift.
+    double t0 = 0.0;    // finger down, on edge
+    double t1 = 0.09;   // end of the on-edge dwell
+    double t2 = 0.46;   // end of travel
+    double t3 = 0.54;   // hold at destination, then lift
+    enum { kHeld = 4, kTravel = 16, kTail = 3, kFrames = kHeld + kTravel + kTail };
+    TGGestureFrame frames[kFrames] = {0};
+
+    // Phase 1: dwell on the left edge with edge=8 held — the critical part.
+    for (int i = 0; i < kHeld; i++) {
+        TGGestureFrame *f = &frames[i];
+        double p = (double)i / kHeld;
+        f->t = t0 + (t1 - t0) * p;
+        f->count = 1;
+        f->fingers[0] = (TGTouchFinger){ 0, 1, 8, startX, y };
+    }
+    // Phase 2: eased travel inward; keep edge=8 until x passes edgeX, then drop it
+    // (real touches clear the edge flag once the finger is off the edge).
+    for (int i = 0; i < kTravel; i++) {
+        TGGestureFrame *f = &frames[kHeld + i];
+        double p = (double)(i + 1) / kTravel;          // 0..1
+        double e = p * p * (3.0 - 2.0 * p);            // smoothstep, gentle start & stop
+        f->t = t1 + (t2 - t1) * p;
+        f->count = 1;
+        double x = startX + (endX - startX) * e;
+        uint8_t edge = x <= edgeX ? 8 : 0;
+        f->fingers[0] = (TGTouchFinger){ 0, 1, edge, x, y };
+    }
+    // Phase 3: hold at destination so the recognizer commits before the lift; last frame lifts.
+    for (int i = 0; i < kTail; i++) {
+        TGGestureFrame *f = &frames[kHeld + kTravel + i];
+        f->t = t2 + (t3 - t2) * (double)(i + 1) / kTail;
+        f->count = 1;
+        BOOL lifting = (i == kTail - 1);
+        f->fingers[0] = (TGTouchFinger){ 0, (uint8_t)(lifting ? 0 : 1), 0, endX, y };
+    }
+
+    NSData *data = [NSData dataWithBytes:frames length:sizeof(frames)]; // heap: play blocks the queue
+    dispatch_async(tg_gesture_play_queue(), ^{
+        tg_gesture_play(@"__back__", data.bytes, kFrames, sender, 1.0, CGSizeZero);
+    });
+    return YES;
+}
 
 // Background HID listener. Lives here so the HID types stay in this translation unit;
 // the tweak calls TGGestureStartListener once SpringBoard is up.

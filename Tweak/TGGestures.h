@@ -21,3 +21,8 @@ BOOL TGGesturePlaying(void);     // a playback is in progress (used to gate touc
 // Start the background HID listener. Idempotent; call once after SpringBoard starts.
 void TGGestureStartListener(void);
 
+// cn5.2.18: synthesize a system left-edge swipe (AssistiveTouch-style) so any app's
+// native interactive pop runs — no in-app tweak needed. Returns NO if no touch sender
+// is known yet (screen untouched since respring). Runs asynchronously on the play queue.
+BOOL TGPlayBackFromLeftEdge(void);
+

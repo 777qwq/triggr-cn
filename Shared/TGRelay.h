@@ -2,8 +2,6 @@
 // Apps can't run Triggr's actions; they only tell SpringBoard that something
 // happened, and only while SpringBoard says a trigger is waiting for it.
 
-#include <stdio.h>
-
 #define TGRelayStatusBarTap "com.johndie.triggr/statusbar-tap"
 // The same tap, when the app knows which half of the status bar it was on.
 #define TGRelayStatusBarTapLeft "com.johndie.triggr/statusbar-tap-left"
@@ -11,26 +9,9 @@
 #define TGRelayShake "com.johndie.triggr/shake"
 // A Darwin notification state set by SpringBoard: which events are assigned.
 #define TGRelayWanted "com.johndie.triggr/relay-wanted"
-// cn5.2.16：「返回上级」在 Relay 进程内执行 pop。SpringBoard 触发时主屏幕不发（判空，
-// 保住 A 方案），App 内写 token 到命令文件再 post 广播；前台 active 的 Relay 读文件后
-// 删文件（消费型）再执行返回。后台积压 block 回前台时文件已被删 → 忽略，不误退。
-#define TGRelayBack "com.johndie.triggr/back"
-#define TGBackCommandPath @"/var/tmp/com.johndie.triggr-back-command.plist"
-#define TGBackCommandToken @"token"   // NSNumber(unsignedLongLong)，mach_absolute_time() 单调递增
-
-// cn5.2.17 诊断：把返回链每一步追加到日志，两端共用（Tweak=SpringBoard，Relay=各 App）。
-// 仅诊断用，正式修好后移除。SpringBoard 每次触发先把日志截断，只看最后一次触发。
-#define TGBackLogPath "/var/tmp/triggr-back-debug.log"
-static inline void TGBackDiagClear(void) { fclose(fopen(TGBackLogPath, "w")); }
-static inline void TGBackDiag(NSString *fmt, ...) {
-    va_list ap; va_start(ap, fmt);
-    NSString *body = [[NSString alloc] initWithFormat:fmt arguments:ap];
-    va_end(ap);
-    NSString *tag = [NSBundle.mainBundle.bundleIdentifier isEqualToString:@"com.apple.springboard"] ? @"SB" : (NSBundle.mainBundle.bundleIdentifier ?: @"?");
-    NSString *line = [NSString stringWithFormat:@"[%@] %@\n", tag, body];
-    FILE *f = fopen(TGBackLogPath, "a");
-    if (f) { fputs(line.UTF8String, f); fclose(f); }
-}
+// cn5.2.18：「返回上级」不再走 Relay——微信等 App 不加载它，收不到通知。改由 SpringBoard
+// 合成一次左边缘滑动，走前台 App 自己的原生交互式返回。back 通知/命令文件/诊断日志全删。
+// EdgeBack（放行被禁用的边缘返回手势）保留，是合成左滑被系统接受的前提。
 // 落指快照 + 冻结/解冻：多指与边缘竖滑共用同一套。SpringBoard 落指时发 Snapshot，
 // 冻结/解冻分别发 Begin/End；App 侧照此快照自己的 offset 并冻/解自己的界面。
 #define TGRelayFreezeSnapshot "com.johndie.triggr/freeze-snapshot"

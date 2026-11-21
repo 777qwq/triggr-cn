@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.18
+
+- **彻底重做「返回上级」：不再依赖 App 内 Relay，改由 SpringBoard 合成系统左滑，走前台 App 的原生交互式返回**。5.2.17 诊断日志给出铁证：在系统设置里触发时 Relay 完整跑通 `读到 token → 删文件 → 两关 → DoBack → PublicPop → popViewControllerAnimated`；而在微信和 WordPress 里触发时，这两个进程的 Relay **连「收到 back 通知」这行日志都没有**——说明它们根本没加载 Relay dylib（越狱注入管理未覆盖，或反注入），所以从 5.2.10 到 5.2.17 所有「通知送达后怎么办」的改动对它们全是无效功。既然 iOS 没有跨 App 的返回 API、App 又不加载我们的代码，唯一可行的路是像 AssistiveTouch 那样在 SpringBoard 侧合成触摸、让 iOS 把触摸当真手指路由给前台 App，走它自己的原生返回。本次重写 `TGPlayBackFromLeftEdge`：针对 5.2.15「偶尔能成」的四个技术缺陷逐项修正——① 加 ~90ms 边缘起手停顿，让 `UIScreenEdgePanGestureRecognizer` 采样到足够帧确认「手指在左边缘按下」；② edge=8 位覆盖起手停顿 + 早期滑行全程，不再只挂两帧（55ms 短于采样窗）；③ smoothstep 缓入缓出、~0.5s 滑行，像真拇指；④ `__back__` 回放强制关闭 stop-on-touch，避免触发手势的真实手指把回放掐断。主屏幕（无前台 App）不回放——那里左滑是负一屏，保住 A 方案。删除 Relay 侧整条 escape+pop 执行链、back 通知注册、命令文件与 5.2.17 全部诊断日志（净减代码）；EdgeBack 保留——它放行被 App 禁用的原生边缘返回手势，是合成左滑被系统接受的前提。冻结与多指判据不动。
+
 ## 1.5.0+cn5.2.17（诊断版）
 
 - **临时诊断版：返回链逻辑完全不变，只加写文件日志，用于定位微信返回上级为何无效**。cn5.2.16 去掉时间窗后微信仍无效，证伪了「时间窗误杀」的判断——投递层已被系统设置正常返回证明是通的，微信手动左滑也 100% 正常，问题锁定在微信收到命令后的执行链，但具体卡在哪一环没有证据。本版把每一步追加到 `/var/tmp/triggr-back-debug.log`（SpringBoard 触发时先截断，只看最后一次）：SpringBoard 侧记触发/判空/写文件/广播；Relay 侧记收到通知时的 applicationState、token 判定、命令文件消费结果、window 抓取、可见控制器链各层类名、escape 逐个试了谁且是否应答、0.35s 页面戳比对、PublicPop 找到的 nav 类名/栈深/转场状态及每道跳过原因、pop/dismiss 是否真正调用。**逻辑与 5.2.16 完全一致，仅多写日志**；拿到日志定位后出正式修复版并移除日志。

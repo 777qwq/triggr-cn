@@ -1380,15 +1380,12 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            TGBackDiagClear(); // 每次触发只看这一次
-            NSString *front = TGFrontAppIdentifier();
-            TGBackDiag(@"触发 system.back，前台=%@", front ?: @"(无/主屏幕)");
-            if (!front) { TGBackDiag(@"主屏幕：不发通知，结束"); return YES; }
-            unsigned long long token = mach_absolute_time();
-            NSDictionary *cmd = @{ TGBackCommandToken: @(token) };
-            BOOL wrote = [cmd writeToFile:TGBackCommandPath atomically:YES];
-            TGBackDiag(@"写命令文件 token=%llu 结果=%d，post 广播", token, wrote);
-            notify_post(TGRelayBack);
+            // cn5.2.18：不再依赖 App 内 Relay（微信等 App 不加载它，收不到通知）。改成
+            // SpringBoard 直接合成一次左边缘滑动，iOS 像路由真手指一样交给前台 App，
+            // 走 App 自己的原生交互式返回。主屏幕（无前台 App）不回放——那里左滑是
+            // 负一屏，不是返回，保住 A 方案谁都不作用。
+            if (!TGFrontAppIdentifier()) return YES;
+            TGPlayBackFromLeftEdge();
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {
