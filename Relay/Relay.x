@@ -4,7 +4,6 @@
 
 #import <UIKit/UIKit.h>
 #import <notify.h>
-#import <unistd.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 #import "../Shared/TGRelay.h"
@@ -255,6 +254,23 @@ static void TGRelayDoBack(void) {
     TGBackStep(win);
 }
 
+// cn5.2.14：返回通知是广播，所有注入 Relay 的 App 都收到。只认两条——自己当前是前台
+// active（主屏幕触发时 SpringBoard 根本没 post；这条防的是通知到达时自己已退后台）、
+// 命令是 1.5s 内生成的（后台 App 积压的 block 回前台才跑时戳已过期，忽略，不误退无关
+// App）。戳是 SpringBoard 触发瞬间的单调时钟纳秒，两侧用 TGRelayStamp() 同一把尺子。
+static void TGRelayBackNotification(void) {
+    if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+    NSDictionary *cmd = [NSDictionary dictionaryWithContentsOfFile:TGBackCommandPath];
+    NSNumber *tok = [cmd isKindOfClass:NSDictionary.class] ? cmd[TGBackCommandToken] : nil;
+    if (![tok isKindOfClass:NSNumber.class]) return;
+    unsigned long long stamp = tok.unsignedLongLongValue;
+    unsigned long long now = TGRelayStamp();
+    // 取绝对值差（时钟单调，now >= stamp；若异常则用 now-stamp 防止无符号回绕）。
+    unsigned long long age = now >= stamp ? now - stamp : stamp - now;
+    if (age > 1500000000ULL) return; // 超过 1.5s：后台积压的旧命令，忽略
+    TGRelayDoBack();
+}
+
 // ---- 左滑返回（leftPan 核心方案）：hook 系统交互过渡类，让淘宝类禁用边缘返回的 App 复活原生边缘手势（全系统动画） ----
 %group EdgeBack
 %hook _UINavigationInteractiveTransition
@@ -287,14 +303,11 @@ static void TGRelayDoBack(void) {
         %init(StatusBar);
         %init(EdgeBack); // 左滑返回（leftPan 同款，全 App 生效）
         // cn4.68：多指手势已迁到 SpringBoard 系统手势层，Relay 不再注入识别器。
-        // cn5.2.13：返回上级——只注册带自己 pid 的定向通知名。SpringBoard post 给谁，
-        // 谁的 Relay 才收到；后台 App 收不到发给别人的通知，不会积压误退，也不再需要
-        // 写文件 + bundle id/PID 比对 + token 去重那一套。
-        static char backName[48];
-        TGRelayBackName(getpid(), backName, sizeof(backName));
+        // cn5.2.14：返回上级——固定广播名 + 新鲜度判定。SpringBoard 只发固定名 + 时间戳，
+        // Relay 收到后自己判「前台 + 新鲜」才返回，后台积压的旧命令直接忽略。
         static int backToken = -1;
-        notify_register_dispatch(backName, &backToken, dispatch_get_main_queue(), ^(int t) {
-            TGRelayDoBack(); // 本进程收到即返回（pop 导航 / 收起弹层）
+        notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
+            TGRelayBackNotification(); // 判前台 + 命令新鲜度，再决定要不要返回
         });
         // cn5.2.9：统一冻结——落指快照 + 冻结/解冻，多指与边缘竖滑共用这三条。
         static int freezeSnapshotToken = -1;

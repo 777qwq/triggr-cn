@@ -3,9 +3,13 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.14
+
+- **修「返回上级」全部失效：放弃在 SpringBoard 侧猜目标，改为广播 + 时间戳新鲜度**。cn5.2.13 用「按目标进程定向的通知名」——SpringBoard 从 `_accessibilityFrontMostApplication` 取前台 pid 拼进通知名——但该对象并不保证提供 KVC 兼容的 `pid`，取不到时 pid 降级为 0，通知发到 `back/0`，而所有 App 注册的都是自己的真实 pid（>0），无人订阅 → 返回全部失效（含系统 App）。cn5.2.14 不再在 SpringBoard 侧猜「发给谁」（bundle id 曾在微信上错配、pid 又取不到，两次翻车），回到**固定广播 + 时间戳**：SpringBoard 触发时先看有没有前台 App，主屏幕（无人前台）直接不发——谁都不动，保住 A 方案；在 App 内则写一个纳秒单调时间戳（`TGRelayStamp()`，mach 时钟显式换算 timebase，两侧同一把尺子）到命令文件再发广播。所有注入 Relay 的 App 都收到，但每条只认两关：① 收到时自己是前台 active；② 命令是 1.5s 内生成的。两关都过才执行返回。后台 App 积压的 block 回前台才跑时时间戳已过期，直接忽略，不会误退无关 App。bundle id、pid、命令文件目标比对、token 去重整套删除——比定向名版更简单，且不再依赖任何取不到的属性。App 内的 Escape+pop 两步、EdgeBack 左滑复活、冻结与多指判据一律不动。
+
 ## 1.5.0+cn5.2.13
 
-- **重做「返回上级」的跨进程投递，改用按目标进程定向的通知名**。cn5.2.10 起返回走一条 Darwin 广播：所有注入 Relay 的 App 都收到通知，靠"写命令文件 + 比对目标 bundle id + token 去重"决定谁真正执行。这套有两个病根：① bundle id 在 SpringBoard 侧（`_accessibilityFrontMostApplication`）与 App 侧（`NSBundle.mainBundle`）对微信等 App 取到不一致，被当成"不是发给我的"直接忽略——微信内返回失效，系统设置/短信两侧一致所以正常；② 广播会被后台 App 的 block 积压到回前台再跑，曾造成无关 App 连退。cn5.2.13 把投递方式换成业内常规的**定向通知**：通知名带目标 pid（`com.johndie.triggr/back/<pid>`），SpringBoard 取触发瞬间前台 App 的 pid 拼进名字 post，每个 App 在 Relay 里用 `getpid()` 拼自己的名字注册——只有目标进程的 Relay 收得到。pid 两侧一致（内核分配），不再错配；后台 App 根本收不到发给别人的通知，block 不排队、不会误退；主屏幕触发 pid=0 → `back/0` 无人注册 → 谁都不动（保住 A 方案）。命令文件、bundle id/PID 比对、token 去重整套删除，代码更简单。App 内的 Escape+pop 两步、EdgeBack 左滑复活、冻结与多指判据一律不动。
+- **重做「返回上级」的跨进程投递，改用按目标进程定向的通知名**（cn5.2.14 已弃用，原因见上）。通知名带目标 pid（`com.johndie.triggr/back/<pid>`），SpringBoard 取前台 App pid 拼进名字 post，每个 App 用 `getpid()` 拼自己的名字注册。问题：`_accessibilityFrontMostApplication` 不保证提供 KVC 兼容的 `pid`，取不到时降级 0 → 全部失效。
 - **单应用图标轻扫的显示名称改为「抖音 · 图标下滑」格式**。原「在 图标下滑 上抖音」语序别扭（方向标题与 App 名套进「在 X 上 Y」模板时参数语义错位）。设置页与共享目录两处拼接统一为「App 名 · 方向」，添加入口与 action sheet 不变。
 
 ## 1.5.0+cn5.2.12

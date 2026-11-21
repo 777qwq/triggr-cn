@@ -1380,16 +1380,15 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // cn5.2.13：按目标进程定向通知。取触发瞬间前台 App 的 pid 拼进通知名，
-            // 只有那个进程的 Relay 注册了这个名字、会收到。pid 两侧一致（不像 bundle id
-            // 在微信等 App 上错配），后台 App 收不到发给别人的通知（不会积压误退），
-            // 主屏幕 pid=0 → 无人注册 → 谁都不动（A 方案）。无命令文件、无 token。
-            SpringBoard *sb = (SpringBoard *)UIApplication.sharedApplication;
-            id front = [sb respondsToSelector:@selector(_accessibilityFrontMostApplication)] ? [sb _accessibilityFrontMostApplication] : nil;
-            NSNumber *pidNum = [front respondsToSelector:@selector(pid)] ? [front valueForKey:@"pid"] : nil;
-            int targetPID = [pidNum isKindOfClass:NSNumber.class] ? pidNum.intValue : 0;
-            char name[48];
-            notify_post(TGRelayBackName(targetPID, name, sizeof(name)));
+            // cn5.2.14：广播 + 时间戳新鲜度。不再在 SpringBoard 侧猜「发给谁」（bundle id
+            // 在微信等 App 上两侧对不上、pid 又从 _accessibilityFrontMostApplication 取不到，
+            // 两次翻车）。只做两件事：主屏幕触发（无前台 App）直接不发——谁都不动，保住 A
+            // 方案；App 内触发则写本次单调时间戳，Relay 收到后自己判「我是前台 + 命令新鲜」。
+            if (!TGFrontAppIdentifier()) return YES; // 主屏幕：无人是前台，天然谁都不作用
+            unsigned long long stamp = TGRelayStamp();
+            NSDictionary *cmd = @{ TGBackCommandToken: @(stamp) };
+            [cmd writeToFile:TGBackCommandPath atomically:YES];
+            notify_post(TGRelayBack);
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {
