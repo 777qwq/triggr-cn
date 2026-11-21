@@ -1380,16 +1380,14 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // cn5.2.16：回到 Relay 进程内 pop。5.2.15 的跨进程回放左滑时灵时不灵——注入
-            // 触摸的 edge 位/时序不稳，放弃。微信原生左滑 100% 有效、且 MMUINavigationController
-            // 是 UINavigationController 子类，证明进程内 pop 这条路是通的；5.2.14 微信失效的
-            // 真凶是新鲜度时间窗误杀繁忙主队列，这次去掉时间判定。主屏幕（无前台 App）不发，
-            // 保住 A 方案谁都不作用。Relay 前台 App 读到命令会删文件（消费型），后台积压
-            // block 回前台时读不到文件，不会误退无关 App。token 单调仅作额外去重。
-            if (!TGFrontAppIdentifier()) return YES; // 主屏幕：无人是前台，天然谁都不作用
+            TGBackDiagClear(); // 每次触发只看这一次
+            NSString *front = TGFrontAppIdentifier();
+            TGBackDiag(@"触发 system.back，前台=%@", front ?: @"(无/主屏幕)");
+            if (!front) { TGBackDiag(@"主屏幕：不发通知，结束"); return YES; }
             unsigned long long token = mach_absolute_time();
             NSDictionary *cmd = @{ TGBackCommandToken: @(token) };
-            [cmd writeToFile:TGBackCommandPath atomically:YES];
+            BOOL wrote = [cmd writeToFile:TGBackCommandPath atomically:YES];
+            TGBackDiag(@"写命令文件 token=%llu 结果=%d，post 广播", token, wrote);
             notify_post(TGRelayBack);
             return YES;
         },

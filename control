@@ -1,6 +1,6 @@
 Package: com.johndie.triggr
 Name: Triggr汉化修改
-Version: 1.5.0+cn5.2.16
+Version: 1.5.0+cn5.2.17
 Architecture: iphoneos-arm64
 Description: 基于 Triggr 1.5.0 汉化修改：给按键、手势和系统事件指派动作。
 Maintainer: 777qwq

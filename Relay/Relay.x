@@ -135,7 +135,9 @@ static BOOL TGEscapeAllowed(UIViewController *vc) {
 
 static BOOL TGEscapeOne(UIViewController *vc) {
     if (!TGEscapeAllowed(vc)) return NO;
-    return ((BOOL (*)(id, SEL))objc_msgSend)(vc, @selector(accessibilityPerformEscape));
+    BOOL r = ((BOOL (*)(id, SEL))objc_msgSend)(vc, @selector(accessibilityPerformEscape));
+    TGBackDiag(@"escape 尝试 %@ -> %d", NSStringFromClass(vc.class), r);
+    return r;
 }
 
 static BOOL TGEscapeTree(UIViewController *vc, int depth) {
@@ -190,44 +192,57 @@ static NSString *TGPageStamp(UIViewController *root) {
 // 还能拿返回值判断到底弹没弹。兜底必须是可判、无副作用的最后一步。
 static BOOL TGPublicPop(UIWindow *win) {
     UIViewController *root = win.rootViewController;
-    if (!root) return NO;
+    if (!root) { TGBackDiag(@"PublicPop: window 无 root"); return NO; }
+    NSArray<UIViewController *> *chain = TGVisibleChain(root);
+    NSMutableString *desc = [NSMutableString string];
+    for (UIViewController *c in chain) [desc appendFormat:@"%@ -> ", NSStringFromClass(c.class)];
+    TGBackDiag(@"PublicPop: 可见链(%lu): %@", (unsigned long)chain.count, desc);
     SEL sel = @selector(popViewControllerAnimated:);
-    for (UIViewController *vc in TGVisibleChain(root).reverseObjectEnumerator) {
+    for (UIViewController *vc in chain.reverseObjectEnumerator) {
         if (![vc isKindOfClass:[UINavigationController class]]) continue;
         UINavigationController *nav = (UINavigationController *)vc;
-        if (nav.viewControllers.count < 2) continue;
-        if (nav.transitionCoordinator) continue;
-        if (![nav respondsToSelector:sel]) continue;
+        TGBackDiag(@"PublicPop: 找到 nav=%@ 栈深=%lu transition=%d", NSStringFromClass(nav.class), (unsigned long)nav.viewControllers.count, nav.transitionCoordinator != nil);
+        if (nav.viewControllers.count < 2) { TGBackDiag(@"PublicPop: 栈深<2 跳过"); continue; }
+        if (nav.transitionCoordinator) { TGBackDiag(@"PublicPop: 转场中 跳过"); continue; }
+        if (![nav respondsToSelector:sel]) { TGBackDiag(@"PublicPop: 不响应 pop 跳过"); continue; }
         @try {
             [nav popViewControllerAnimated:YES];
+            TGBackDiag(@"PublicPop: 已调用 popViewControllerAnimated");
         } @catch (NSException *e) {
-            // 同上：容器抛异常不能带崩宿主
+            TGBackDiag(@"PublicPop: pop 抛异常 %@", e.reason);
         }
         return YES;
     }
+    TGBackDiag(@"PublicPop: 链上无可弹 nav，尝试 dismiss modal");
     // 纯 modal 页面（没有可弹的 nav）：dismiss 最上面那层，这就是系统意义上的「返回」。
     // 原来只找 nav，以 modal 为主的 App 上「返回上级」完全没有反应。
     UIViewController *top = root;
     while (top.presentedViewController) top = top.presentedViewController;
     if (top != root && !top.isBeingDismissed && !top.transitionCoordinator) {
         [top dismissViewControllerAnimated:YES completion:nil];
+        TGBackDiag(@"PublicPop: 已 dismiss %@", NSStringFromClass(top.class));
         return YES;
     }
+    TGBackDiag(@"PublicPop: 无 modal 可 dismiss，返回 NO");
     return NO;
 }
 
 static void TGBackStep(UIWindow *win) {
     UIViewController *root = win.rootViewController;
-    if (!root) return;
+    if (!root) { TGBackDiag(@"BackStep: 无 root，结束"); return; }
+    TGBackDiag(@"BackStep: root=%@", NSStringFromClass(root.class));
 
     NSString *stamp = TGPageStamp(root);
     BOOL acted = NO;
     @try {
         acted = TGEscapeIn(root);
     } @catch (NSException *e) {
+        TGBackDiag(@"BackStep: escape 抛异常 %@", e.reason);
         acted = NO;
     }
+    TGBackDiag(@"BackStep: escape 应答=%d", acted);
     if (!acted) { // 没人应答，直接交给容器
+        TGBackDiag(@"BackStep: 无人应答 escape，直接 PublicPop");
         TGPublicPop(win);
         return;
     }
@@ -242,14 +257,22 @@ static void TGBackStep(UIWindow *win) {
         // 转场还在跑就先别判：presentedViewController 要到动画结束才清空，这时的戳只是
         // 「半路状态」，比对必然误判（0.35 秒和转场动画同量级）。宁可这次不补——下一按
         // 用户的意图本来也还没走完；补错一次是「退两层」，代价大得多。
-        if (!root || root.isBeingDismissed || root.isBeingPresented || root.transitionCoordinator) return;
-        if ([TGPageStamp(root) isEqualToString:stamp]) TGPublicPop(w);
+        if (!root || root.isBeingDismissed || root.isBeingPresented || root.transitionCoordinator) {
+            TGBackDiag(@"BackStep: 0.35s 后转场中/无 root，不复核");
+            return;
+        }
+        NSString *after = TGPageStamp(root);
+        TGBackDiag(@"BackStep: 0.35s 后戳比对 相同=%d", [after isEqualToString:stamp]);
+        if ([after isEqualToString:stamp]) { TGBackDiag(@"BackStep: 页面没动，补 PublicPop"); TGPublicPop(w); }
     });
 }
 
 static void TGRelayDoBack(void) {
-    UIWindow *win = TGRelayWindows().firstObject;
-    if (!win) return;
+    NSArray<UIWindow *> *wins = TGRelayWindows();
+    TGBackDiag(@"DoBack: 可见 window 数=%lu", (unsigned long)wins.count);
+    UIWindow *win = wins.firstObject;
+    if (!win) { TGBackDiag(@"DoBack: 无 window，结束"); return; }
+    TGBackDiag(@"DoBack: keyWindow=%@", NSStringFromClass(win.class));
     notify_post("cn.triggr.back.ack");
     TGBackStep(win);
 }
@@ -266,17 +289,23 @@ static void TGRelayDoBack(void) {
 // 防同一 App 的重复 block。全程不依赖 bundle id / pid / 定向名 / 时间窗。
 static unsigned long long tgLastBackToken = 0;
 static void TGRelayBackNotification(void) {
-    if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return; // ①
+    UIApplicationState st = UIApplication.sharedApplication.applicationState;
+    TGBackDiag(@"收到 back 通知，applicationState=%ld (0=Active,1=Inactive,2=Background)", (long)st);
+    if (st != UIApplicationStateActive) { TGBackDiag(@"非前台 active，忽略"); return; } // ①
     NSDictionary *cmd = [NSDictionary dictionaryWithContentsOfFile:TGBackCommandPath];
-    if (![cmd isKindOfClass:NSDictionary.class]) return; // 文件已被前台 App 消费（后台积压）
+    if (![cmd isKindOfClass:NSDictionary.class]) { TGBackDiag(@"命令文件不存在/已被消费，忽略"); return; }
     NSNumber *tok = cmd[TGBackCommandToken];
-    if (![tok isKindOfClass:NSNumber.class]) return;
+    if (![tok isKindOfClass:NSNumber.class]) { TGBackDiag(@"命令无 token，忽略"); return; }
     unsigned long long token = tok.unsignedLongLongValue;
+    TGBackDiag(@"读到 token=%llu，上次处理=%llu", token, tgLastBackToken);
     // 消费：读到了就删文件，后台积压的 block 之后就读不到了。删在前台 App 的同步流程里，
     // 与「谁是当前前台」一致——能读到并删掉的必然是当时 active 的那个 App。
-    [[NSFileManager defaultManager] removeItemAtPath:TGBackCommandPath error:nil];
-    if (token <= tgLastBackToken) return; // 额外去重（同一 App 重复 block）
+    NSError *delErr = nil;
+    [[NSFileManager defaultManager] removeItemAtPath:TGBackCommandPath error:&delErr];
+    TGBackDiag(@"删命令文件=%d err=%@", delErr == nil, delErr.localizedDescription);
+    if (token <= tgLastBackToken) { TGBackDiag(@"token 已处理过，忽略"); return; }
     tgLastBackToken = token;
+    TGBackDiag(@"通过两关，进入 TGRelayDoBack");
     TGRelayDoBack();
 }
 
