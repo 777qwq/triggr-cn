@@ -1380,7 +1380,15 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            notify_post(TGRelayBack); // Relay：App 内左滑返回手势常驻；此动作=程序化返回
+            // cn5.2.10：把「返回谁」定死在文件里，通知只当唤醒。目标=触发瞬间的前台 App；
+            // 主屏幕触发时 front 为 nil → 写空串 → 所有 App 都不作用（A 方案）。
+            NSString *target = TGFrontAppIdentifier() ?: @"";
+            // token 用单调时钟（respring 不归零），让积压的多个 block 只执行一次。
+            unsigned long long token = mach_absolute_time();
+            NSDictionary *cmd = @{ TGBackCommandTarget: target,
+                                   TGBackCommandToken: @(token) };
+            [cmd writeToFile:TGBackCommandPath atomically:YES];
+            notify_post(TGRelayBack);
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

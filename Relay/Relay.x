@@ -254,6 +254,24 @@ static void TGRelayDoBack(void) {
     TGBackStep(win);
 }
 
+// cn5.2.10：返回通知是广播，后台 App 的 block 会积压到回前台才跑。改成读文件核验：
+// 目标必须是本 App（空串=主屏幕触发，谁都不动），且 token 比上次处理的大（防积压 block
+// 重复执行）。校验全在主队列回调里做，与通知同队列，无竞态。
+static unsigned long long tgLastBackToken = 0;
+static void TGRelayBackNotification(void) {
+    NSDictionary *cmd = [NSDictionary dictionaryWithContentsOfFile:TGBackCommandPath];
+    if (!cmd) return;
+    NSString *target = cmd[TGBackCommandTarget];
+    if (![target isKindOfClass:NSString.class] || target.length == 0) return; // 主屏幕触发：不动
+    if (![target isEqualToString:NSBundle.mainBundle.bundleIdentifier]) return; // 不是发给我的
+    NSNumber *tok = cmd[TGBackCommandToken];
+    if (![tok isKindOfClass:NSNumber.class]) return;
+    unsigned long long token = tok.unsignedLongLongValue;
+    if (token <= tgLastBackToken) return; // 已处理过（积压的重复 block）
+    tgLastBackToken = token;
+    TGRelayDoBack();
+}
+
 // ---- 左滑返回（leftPan 核心方案）：hook 系统交互过渡类，让淘宝类禁用边缘返回的 App 复活原生边缘手势（全系统动画） ----
 %group EdgeBack
 %hook _UINavigationInteractiveTransition
@@ -289,7 +307,7 @@ static void TGRelayDoBack(void) {
         // 返回上级：SpringBoard 发一条 Darwin 通知，本 App 内模拟返回（pop 导航 / 收起弹层）
         static int backToken = -1;
         notify_register_dispatch(TGRelayBack, &backToken, dispatch_get_main_queue(), ^(int t) {
- TGRelayDoBack();
+            TGRelayBackNotification(); // cn5.2.10：先核验目标与 token，再决定要不要返回
         });
         // cn5.2.9：统一冻结——落指快照 + 冻结/解冻，多指与边缘竖滑共用这三条。
         static int freezeSnapshotToken = -1;

@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.10
+
+- **修「返回上级」跨进程误退：给广播加目标核验 + token 去重**。`system.back` 原本只发一条 Darwin 通知，广播给所有注入 Relay 的 App，谁收到谁就 pop。后台 App 的通知 block 积压在主队列，回前台时集中执行，`TGRelayWindows()` 那一刻大家都成了前台，于是把微信、短信等无关 App 各退一级——主屏幕右滑触发多次就会退到主页。cn5.2.10 改成「文件定目标 + 通知只做唤醒」：SpringBoard 触发时把目标 bundle id 与 `mach_absolute_time()` token 写进 `/var/tmp` 文件再 `notify_post`；Relay 收到后核验——目标空串（主屏幕触发，A 方案：谁都不作用）直接忽略、目标不是本 App 直接忽略、token ≤ 上次处理的（积压的重复 block）直接忽略，三项都过才执行返回。token 用单调时钟、respring 不归零，避免序号重置导致误判已处理。Escape + pop 两步、EdgeBack 左滑复活、冻结与多指判据一律不动。代价：从主屏幕触发的「返回上级」不再有任何效果。
+
 ## 1.5.0+cn5.2.9
 
 - **冻结统一为一套：删掉"冻结瞬间快照"分支，多指与边缘竖滑共用落指快照**。cn5.2.8 里两套快照并存——多指还原到冻结瞬间 offset（多存 `tgFreezeOffsets`/`tgFreezeZooms`），边缘还原到落指快照（`tgBeganOffsets` + `useBegan` 分支 + `TGFreezeBeginFromBegan` 专用入口 + `TGRelayFreezeBeganBegin` 专用通知），体验分裂、代码层层加分支。cn5.2.9 把这套收敛：**删掉**冻结瞬间的 offset/zoom 数组、`useBegan`/`tgFreezeBeganGen` 分支、`TGFreezeBeginFromBegan` 入口和 `TGRelayFreezeBeganBegin` 通知；落指那一刻统一快照所有 scrollView 的 `contentOffset + zoomScale`（weak key + generation 保护，无状态幂等，多指识别器与边缘各在自己的 `touchesBegan` 调同一句），冻结只记 `tgFreezeSnapGen`，解冻一律还原到落指位置。多指与边缘从此走同一个 `TGFreezeBegin/End` 和同一组 Snapshot/Begin/End 通知。generation 不符（冻结期间换了轮）时不还原位置、只恢复开关，避免串场。判据（cn5.2.7 四向滑起手收紧、cn5.2.6 捏合方向闸门、cn5.2.5 正交分解、cn5.2.2 点按误触）与触发阈值一律不动。
