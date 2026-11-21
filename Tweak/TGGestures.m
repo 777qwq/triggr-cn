@@ -1182,53 +1182,6 @@ static NSArray<NSString *> *tg_gesture_words(NSString *text) {
 BOOL TGGestureRecording(void) { return g_recActive; }
 BOOL TGGesturePlaying(void) { return g_playing; }
 
-// cn5.2.15: programmatic "swipe back from the left edge". Some apps (WeChat, custom
-// navigation containers) ignore accessibilityPerformEscape and popViewControllerAnimated:,
-// but they all answer iOS's native interactive pop — which is driven by a real touch that
-// begins on the left edge. So play exactly that touch through the same HID path gesture
-// playback uses: iOS routes it like a finger and the front app runs its own back gesture.
-// Reuses tg_gesture_play (play queue, sender ID, g_playing gate) — Triggr's own recognizers
-// drop these injected touches via TGGesturePlaybackBusy, so no trigger recursion.
-BOOL TGPlayBackFromLeftEdge(void) {
-    uint64_t sender = tg_touch_sender();
-    if (!sender) {
-        TGLog(@"[Gesture] back: no touch sender yet (screen untouched since respring)");
-        return NO;
-    }
-    __block CGSize screen = CGSizeZero;
-    tg_on_main_sync(^{ screen = [UIScreen mainScreen].fixedCoordinateSpace.bounds.size; });
-    if (screen.width <= 0 || screen.height <= 0) return NO;
-
-    // One finger, slot 0. Start just inside the left edge with edge bit 8 (left), move
-    // right past the interactive-pop threshold (~1/3 width), then lift. ~0.3s, like a
-    // natural swipe. Positions are points; tg_gesture_send_frame_ex normalizes them.
-    if (g_playing) return NO;                    // don't collide with a user gesture playback
-    enum { kFrames = 12 };
-    TGGestureFrame frames[kFrames] = {0};
-    double y = screen.height * 0.5;              // middle of the screen, away from bars
-    double startX = 2.0;                         // on the left edge
-    double endX = screen.width * 0.42;           // far enough to commit the pop
-    for (int i = 0; i < kFrames; i++) {
-        double p = (double)i / (kFrames - 1);
-        TGGestureFrame *f = &frames[i];
-        f->t = p * 0.3;                          // 0 .. 0.3 seconds
-        f->count = 1;
-        // edge bit only while the finger is still on the edge; after it moves in,
-        // real touches drop the edge flag too. Keep it on the first couple frames.
-        uint8_t edge = (i < 2) ? 8 : 0;
-        f->fingers[0] = (TGTouchFinger){ 0, 1, edge, startX + (endX - startX) * p, y };
-    }
-    // Lift on the final frame: touching = 0, position held at the end.
-    frames[kFrames - 1].fingers[0] = (TGTouchFinger){ 0, 0, 0, endX, y };
-    // Copy to the heap: playback blocks the serial queue ~0.3s and system.back runs
-    // on the main thread, so dispatch async — a stack array would dangle.
-    NSData *data = [NSData dataWithBytes:frames length:sizeof(frames)];
-    dispatch_async(tg_gesture_play_queue(), ^{
-        tg_gesture_play(@"__back__", data.bytes, kFrames, sender, 1.0, CGSizeZero);
-    });
-    return YES;
-}
-
 // Background HID listener. Lives here so the HID types stay in this translation unit;
 // the tweak calls TGGestureStartListener once SpringBoard is up.
 extern void IOHIDEventSystemClientRegisterEventCallback(TGHIDClientRef client, void *callback, void *target, void *refcon);

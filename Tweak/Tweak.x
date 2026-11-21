@@ -1380,12 +1380,17 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // cn5.2.15：改走系统原生返回手势。微信等自绘导航 App 不认程序化 escape/pop，
-            // 但认「从左边缘起滑」的真实触摸（用户已验证系统左滑在微信能返回）。回放一次
-            // 这样的触摸，iOS 像路由真手指一样交给前台 App，走它自己的交互式返回。
-            // 主屏幕触发（无前台 App）不回放——那里左滑是负一屏，不是返回（保住 A 方案）。
-            if (!TGFrontAppIdentifier()) return YES;
-            TGPlayBackFromLeftEdge();
+            // cn5.2.16：回到 Relay 进程内 pop。5.2.15 的跨进程回放左滑时灵时不灵——注入
+            // 触摸的 edge 位/时序不稳，放弃。微信原生左滑 100% 有效、且 MMUINavigationController
+            // 是 UINavigationController 子类，证明进程内 pop 这条路是通的；5.2.14 微信失效的
+            // 真凶是新鲜度时间窗误杀繁忙主队列，这次去掉时间判定。主屏幕（无前台 App）不发，
+            // 保住 A 方案谁都不作用。Relay 前台 App 读到命令会删文件（消费型），后台积压
+            // block 回前台时读不到文件，不会误退无关 App。token 单调仅作额外去重。
+            if (!TGFrontAppIdentifier()) return YES; // 主屏幕：无人是前台，天然谁都不作用
+            unsigned long long token = mach_absolute_time();
+            NSDictionary *cmd = @{ TGBackCommandToken: @(token) };
+            [cmd writeToFile:TGBackCommandPath atomically:YES];
+            notify_post(TGRelayBack);
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

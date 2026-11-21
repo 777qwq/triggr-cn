@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.16
+
+- **修微信内「返回上级」仍不稳：放弃跨进程注入触摸，回到 Relay 进程内 pop，去掉误杀微信的时间窗**。cn5.2.15 让 SpringBoard 回放「从左边缘起滑」的系统触摸，但跨进程合成触摸的 edge 位与时序不稳，真机上**偶尔能成**；而用户同时确认微信里**手动左滑 100% 正常**——这说明微信的原生返回路径本身是好的，Relay 也确实注入进了微信，坏的只是「跨进程注入触摸」这一环。同时厘清：微信用的是 `MMUINavigationController`，它是 `UINavigationController` 子类，进程内 `popViewControllerAnimated:` 这条路对微信有效。那 cn5.2.14（escape+pop）为何微信不返回？真凶是那道「命令必须 1.5s 内生成」的新鲜度窗——微信主队列繁忙时，Darwin 通知 block 排到主队列执行常超过 1.5s，命令被当成后台积压的旧命令丢弃；系统 App 轻、回调及时所以正常。cn5.2.16 去掉时间判定，投递改为「消费型命令文件」：SpringBoard 触发时写一份带单调 token 的命令文件再发广播（主屏幕判空不发，保住 A 方案）；前台 active 的 Relay 读到文件后**立刻删文件**再执行返回。后台 App 收到通知时非 active 直接 return、不删文件，等它积压的 block 回前台才跑时文件已被前台 App 删掉 → 读到 nil → 忽略，不会误退无关 App；而繁忙 App（微信）的 block 晚到时文件一直还在，正常执行——这就同时满足了「忙 App 晚到能返回」和「后台积压不误退」，且不依赖 bundle id / pid / 定向名 / 时间窗。token 递增仅作同一 App 重复 block 的额外去重。恢复 5.2.14 的 escape+pop 执行链（含 0.35s 页面戳比对防退两层），删除 5.2.15 的 `TGPlayBackFromLeftEdge` 回放函数与其头声明（彻底去掉跨进程注入）。EdgeBack 保留，冻结/多指判据不动。
+
 ## 1.5.0+cn5.2.15
 
 - **修微信内「返回上级」无效：执行层改走系统原生返回手势**。cn5.2.14 修好了跨进程投递（系统 App 的返回已恢复），但微信始终不动——问题不在"通知有没有送达"，而在送达之后的执行：Relay 的 `TGBackStep` 靠 `accessibilityPerformEscape` + `popViewControllerAnimated:` 硬弹，微信既不自报 escape、自绘导航容器也不在标准 UINavigationController 栈里，两条都落空，于是"通知收到、闸也过了、页面不动"。前三版全改投递层，方向就错了。cn5.2.15 改成让 SpringBoard 直接回放一次「从屏幕左边缘起滑、向右滑出、抬起」的系统触摸（复用手势库那套 `IOHIDEvent` 注入设施：`tg_gesture_play`、真实触摸屏 sender ID、`edge=8` 左边缘位、play 串行队列、`g_playing` 递归闸——Triggr 自己的识别器会自动忽略注入触摸，不会触发用户绑的边缘动作）。iOS 像路由真手指一样把这段触摸交给前台 App，由 App 自己的原生交互式返回接管——这正是用户已验证在微信有效的那条路径，也是 AssistiveTouch 同类做法，不依赖任何 App 内部结构。主屏幕触发（无前台 App）不回放，左滑在主屏幕是负一屏而非返回，保住 A 方案。Relay 侧的 escape/pop 执行链、back 通知注册、命令文件与时间戳整套删除（净减代码）；EdgeBack 保留——它放行被 App 禁用的边缘返回手势，是回放触摸能被系统返回识别器接受的前提。dry-run 不发触摸，冻结/多指判据与投递无关的逻辑一律不动。
