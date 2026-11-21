@@ -3,6 +3,10 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.15
+
+- **修微信内「返回上级」无效：执行层改走系统原生返回手势**。cn5.2.14 修好了跨进程投递（系统 App 的返回已恢复），但微信始终不动——问题不在"通知有没有送达"，而在送达之后的执行：Relay 的 `TGBackStep` 靠 `accessibilityPerformEscape` + `popViewControllerAnimated:` 硬弹，微信既不自报 escape、自绘导航容器也不在标准 UINavigationController 栈里，两条都落空，于是"通知收到、闸也过了、页面不动"。前三版全改投递层，方向就错了。cn5.2.15 改成让 SpringBoard 直接回放一次「从屏幕左边缘起滑、向右滑出、抬起」的系统触摸（复用手势库那套 `IOHIDEvent` 注入设施：`tg_gesture_play`、真实触摸屏 sender ID、`edge=8` 左边缘位、play 串行队列、`g_playing` 递归闸——Triggr 自己的识别器会自动忽略注入触摸，不会触发用户绑的边缘动作）。iOS 像路由真手指一样把这段触摸交给前台 App，由 App 自己的原生交互式返回接管——这正是用户已验证在微信有效的那条路径，也是 AssistiveTouch 同类做法，不依赖任何 App 内部结构。主屏幕触发（无前台 App）不回放，左滑在主屏幕是负一屏而非返回，保住 A 方案。Relay 侧的 escape/pop 执行链、back 通知注册、命令文件与时间戳整套删除（净减代码）；EdgeBack 保留——它放行被 App 禁用的边缘返回手势，是回放触摸能被系统返回识别器接受的前提。dry-run 不发触摸，冻结/多指判据与投递无关的逻辑一律不动。
+
 ## 1.5.0+cn5.2.14
 
 - **修「返回上级」全部失效：放弃在 SpringBoard 侧猜目标，改为广播 + 时间戳新鲜度**。cn5.2.13 用「按目标进程定向的通知名」——SpringBoard 从 `_accessibilityFrontMostApplication` 取前台 pid 拼进通知名——但该对象并不保证提供 KVC 兼容的 `pid`，取不到时 pid 降级为 0，通知发到 `back/0`，而所有 App 注册的都是自己的真实 pid（>0），无人订阅 → 返回全部失效（含系统 App）。cn5.2.14 不再在 SpringBoard 侧猜「发给谁」（bundle id 曾在微信上错配、pid 又取不到，两次翻车），回到**固定广播 + 时间戳**：SpringBoard 触发时先看有没有前台 App，主屏幕（无人前台）直接不发——谁都不动，保住 A 方案；在 App 内则写一个纳秒单调时间戳（`TGRelayStamp()`，mach 时钟显式换算 timebase，两侧同一把尺子）到命令文件再发广播。所有注入 Relay 的 App 都收到，但每条只认两关：① 收到时自己是前台 active；② 命令是 1.5s 内生成的。两关都过才执行返回。后台 App 积压的 block 回前台才跑时时间戳已过期，直接忽略，不会误退无关 App。bundle id、pid、命令文件目标比对、token 去重整套删除——比定向名版更简单，且不再依赖任何取不到的属性。App 内的 Escape+pop 两步、EdgeBack 左滑复活、冻结与多指判据一律不动。

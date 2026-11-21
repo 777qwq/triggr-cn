@@ -1380,15 +1380,12 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // cn5.2.14：广播 + 时间戳新鲜度。不再在 SpringBoard 侧猜「发给谁」（bundle id
-            // 在微信等 App 上两侧对不上、pid 又从 _accessibilityFrontMostApplication 取不到，
-            // 两次翻车）。只做两件事：主屏幕触发（无前台 App）直接不发——谁都不动，保住 A
-            // 方案；App 内触发则写本次单调时间戳，Relay 收到后自己判「我是前台 + 命令新鲜」。
-            if (!TGFrontAppIdentifier()) return YES; // 主屏幕：无人是前台，天然谁都不作用
-            unsigned long long stamp = TGRelayStamp();
-            NSDictionary *cmd = @{ TGBackCommandToken: @(stamp) };
-            [cmd writeToFile:TGBackCommandPath atomically:YES];
-            notify_post(TGRelayBack);
+            // cn5.2.15：改走系统原生返回手势。微信等自绘导航 App 不认程序化 escape/pop，
+            // 但认「从左边缘起滑」的真实触摸（用户已验证系统左滑在微信能返回）。回放一次
+            // 这样的触摸，iOS 像路由真手指一样交给前台 App，走它自己的交互式返回。
+            // 主屏幕触发（无前台 App）不回放——那里左滑是负一屏，不是返回（保住 A 方案）。
+            if (!TGFrontAppIdentifier()) return YES;
+            TGPlayBackFromLeftEdge();
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

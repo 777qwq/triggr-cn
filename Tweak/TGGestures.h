@@ -20,3 +20,9 @@ BOOL TGGesturePlaying(void);     // a playback is in progress (used to gate touc
 
 // Start the background HID listener. Idempotent; call once after SpringBoard starts.
 void TGGestureStartListener(void);
+
+// cn5.2.15: play a synthetic swipe that starts on the left screen edge and moves right,
+// so iOS routes it as a real finger and the front app's native interactive pop handles it.
+// Returns NO if the touchscreen sender ID isn't known yet (touch the screen once first).
+// Used by system.back because apps with custom navigation ignore programmatic escape/pop.
+BOOL TGPlayBackFromLeftEdge(void);
