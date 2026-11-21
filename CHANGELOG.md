@@ -3,6 +3,11 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.11
+
+- **修三指四向滑被双指识别器误冻（"三指滑不动"）**。三指几乎不会严格同时落屏，前两指先落的几十毫秒里，双指识别器（`numberOfTouchesRequired=2`）处于 Possible、记了 origins、`event.allTouches.count` 仍是 2，三指起手的前两指位移一旦过 16pt、偏差小、方向匹配就已 `TGMultiFreezeBegin()` 冻住画面。第三指落下 `count=3>2` 时双指识别器才 Failed，但它触发的冻结没有撤销——Failed 不再收 `touchesEnded`/不走 `recognized:`，于是画面被钉住到抬手或 2s 兜底，表现为三指右滑"滑不动"。cn5.2.11 在四向滑 `touchesBegan` 的手数超限分支加一条对称性守卫：出局前若本识别器已冻就先 `TGMultiFreezeEnd()` 撤销（解冻幂等，多识别器同时撤销安全），把画面交还三指识别器按自己的判据冻结。方向判据、阈值、落指快照统一那套一律不动，只补"谁冻的出局谁解"。动作触发链本就正常（多指识别器挂在 SpringBoard，冻结只禁 App 内 scrollView 识别器），未改。
+- **同步边缘手势与多指手势的分组说明文案**，去掉过时的"内容可能跟着动/列表仍会跟着动/手指到齐就冻结"，改写为当前的冻结行为。
+
 ## 1.5.0+cn5.2.10
 
 - **修「返回上级」跨进程误退：给广播加目标核验 + token 去重**。`system.back` 原本只发一条 Darwin 通知，广播给所有注入 Relay 的 App，谁收到谁就 pop。后台 App 的通知 block 积压在主队列，回前台时集中执行，`TGRelayWindows()` 那一刻大家都成了前台，于是把微信、短信等无关 App 各退一级——主屏幕右滑触发多次就会退到主页。cn5.2.10 改成「文件定目标 + 通知只做唤醒」：SpringBoard 触发时把目标 bundle id 与 `mach_absolute_time()` token 写进 `/var/tmp` 文件再 `notify_post`；Relay 收到后核验——目标空串（主屏幕触发，A 方案：谁都不作用）直接忽略、目标不是本 App 直接忽略、token ≤ 上次处理的（积压的重复 block）直接忽略，三项都过才执行返回。token 用单调时钟、respring 不归零，避免序号重置导致误判已处理。Escape + pop 两步、EdgeBack 左滑复活、冻结与多指判据一律不动。代价：从主屏幕触发的「返回上级」不再有任何效果。

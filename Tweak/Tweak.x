@@ -3353,7 +3353,15 @@ static BOOL TGSwipeDirectionMatches(CGPoint c, UISwipeGestureRecognizerDirection
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     TGMultiSnapshotBegan();
     NSUInteger n = event.allTouches.count;
-    if (n > self.numberOfTouchesRequired) { self.state = UIGestureRecognizerStateFailed; return; }
+    if (n > self.numberOfTouchesRequired) {
+        // cn5.2.11：三指手势逐指落下时，前两指先落的几十毫秒里本识别器（双指）可能已在
+        // 两指中间态误冻画面。第三指落下说明这不是本手势，出局前先撤销自己那次冻结，
+        // 否则冻结悬空、画面被钉住直到抬手/2s 兜底，表现为"三指滑不动"。
+        // 解冻幂等（TGFreezeEnd 有 tgFreezeOn 守卫），多个识别器同时撤销也安全。
+        if (self.didFreeze) TGMultiFreezeEnd();
+        self.state = UIGestureRecognizerStateFailed;
+        return;
+    }
     if (n == self.numberOfTouchesRequired && !self.origins) {
         self.origins = [NSMutableDictionary dictionary];
         for (UITouch *t in event.allTouches)
