@@ -2091,6 +2091,13 @@ static NSString *const TGCustomGroupTitle = @"自定义事件";
 // Which row of a place's page a trigger belongs under: an index into
 // TGTriggerGroups, or -1 for Custom Events.
 static NSInteger TGGroupOfTrigger(NSString *trigger) {
+    // cn5.2.12：两类带参数的动态事件归入对应分组，不再固定落在自定义事件。
+    if ([trigger hasPrefix:TGNotificationAppPrefix])
+        for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++)
+            if (TGTriggerGroups[g].items == TGNotifications) return g;
+    if ([trigger hasPrefix:@"icon.flick"] && TGIsCustomTrigger(trigger))
+        for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++)
+            if (TGTriggerGroups[g].items == TGIcons) return g;
     if (TGIsCustomTrigger(trigger)) return -1;
     for (int g = 0; g < TG_COUNT(TGTriggerGroups); g++)
         for (int i = 0; i < TGTriggerGroups[g].count; i++)
@@ -2155,6 +2162,26 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
                 if (!tapsOn && TGIsStatusBarSingleTap(@(triggers->items[i].identifier))) continue;
                 [specs addObject:TGTriggerRow(@(triggers->items[i].title), self, @selector(assignedActionTitle:), _mode, @(triggers->items[i].identifier))];
             }
+            // cn5.2.12：归入本组的动态事件行（应用通知归通知组、单应用图标轻扫归主屏手势组）。
+            NSArray *dynamic = [self customEventRows];
+            if (dynamic.count) [specs addObjectsFromArray:dynamic];
+            // cn5.2.12：这两个添加入口从自定义事件页搬来，就近放在对应分组。
+            if (triggers->items == TGNotifications) {
+                [specs addObject:[PSSpecifier groupSpecifierWithName:@"添加事件"]];
+                PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:@"来自应用的通知" target:self set:@selector(setNotifyingApp:specifier:)
+                    get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+                [addNotification setProperty:@YES forKey:@"useSearchBar"];
+                [addNotification setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+                [specs addObject:addNotification];
+            }
+            if (triggers->items == TGIcons) {
+                [specs addObject:[PSSpecifier groupSpecifierWithName:@"添加事件"]];
+                PSSpecifier *addFlick = [PSSpecifier preferenceSpecifierNamed:@"应用图标轻扫" target:self set:@selector(setFlickedApp:specifier:)
+                    get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
+                [addFlick setProperty:@YES forKey:@"useSearchBar"];
+                [addFlick setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
+                [specs addObject:addFlick];
+            }
         } else {
             NSArray *events = [self customEventRows];
             PSSpecifier *mine = [PSSpecifier groupSpecifierWithName:nil];
@@ -2185,30 +2212,24 @@ static NSComparator const TGCatalogOrder = ^NSComparisonResult(PSSpecifier *a, P
             [addLeftApp setProperty:@YES forKey:@"useSearchBar"];
             [addLeftApp setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
             [specs addObject:addLeftApp];
-            PSSpecifier *addNotification = [PSSpecifier preferenceSpecifierNamed:@"来自应用的通知" target:self set:@selector(setNotifyingApp:specifier:)
-                get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
-            [addNotification setProperty:@YES forKey:@"useSearchBar"];
-            [addNotification setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
-            [specs addObject:addNotification];
-            PSSpecifier *addFlick = [PSSpecifier preferenceSpecifierNamed:@"应用图标轻扫" target:self set:@selector(setFlickedApp:specifier:)
-                get:@selector(openedApp:) detail:ATLApplicationListSelectionController.class cell:PSLinkCell edit:nil];
-            [addFlick setProperty:@YES forKey:@"useSearchBar"];
-            [addFlick setProperty:@[@{ @"sectionType": @"Visible" }] forKey:@"sections"];
-            [specs addObject:addFlick];
+            // cn5.2.12：「来自应用的通知」搬到通知组、「应用图标轻扫」搬到主屏手势组，
+            // 这两个入口已不在自定义事件页（setNotifyingApp:/setFlickedApp: 逻辑复用）。
         }
         _specifiers = specs;
     }
     return _specifiers;
 }
 
-// Custom events assigned in this place (key "<mode>/<custom trigger>" with actions).
+// 本分组的动态事件行：按 _group 过滤——分组页列归入该组的，自定义事件页（_group=-1）
+// 列仍留在自定义事件的。cn5.2.12 两类带参数事件改归通知组/主屏手势组，靠 TGGroupOfTrigger
+// 统一归类，两页共用这一个方法。
 - (NSArray<PSSpecifier *> *)customEventRows {
     NSString *prefix = [_mode stringByAppendingString:@"/"];
     NSMutableArray *rows = [NSMutableArray array];
     for (NSString *key in TGAllAssignments()) {
         if (![key hasPrefix:prefix]) continue;
         NSString *trigger = [key substringFromIndex:prefix.length];
-        if (!TGIsCustomTrigger(trigger)) continue;
+        if (!TGIsCustomTrigger(trigger) || TGGroupOfTrigger(trigger) != _group) continue;
         [rows addObject:TGSubtitled(TGTriggerRow(TGSettingsTriggerTitle(trigger), self, @selector(assignedActionTitle:), _mode, trigger))];
     }
     return [rows sortedArrayUsingComparator:^NSComparisonResult(PSSpecifier *a, PSSpecifier *b) { return [a.name localizedStandardCompare:b.name]; }];

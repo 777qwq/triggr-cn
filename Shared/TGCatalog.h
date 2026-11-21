@@ -75,11 +75,11 @@ static const TGItem TGSeqConditions[] = {
     {"if:headphones", "已连接耳机"}, {"if:bt", "已连接蓝牙设备"},
     {"else", "否则"}, {"endif", "结束条件"},
 };
-// A quick flick that starts on a Home Screen icon (see TGFlickRecognizer).
-// 双击空白处（homescreen.doubletap）从主屏幕分组挪来这里归类；标识符与识别器不变，
-// 仍挂在 SBRootFolderView、只在空白处生效（cn4.68）。
+// 主屏幕手势分组的静态项：cn5.2.12 起只剩「双击空白处」。
+// 四项通用图标轻扫（对所有 App 生效的 icon.flickup/down/left/right）已删除；
+// 针对单个 App 的图标轻扫（icon.flick<方向>:<bundle id>）作为动态事件归在本组。
+// 双击空白处标识符与识别器不变，仍挂在 SBRootFolderView、只在空白处生效（cn4.68）。
 static const TGItem TGIcons[] = {
-    {"icon.flickup", "图标上滑"}, {"icon.flickdown", "图标下滑"}, {"icon.flickleft", "图标左滑"}, {"icon.flickright", "图标右滑"},
     {"homescreen.doubletap", "双击空白处"},
 };
 
@@ -143,14 +143,14 @@ static const TGGroup TGTriggerGroups[] = {
     {"锁键 + 音量键", TGSideCombos, TG_COUNT(TGSideCombos), "同时按住锁键与一个音量键。「长按音量加 / 长按音量减」指同时按住半秒；动作与 iOS 并行运行，继续按住仍会照常出现关机滑条和紧急 SOS。"},
     {"拨片开关", TGMuteSwitch, TG_COUNT(TGMuteSwitch), "开启「替换按键动作」时，拨片位置与铃声状态可能暂时不一致，直到你把它拨回。"},
     {"状态栏手势", TGStatusBar, TG_COUNT(TGStatusBar), "主屏幕、锁屏界面和应用内均可用。单击仍会滚动到顶部。长按为半秒。左半段和右半段各是状态栏的一半：指派某侧后，该侧的单击/双击/长按会由它取代。左右滑是沿状态栏的快速横向轻扫；下滑仍会打开通知中心或控制中心。"},
-    {"主屏幕手势", TGIcons, TG_COUNT(TGIcons), "从主屏幕或程序坞的应用/文件夹图标上起始的快速轻扫。小组件、App 资源库和抖动模式不受影响。左滑与右滑会接管从图标起始的翻页滑动。「双击空白处」在主屏幕空白区域生效，不在图标上。"},
+    {"主屏幕手势", TGIcons, TG_COUNT(TGIcons), "「应用图标轻扫」为某个应用单独指派图标上的轻扫，会取代该方向通用的翻页滑动；小组件、App 资源库和抖动模式不受影响。「双击空白处」在主屏幕空白区域生效，不在图标上。"},
     {"边缘手势", TGEdges, TG_COUNT(TGEdges), "「从左侧滑入」是普通手势，保留系统原生返回；其余滑入由系统识别，会从源头取消应用触摸。边缘上下滑列表不会跟着滚。"},
     {"多指手势", TGInAppGestures, TG_COUNT(TGInAppGestures), "只有指派了动作的滑动、捏合、张开才会冻结画面。冻结时照片不缩小、列表不跟着滚。"},
     {"动作", TGMotion, TG_COUNT(TGMotion), "使用系统自带的摇晃检测（即「摇动以撤销」背后那套），不耗电。解锁且屏幕亮着时可用；应用提供该功能时「摇动以撤销」仍会出现。"},
     {"充电器与耳机", TGOther, TG_COUNT(TGOther), "取下一只 AirPod 可能被计为「断开耳机」，因为 iOS 会把声音转回扬声器。"},
     {"CarPlay", TGCarPlay, TG_COUNT(TGCarPlay), "靠音频输出端口判断，有线和无线 CarPlay 都算。连接在建立会话时触发，断开在端口切回扬声器时触发。"},
     {"电话", TGCalls, TG_COUNT(TGCalls), "使用 CallKit 的电话、FaceTime 及其他通话应用。来电在响铃时触发，接听电话在接通时触发。开启「实时留言信箱」后，转入语音信箱的电话也算接听。"},
-    {"通知", TGNotifications, TG_COUNT(TGNotifications), "收到任意通知时触发，无论是否显示横幅。想只针对某个应用，用自定义事件中的「来自应用的通知」。"},
+    {"通知", TGNotifications, TG_COUNT(TGNotifications), "收到任意通知时触发，无论是否显示横幅。想只针对某个应用，用本组的「来自应用的通知」。"},
     {"音乐", TGMusic, TG_COUNT(TGMusic), "任何出现在「正在播放」里的应用：音乐、Spotify、YouTube、播客等。切歌每首新歌运行一次，含暂停后的第一首；Triggr 自身媒体动作引起的变化 1 秒内忽略，避免指派自我循环。"},
     {"距离传感器", TGProximity, TG_COUNT(TGProximity), "听筒旁的传感器。指派后屏幕亮着期间它会一直开启（略耗电）。「挥手」指遮挡不到半秒；指派了「挥手」后，「遮挡」会等这么久才执行。"},
     {"状态变化", TGStateChanges, TG_COUNT(TGStateChanges), "在变化发生后触发。控制中心的 Wi-Fi 开关只会断开网络（即「离开 Wi-Fi 网络」），Wi-Fi 本身保持开启。由 Triggr 自身动作引起的变化在一秒内被忽略，避免指派循环触发。"},
@@ -549,10 +549,14 @@ static inline BOOL TGParseTime(NSString *trigger, int *hour, int *minute, NSStri
 }
 
 // "上滑" for "icon.flickup" or "icon.flickup:<bundle id>".
+// cn5.2.12：四项通用轻扫已从 TGIcons 删除，方向标题改为独立映射，不依赖静态表。
 static inline NSString *TGFlickDirectionTitle(NSString *trigger) {
     NSString *direction = [trigger componentsSeparatedByString:@":"].firstObject;
-    for (int i = 0; i < TG_COUNT(TGIcons); i++) if ([direction isEqualToString:@(TGIcons[i].identifier)]) return @(TGIcons[i].title);
-    return direction;
+    NSDictionary *titles = @{
+        @"icon.flickup": @"图标上滑", @"icon.flickdown": @"图标下滑",
+        @"icon.flickleft": @"图标左滑", @"icon.flickright": @"图标右滑",
+    };
+    return titles[direction] ?: direction;
 }
 
 static inline NSString *TGCustomTriggerTitle(NSString *trigger) {
