@@ -1380,15 +1380,16 @@ static NSDictionary<NSString *, TGActionBlock> *TGActionTable(void) {
             @"system.dismisssiri": ^BOOL(BOOL dry) { return TGDismissSiri(dry); },
 @"system.back": ^BOOL(BOOL dry) {
             if (dry) return YES;
-            // cn5.2.10：把「返回谁」定死在文件里，通知只当唤醒。目标=触发瞬间的前台 App；
-            // 主屏幕触发时 front 为 nil → 写空串 → 所有 App 都不作用（A 方案）。
-            NSString *target = TGFrontAppIdentifier() ?: @"";
-            // token 用单调时钟（respring 不归零），让积压的多个 block 只执行一次。
-            unsigned long long token = mach_absolute_time();
-            NSDictionary *cmd = @{ TGBackCommandTarget: target,
-                                   TGBackCommandToken: @(token) };
-            [cmd writeToFile:TGBackCommandPath atomically:YES];
-            notify_post(TGRelayBack);
+            // cn5.2.13：按目标进程定向通知。取触发瞬间前台 App 的 pid 拼进通知名，
+            // 只有那个进程的 Relay 注册了这个名字、会收到。pid 两侧一致（不像 bundle id
+            // 在微信等 App 上错配），后台 App 收不到发给别人的通知（不会积压误退），
+            // 主屏幕 pid=0 → 无人注册 → 谁都不动（A 方案）。无命令文件、无 token。
+            SpringBoard *sb = (SpringBoard *)UIApplication.sharedApplication;
+            id front = [sb respondsToSelector:@selector(_accessibilityFrontMostApplication)] ? [sb _accessibilityFrontMostApplication] : nil;
+            NSNumber *pidNum = [front respondsToSelector:@selector(pid)] ? [front valueForKey:@"pid"] : nil;
+            int targetPID = [pidNum isKindOfClass:NSNumber.class] ? pidNum.intValue : 0;
+            char name[48];
+            notify_post(TGRelayBackName(targetPID, name, sizeof(name)));
             return YES;
         },
             @"system.siri": ^BOOL(BOOL dry) {

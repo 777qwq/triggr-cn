@@ -210,7 +210,7 @@ static NSString *TGSettingsTriggerTitle(NSString *trigger) {
     if ([trigger hasPrefix:TGNotificationAppPrefix]) return [@"来自 " stringByAppendingString:TGAppName([trigger substringFromIndex:TGNotificationAppPrefix.length])];
     if ([trigger hasPrefix:@"icon.flick"] && TGIsCustomTrigger(trigger)) {
         NSRange colon = [trigger rangeOfString:@":"];
-        return [NSString stringWithFormat:@"在 %@ 上%@", TGFlickDirectionTitle(trigger), TGAppName([trigger substringFromIndex:colon.location + 1])];
+        return [NSString stringWithFormat:@"%@ · %@", TGAppName([trigger substringFromIndex:colon.location + 1]), TGFlickDirectionTitle(trigger)];
     }
     return TGButtonText(TGTriggerTitle(trigger));
 }

@@ -3,6 +3,11 @@
 本仓库是 [`Jond-ie/triggr-beta`](https://github.com/Jond-ie/triggr-beta) 1.5.0 的汉化修改版。
 版本号形如 `1.5.0+cn4.19`：前半是上游基线，`cnN` 是本仓库的第 N 次发布。
 
+## 1.5.0+cn5.2.13
+
+- **重做「返回上级」的跨进程投递，改用按目标进程定向的通知名**。cn5.2.10 起返回走一条 Darwin 广播：所有注入 Relay 的 App 都收到通知，靠"写命令文件 + 比对目标 bundle id + token 去重"决定谁真正执行。这套有两个病根：① bundle id 在 SpringBoard 侧（`_accessibilityFrontMostApplication`）与 App 侧（`NSBundle.mainBundle`）对微信等 App 取到不一致，被当成"不是发给我的"直接忽略——微信内返回失效，系统设置/短信两侧一致所以正常；② 广播会被后台 App 的 block 积压到回前台再跑，曾造成无关 App 连退。cn5.2.13 把投递方式换成业内常规的**定向通知**：通知名带目标 pid（`com.johndie.triggr/back/<pid>`），SpringBoard 取触发瞬间前台 App 的 pid 拼进名字 post，每个 App 在 Relay 里用 `getpid()` 拼自己的名字注册——只有目标进程的 Relay 收得到。pid 两侧一致（内核分配），不再错配；后台 App 根本收不到发给别人的通知，block 不排队、不会误退；主屏幕触发 pid=0 → `back/0` 无人注册 → 谁都不动（保住 A 方案）。命令文件、bundle id/PID 比对、token 去重整套删除，代码更简单。App 内的 Escape+pop 两步、EdgeBack 左滑复活、冻结与多指判据一律不动。
+- **单应用图标轻扫的显示名称改为「抖音 · 图标下滑」格式**。原「在 图标下滑 上抖音」语序别扭（方向标题与 App 名套进「在 X 上 Y」模板时参数语义错位）。设置页与共享目录两处拼接统一为「App 名 · 方向」，添加入口与 action sheet 不变。
+
 ## 1.5.0+cn5.2.12
 
 - **触发器归类整理：应用通知/应用图标轻扫归位，删除通用图标轻扫**。两项带参数的动态事件此前固定显示在"自定义事件"组——`notification.app:<bundle id>`（来自应用的通知）和 `icon.flick<方向>:<bundle id>`（在某应用图标上轻扫）。cn5.2.12 把它们归入对应静态分组：前者归"通知"组、后者归"主屏幕手势"组，添加入口也一并从自定义事件页搬到对应分组页就近放置。实现上复用现有机制：`TGGroupOfTrigger` 按前缀判定归属，`customEventRows` 按 `_group` 过滤，分组页与自定义事件页共用同一方法，总览计数、删除、移动等功能自动跟着走，未新建平行逻辑。同时删除主屏组四项通用图标轻扫（对所有 App 生效的图标上/下/左/右滑）；针对单个 App 的图标轻扫保留。分组 footer 文案同步更新。触发器标识符、判定逻辑、Relay/Tweak 侧不变——纯设置页归类整理，不影响通知与手势的实际行为。
